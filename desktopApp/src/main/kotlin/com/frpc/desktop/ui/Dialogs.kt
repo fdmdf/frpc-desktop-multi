@@ -660,6 +660,8 @@ fun VisitorEditDialog(
 ) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var type by remember { mutableStateOf(initial?.type ?: "stcp") }
+    // 与代理一致：false 写入 enabled = false，frpc 不会注册这条访问者
+    var enabled by remember { mutableStateOf(initial?.enabled ?: true) }
     // 类型切换时清理 xtcp 专属字段，避免生成 frp 拒绝的配置
     var serverName by remember { mutableStateOf(initial?.serverName ?: "") }
     var secretKey by remember { mutableStateOf(initial?.secretKey ?: "") }
@@ -703,6 +705,13 @@ fun VisitorEditDialog(
                             modifier = Modifier.weight(1f),
                         )
                     }
+
+                    SwitchRow(
+                        label = "启用该访问者",
+                        checked = enabled,
+                        onCheckedChange = { enabled = it },
+                        supportingText = "关闭时写入 enabled = false，frpc 不会去连对方的私密代理",
+                    )
 
                     DialogSection("要访问谁")
                     LabeledTextField(
@@ -823,6 +832,7 @@ fun VisitorEditDialog(
                                     // 解析失败给 0：交给校验器明确报「不能为 0」，不静默塞一个默认值
                                     bindPort = bindPort.trim().toIntOrNull() ?: 0,
                                     serverUser = serverUser.trim().ifBlank { null },
+                                    enabled = if (enabled) null else false,
                                     fallbackTo = fallbackTo.trim().ifBlank { null },
                                     fallbackTimeoutMs = fallbackTimeoutMs.trim().toIntOrNull(),
                                     keepTunnelOpen = keepTunnelOpen,

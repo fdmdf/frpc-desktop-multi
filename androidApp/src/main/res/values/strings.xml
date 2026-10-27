@@ -201,6 +201,8 @@
     <string name="field_proxy_type">代理类型</string>
     <string name="field_proxy_enabled">启用该代理</string>
     <string name="field_proxy_enabled_hint">关闭时写入 enabled = false，frpc 不会注册这条代理</string>
+    <string name="field_visitor_enabled">启用该访问者</string>
+    <string name="field_visitor_enabled_hint">关闭时写入 enabled = false，frpc 不会去连对方的私密代理</string>
     <string name="proxy_full_name">在 frps 上的名字：%1$s</string>
     <string name="field_local_ip">本地地址</string>
     <string name="field_local_ip_hint">frpc 所在机器上要暴露的服务地址</string>

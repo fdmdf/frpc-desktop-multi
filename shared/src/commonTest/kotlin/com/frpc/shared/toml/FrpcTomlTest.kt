@@ -167,4 +167,32 @@ class FrpcTomlTest {
         assertTrue(xtcpToml.contains("keepTunnelOpen = true"), xtcpToml)
         assertTrue(FrpcToml.decode(xtcpToml).visitors.first().keepTunnelOpen == true)
     }
+
+    /**
+     * 访问者同样支持 enabled：frp 的 VisitorBaseConfig 有这个字段，
+     * `FilterClientConfigurers` 对代理与访问者一视同仁地按它过滤。
+     * 关掉必须真的写进 TOML，否则「列表里关了、frpc 照样连」。
+     */
+    @Test
+    fun visitor_enabled_roundTrip() {
+        val toml = """
+            serverAddr = "127.0.0.1"
+            [[visitors]]
+            name = "v-stcp"
+            type = "stcp"
+            serverName = "p"
+            bindPort = 6000
+            enabled = false
+        """.trimIndent()
+        val decoded = FrpcToml.decode(toml)
+        assertEquals(false, decoded.visitors.first().enabled)
+
+        val encoded = FrpcToml.encode(decoded)
+        assertTrue(encoded.contains("enabled = false"), encoded)
+        assertEquals(false, FrpcToml.decode(encoded).visitors.first().enabled)
+
+        // 没设过就不写，避免给 frpc 塞它没见过的多余字段
+        val enabled = decoded.copy(visitors = decoded.visitors.map { it.copy(enabled = null) })
+        assertTrue(!FrpcToml.encode(enabled).contains("enabled"), FrpcToml.encode(enabled))
+    }
 }

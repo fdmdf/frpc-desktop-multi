@@ -668,6 +668,14 @@ fun ConfigEditScreen(
                 store.update {
                     it.copy(visitors = it.visitors.filterIndexed { i, _ -> i != index })
                 }
+            }, onToggleEnabled = { index, enabled ->
+                store.update {
+                    it.copy(
+                        visitors = it.visitors.mapIndexed { i, v ->
+                            if (i == index) v.copy(enabled = enabled) else v
+                        },
+                    )
+                }
             })
         }
     }
@@ -799,6 +807,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedVisitors(
     config: FrpcConfig,
     onEdit: (Int) -> Unit,
     onDelete: (Int) -> Unit,
+    onToggleEnabled: (Int, Boolean) -> Unit,
 ) {
     itemsIndexed(config.visitors) { index, visitor ->
         SectionCard {
@@ -806,14 +815,29 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedVisitors(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val enabled = visitor.enabled ?: true
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = visitor.name, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = visitor.type.uppercase() + " → " + visitor.serverName,
+                        text = visitor.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                    Text(
+                        text = visitor.type.uppercase() + " → " + visitor.serverName +
+                            if (enabled) "" else " · " + stringResource(R.string.proxy_status_disabled),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // 与代理规则一致：列表内直接启停，禁用的访问者 frpc 不会去注册
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = { onToggleEnabled(index, it) },
+                )
                 IconButton(onClick = { onEdit(index) }) {
                     Icon(Icons.Filled.Edit, contentDescription = null)
                 }

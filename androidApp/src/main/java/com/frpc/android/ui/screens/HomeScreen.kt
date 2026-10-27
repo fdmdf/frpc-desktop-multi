@@ -19,6 +19,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -122,10 +123,38 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
     val visitors = currentProfile?.config?.visitors.orEmpty()
     // 禁用的规则 frpc 不注册，既不占在线数也不该进分母（否则永远显示 0/1）
     val enabledProxies = proxies.filter { it.enabled != false }
+    val enabledVisitors = visitors.filter { it.enabled != false }
     // 在线数优先取 Admin API，其次日志推断
     val onlineCount = status?.all?.count { it.status == "running" }
         ?: logProxyStates.count { it.value.phase == LogProxyPhase.RUNNING }
     val totalCount = enabledProxies.size
+
+    // 行内启停：与桌面端一致，首页直接开关，不必进配置页翻开关。
+    // 运行中改完不会自动生效（frpc 拿的还是旧配置），所以记一笔「待重载」给出口
+    fun setRuleEnabled(name: String, enabled: Boolean, isVisitor: Boolean) {
+        val profile = currentProfile ?: return
+        val updated = profile.copy(
+            config = if (isVisitor) {
+                profile.config.copy(
+                    visitors = profile.config.visitors.map {
+                        if (it.name == name) it.copy(enabled = if (enabled) null else false) else it
+                    },
+                )
+            } else {
+                profile.config.copy(
+                    proxies = profile.config.proxies.map {
+                        if (it.name == name) it.copy(enabled = if (enabled) null else false) else it
+                    },
+                )
+            },
+        )
+        uiScope.launch {
+            container.configRepository.upsert(updated)
+            if (state.phase == FrpcSupervisor.Phase.RUNNING) {
+                FrpcSupervisor.markPendingReload(updated.id)
+            }
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -424,6 +453,10 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                             )
                         }
                     }
+                    Switch(
+                        checked = proxy.enabled != false,
+                        onCheckedChange = { on -> setRuleEnabled(proxy.name, on, isVisitor = false) },
+                    )
                     StatusChip(text = label, color = color)
                 }
             }
@@ -435,7 +468,7 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                     text = stringResource(
                         R.string.home_group_count,
                         stringResource(R.string.home_visitors),
-                        visitors.size,
+                        enabledVisitors.size,
                     ),
                 )
             }
@@ -443,7 +476,10 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                 // admin API 不返回 visitor，是否注册成功只能从 "visitor added: [...]" 日志判断
                 val online = state.phase == FrpcSupervisor.Phase.RUNNING &&
                     visitor.name in visitorsOnline
+                // 状态优先级：enabled=false（frpc 不注册）> 日志推断 > 未启动
                 val (label, color) = when {
+                    visitor.enabled == false ->
+                        stringResource(R.string.proxy_status_disabled) to StatusIdle
                     online -> stringResource(R.string.proxy_status_online) to StatusRunning
                     state.phase == FrpcSupervisor.Phase.RUNNING ->
                         stringResource(R.string.proxy_status_pending) to StatusStarting
@@ -481,6 +517,10 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        Switch(
+                            checked = visitor.enabled != false,
+                            onCheckedChange = { on -> setRuleEnabled(visitor.name, on, isVisitor = true) },
+                        )
                         StatusChip(text = label, color = color)
                     }
                 }

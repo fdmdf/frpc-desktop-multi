@@ -207,13 +207,16 @@ fun MonitorScreen(container: AppContainer) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        // 与主页一致：enabled = false 的访问者根本没注册，不该显示「启动中」
                         StatusChip(
                             text = when {
+                                visitor.enabled == false -> "已禁用"
                                 state.phase != FrpcSupervisor.Phase.RUNNING -> "未运行"
                                 online -> "在线"
                                 else -> "启动中"
                             },
                             color = when {
+                                visitor.enabled == false -> StatusIdle
                                 state.phase != FrpcSupervisor.Phase.RUNNING -> StatusIdle
                                 online -> StatusRunning
                                 else -> StatusStarting

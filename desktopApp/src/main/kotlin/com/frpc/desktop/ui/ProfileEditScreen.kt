@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -613,18 +614,40 @@ fun ProfileEditScreen(
                             p.remotePort?.toString()?.contains(proxyQuery) == true
                     }
                     .forEach { (index, proxy) ->
+                    val on = proxy.enabled != false
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(proxy.name, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                proxy.name,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (on) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
                             Text(
                                 text = describeProxy(proxy),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        // 列表内直接启停，不必进编辑页翻开关：禁用的代理 frpc 会跳过注册
+                        Switch(
+                            checked = on,
+                            onCheckedChange = { checked ->
+                                updateConfig {
+                                    it.copy(
+                                        proxies = it.proxies.mapIndexed { i, p ->
+                                            if (i == index) p.copy(enabled = if (checked) null else false) else p
+                                        },
+                                    )
+                                }
+                            },
+                        )
                         IconButton(onClick = { proxyEditing = index }) {
                             Icon(Icons.Filled.Edit, contentDescription = "编辑")
                         }
@@ -653,18 +676,40 @@ fun ProfileEditScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 draft.config.visitors.forEachIndexed { index, visitor ->
+                    val on = visitor.enabled != false
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(visitor.name, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                visitor.name,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (on) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
                             Text(
                                 text = describeVisitor(visitor, draft.config.user),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        // 与代理规则一致：列表内直接启停，禁用的访问者 frpc 不会去注册
+                        Switch(
+                            checked = on,
+                            onCheckedChange = { checked ->
+                                updateConfig {
+                                    it.copy(
+                                        visitors = it.visitors.mapIndexed { i, v ->
+                                            if (i == index) v.copy(enabled = if (checked) null else false) else v
+                                        },
+                                    )
+                                }
+                            },
+                        )
                         IconButton(onClick = { visitorEditing = index }) {
                             Icon(Icons.Filled.Edit, contentDescription = "编辑")
                         }
@@ -788,6 +833,8 @@ private fun describeVisitor(visitor: VisitorConfig, localUser: String?): String 
     append(
         com.frpc.shared.model.FrpcNaming.targetServerProxyName(localUser, visitor.serverUser, visitor.serverName),
     )
+    // 禁用态两端都能在列表里直接切换，这里也要显示出来（frpc 不会去连对方）
+    if (visitor.enabled == false) append(" · 已禁用")
 }
 
 /** 字段路径 → 用户能看懂的名称（P3：错误文案不直接暴露 serverPort / auth.token 这类原始字段名） */

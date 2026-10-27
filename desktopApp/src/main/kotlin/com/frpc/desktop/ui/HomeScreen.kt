@@ -80,17 +80,29 @@ fun HomeScreen(
     val running = state.phase == FrpcSupervisor.Phase.RUNNING
     val proxies = currentProfile?.config?.proxies.orEmpty()
     val visitors = currentProfile?.config?.visitors.orEmpty()
+    // 计数只算已启用的：禁用的规则不注册，混进总数会让「0/1 在线」看起来像故障（与 Android 端一致）
+    val enabledProxies = proxies.filter { it.enabled != false }
+    val enabledVisitors = visitors.filter { it.enabled != false }
     val scope = rememberCoroutineScope()
     var copied by remember { mutableStateOf<String?>(null) }
 
-    // 行内启停：只改 enabled 一个字段，其余仍受「运行中不可编辑」约束
-    fun setProxyEnabled(profile: ServerProfile, proxyName: String, enabled: Boolean) {
+    // 行内启停：只改 enabled 一个字段，其余仍受「运行中不可编辑」约束。
+    // 代理与访问者共用这一条路径，避免两端行为分叉
+    fun setEnabled(profile: ServerProfile, name: String, enabled: Boolean, visitor: Boolean) {
         val updated = profile.copy(
-            config = profile.config.copy(
-                proxies = profile.config.proxies.map {
-                    if (it.name == proxyName) it.copy(enabled = if (enabled) null else false) else it
-                },
-            ),
+            config = if (visitor) {
+                profile.config.copy(
+                    visitors = profile.config.visitors.map {
+                        if (it.name == name) it.copy(enabled = if (enabled) null else false) else it
+                    },
+                )
+            } else {
+                profile.config.copy(
+                    proxies = profile.config.proxies.map {
+                        if (it.name == name) it.copy(enabled = if (enabled) null else false) else it
+                    },
+                )
+            },
         )
         scope.launch {
             container.profiles.upsert(updated)
@@ -98,6 +110,12 @@ fun HomeScreen(
             if (running) container.supervisor.reload()
         }
     }
+
+    fun setProxyEnabled(profile: ServerProfile, proxyName: String, enabled: Boolean) =
+        setEnabled(profile, proxyName, enabled, visitor = false)
+
+    fun setVisitorEnabled(profile: ServerProfile, visitorName: String, enabled: Boolean) =
+        setEnabled(profile, visitorName, enabled, visitor = true)
 
     Column(
         modifier = Modifier
@@ -332,7 +350,7 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "代理规则",
+                    text = "代理规则（${enabledProxies.size}）",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 4.dp),
@@ -418,7 +436,7 @@ fun HomeScreen(
 
         if (visitors.isNotEmpty()) {
             Text(
-                text = "访问者",
+                text = "访问者（${enabledVisitors.size}）",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 4.dp),
@@ -428,7 +446,9 @@ fun HomeScreen(
         visitors.forEach { visitor ->
             // admin API 不返回 visitor，注册成功与否只能从 "visitor added: [...]" 日志判断
             val online = running && visitor.name in visitorsOnline
+            // 与代理一致：enabled = false 的访问者 frpc 根本不会注册，不该显示「启动中」
             val (label, color) = when {
+                visitor.enabled == false -> "已禁用" to StatusIdle
                 online -> "在线" to StatusRunning
                 running -> "启动中" to StatusStarting
                 else -> "未运行" to StatusIdle
@@ -453,6 +473,13 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    // 行内启停：与代理一致，改完立刻 reload
+                    Switch(
+                        checked = visitor.enabled != false,
+                        onCheckedChange = { on ->
+                            currentProfile?.let { setVisitorEnabled(it, visitor.name, on) }
+                        },
+                    )
                     StatusChip(label, color)
                 }
             }

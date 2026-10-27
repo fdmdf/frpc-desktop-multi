@@ -187,6 +187,12 @@ fun VisitorEditScreen(
                         }
                     }
                 }
+                SwitchRow(
+                    label = stringResource(R.string.field_visitor_enabled),
+                    checked = current.enabled ?: true,
+                    onCheckedChange = { v -> store.updateVisitor { it.copy(enabled = v) } },
+                    supportingText = stringResource(R.string.field_visitor_enabled_hint),
+                )
                 LabeledTextField(
                     value = current.secretKey.orEmpty(),
                     onValueChange = { v ->

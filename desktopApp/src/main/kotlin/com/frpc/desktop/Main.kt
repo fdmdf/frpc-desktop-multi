@@ -205,14 +205,16 @@ private fun app() = application {
         when (runState.phase) {
             FrpcSupervisor.Phase.RUNNING -> {
                 append(" · 运行中")
-                val proxyTotal = activeProfile?.config?.proxies?.size ?: 0
+                // 分母只算启用的：禁用的规则 frpc 不注册，算进去就成了永远凑不齐的 0/1
+                val proxyTotal = activeProfile?.config?.proxies?.count { it.enabled != false } ?: 0
                 if (proxyTotal > 0) {
                     val online = proxyStatus?.all?.count { it.status == "running" } ?: 0
                     append(" · 代理 ").append(online).append('/').append(proxyTotal)
                 }
-                val visitorTotal = activeProfile?.config?.visitors?.size ?: 0
+                val visitorTotal = activeProfile?.config?.visitors?.count { it.enabled != false } ?: 0
                 if (visitorTotal > 0) {
-                    val vOnline = activeProfile!!.config.visitors.count { it.name in visitorsOnline }
+                    val vOnline = activeProfile!!.config.visitors
+                        .count { it.enabled != false && it.name in visitorsOnline }
                     append(" · 访问者 ").append(vOnline).append('/').append(visitorTotal)
                 }
             }

@@ -169,6 +169,8 @@
     <string name="field_proxy_type">Proxy type</string>
     <string name="field_proxy_enabled">Enable this proxy</string>
     <string name="field_proxy_enabled_hint">Off writes enabled = false and frpc will not register it</string>
+    <string name="field_visitor_enabled">Enable this visitor</string>
+    <string name="field_visitor_enabled_hint">Off writes enabled = false and frpc will not connect to that private proxy</string>
     <string name="proxy_full_name">Name on frps: %1$s</string>
     <string name="field_local_ip">Local address</string>
     <string name="field_local_ip_hint">Service address on the machine running frpc</string>

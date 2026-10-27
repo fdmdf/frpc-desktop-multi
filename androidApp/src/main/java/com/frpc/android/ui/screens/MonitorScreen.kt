@@ -222,7 +222,10 @@ fun MonitorScreen(container: AppContainer) {
             }
             items(visitors) { visitor ->
                 val online = visitor.name in visitorsOnline
+                // 与主页一致：enabled = false 的访问者根本没注册，不该显示「启动中」
                 val (label, color) = when {
+                    visitor.enabled == false ->
+                        stringResource(R.string.proxy_status_disabled) to StatusIdle
                     online -> stringResource(R.string.proxy_status_online) to StatusRunning
                     else -> stringResource(R.string.proxy_status_pending) to StatusStarting
                 }

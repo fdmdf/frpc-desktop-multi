@@ -190,6 +190,12 @@ data class VisitorConfig(
     val bindPort: Int = 6000,
     val serverUser: String? = null,
     /**
+     * false 时生成 enabled = false 禁用该访问者。
+     * frp 的 VisitorBaseConfig 有这个字段，且 `FilterClientConfigurers` 对代理与访问者
+     * 一视同仁地按它过滤（nil / true 才启动），所以禁用后 frpc 不会去连对方的私密代理。
+     */
+    val enabled: Boolean? = null,
+    /**
      * 打洞失败时转交给哪个访问者（通常是同目标的 stcp 访问者，数据改走 frps 中转）。
      * frp 在 xtcp 建连失败后把连接交给它，是「xtcp 不通也能用」的兜底。
      */

@@ -8,7 +8,7 @@ import sys
 
 import yaml
 
-V, P = "1.1.0", "Frpc-Android-Multi"
+V, P = "1.2.0", "Frpc-Android-Multi"
 path = ".github/workflows/release.yml"
 d = yaml.safe_load(open(path, encoding="utf-8"))
 jobs = d["jobs"]
