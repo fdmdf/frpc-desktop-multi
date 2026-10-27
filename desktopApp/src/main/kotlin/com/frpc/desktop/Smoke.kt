@@ -1,7 +1,23 @@
 package com.frpc.desktop
 
+import com.frpc.desktop.engine.FrpcSupervisor
 import kotlin.system.exitProcess
 import java.io.File
+
+/**
+ * 有上限地等待条件成立。
+ *
+ * 状态、代理列表、admin 可达性都由轮询协程异步更新（STATUS_INTERVAL_MS = 4s），
+ * 用「固定 sleep 后取一次快照」的写法会和轮询周期赛跑。
+ */
+private fun waitUntil(timeoutMs: Long, condition: () -> Boolean): Boolean {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    while (System.currentTimeMillis() < deadline) {
+        if (condition()) return true
+        Thread.sleep(200)
+    }
+    return condition()
+}
 
 /**
  * 无界面自检：`frpc-desktop --smoke <frpc.toml>`
@@ -26,11 +42,23 @@ fun runSmoke(args: Array<String>) {
     println("[smoke] profile server=${profile.serverSummary} proxies=${profile.config.proxies.size}")
 
     container.supervisor.start(profile)
-    Thread.sleep(8_000)
+
+    // 原先是「sleep 8s 后取一次快照」，而状态轮询间隔是 4s，取样点正好卡在第二次轮询的
+    // 边界上 —— CI 上复现过一次：frpc 已 login success、代理也已 start success，
+    // 但 admin reachable 仍是 false，被 CI 断言误判为失败。
+    // 改成有上限地等待条件就绪，超时依旧判 false，判定语义不变，只是不再和轮询周期赛跑。
+    waitUntil(20_000) { container.supervisor.state.value.phase == FrpcSupervisor.Phase.RUNNING }
+    waitUntil(15_000) { container.supervisor.status.value?.all?.isNotEmpty() == true }
+    val adminReady =
+        if (container.supervisor.state.value.adminEnabled) {
+            waitUntil(20_000) { container.supervisor.adminReachable.value }
+        } else {
+            false
+        }
 
     val state = container.supervisor.state.value
     println("[smoke] phase=${state.phase} pid=${state.pid} exit=${state.error}")
-    println("[smoke] admin enabled=${state.adminEnabled} port=${state.adminPort} reachable=${container.supervisor.adminReachable.value}")
+    println("[smoke] admin enabled=${state.adminEnabled} port=${state.adminPort} reachable=$adminReady")
     container.supervisor.status.value?.all?.forEach {
         println("[smoke] proxy ${it.name} type=${it.type} status=${it.status} remote=${it.remoteAddr} err=${it.err}")
     }
@@ -55,7 +83,7 @@ fun runSmoke(args: Array<String>) {
     }
 
     container.supervisor.stop()
-    Thread.sleep(3_000)
+    waitUntil(15_000) { container.supervisor.state.value.phase == FrpcSupervisor.Phase.IDLE }
     println("[smoke] after-stop phase=${container.supervisor.state.value.phase}")
     println("[smoke] logs(tail):")
     container.supervisor.logsSnapshot().takeLast(10).forEach {
