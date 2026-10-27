@@ -21,6 +21,9 @@
   - 桌面端：跑 `netstat -ano` 时只等 3 秒且**不排空 stdout**，连接数多的机器上输出有几 MB，
     管道一满 netstat 就卡在写，超时被我们杀掉 → 同样返回空。改成一边等一边用线程排空，
     超时也返回已采集的部分；超时放宽到 10 秒。
+  - macOS：lsof 的 NAME 列自带空格（`*:8080 (LISTEN)`），按空白切分后取最后一列拿到的是
+    `(LISTEN)`，一条端口都解析不出来。改为从第 8 列起整段拼回再截断；lsof 万一仍为空，
+    macOS 也允许退到探测。
 - **设置 → 关于 一进去就闪退**：关于页用了 `painterResource(R.mipmap.ic_launcher)`，
   而 `ic_launcher` 是 `<adaptive-icon>` XML（mipmap-anydpi-v26），
   `painterResource` 只认 `<vector>`，解析到它直接抛异常。

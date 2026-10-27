@@ -35,14 +35,16 @@ class PortCheckTest {
     /**
      * 自己 stopping 完立刻再启动不得被拦：服务端侧主动关闭留下的 TIME_WAIT 不算占用。
      *
-     * 注：Linux/Android 上这一条是硬需求（不带 SO_REUSEADDR 的 bind 会直接失败）；
-     * Windows 内核宽松些，但语义应当一致。
+     * 监听者这里**必须**带 SO_REUSEADDR —— frpc 用的 Go `net.Listen` 就是这么绑的，
+     * 于是它 accept 出来的连接也继承了这个选项，退出后留下的 TIME_WAIT 才允许被重新绑定。
+     * 反过来讲：如果上一个监听者没带这个选项（Linux 要求「新旧两端都带」才可复用），
+     * 那 frpc 自己也绑不上，此时报「被占用」是对的，不是误报。
      */
     @Test
     fun `上一轮连接残留 TIME_WAIT 不算占用`() {
         val port = freePort()
         val listener = ServerSocket().apply {
-            reuseAddress = false
+            reuseAddress = true
             bind(InetSocketAddress(HOST, port))
         }
         // 建一条真连接，再让「服务端」先关 —— 模拟 frpc 退出时关闭自己已建立的连接

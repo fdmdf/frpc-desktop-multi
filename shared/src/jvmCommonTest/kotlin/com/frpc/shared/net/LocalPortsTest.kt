@@ -23,7 +23,12 @@ class LocalPortsTest {
         val server = bindCommonPort() ?: return
         server.use {
             val port = it.localPort
-            val found = LocalPorts.list().any { item -> item.port == port }
+            // 读表/探测都可能比「bind 返回」晚一瞬，给一次重试的机会
+            var found = LocalPorts.list().any { item -> item.port == port }
+            if (!found) {
+                Thread.sleep(500)
+                found = LocalPorts.list().any { item -> item.port == port }
+            }
             assertTrue(found, "list() 没有列出本机正在监听的端口 $port")
         }
     }

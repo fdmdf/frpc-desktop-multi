@@ -143,7 +143,8 @@ object LocalPorts {
         }.getOrDefault(emptyList())
         // 解析类手段拿不到东西时（最典型：Android 10+ 起 /proc/net 不对应用开放，
         // 系统里也没有 netstat / ss）退化成主动探测，否则选择器永远空列表
-        val scanned = if (parsed.isEmpty() && needConnectScan()) {
+        // macOS 的 lsof 在受限环境里可能一条都列不出来，同样允许退到探测
+        val scanned = if (parsed.isEmpty() && (needConnectScan() || isMac)) {
             runCatching { scanByConnect() }.getOrDefault(emptyList())
         } else {
             emptyList()
@@ -227,7 +228,9 @@ object LocalPorts {
             if (cols.size < 9) return@mapNotNull null
             val proto = cols.firstOrNull { it.equals("TCP", true) || it.equals("UDP", true) }?.lowercase()
                 ?: return@mapNotNull null
-            val name = cols.last()
+            // NAME 是最后一列，但它自己带空格（`*:8080 (LISTEN)`），按空白切开会把它劈成两列，
+            // 所以从第 8 列开始整段拼回去，再截掉状态标记与 `->` 对端
+            val name = cols.drop(8).joinToString(" ")
             val endpoint = name.substringBefore(" ").substringBefore("->")
             val (addr, port) = splitEndpoint(endpoint) ?: return@mapNotNull null
             val listening = proto == "udp" || line.contains("(LISTEN)")
