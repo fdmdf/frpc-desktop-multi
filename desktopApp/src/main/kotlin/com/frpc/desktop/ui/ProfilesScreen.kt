@@ -59,9 +59,10 @@ fun ProfilesScreen(
     val profiles by container.profiles.profiles.collectAsState()
     val defaultId by container.settings.state.collectAsState()
     val supervisorState by container.supervisor.state.collectAsState()
-    // 运行中的配置不允许编辑：frpc 正在使用它，改字段不会生效
+    // 运行中的配置允许编辑保存，改动要等「重载配置」才生效（见列表里的提示文案）
     val runningId = supervisorState.profileId
         .takeIf { supervisorState.phase == FrpcSupervisor.Phase.RUNNING }
+    val pendingReloadId by container.supervisor.pendingReloadProfileId.collectAsState()
     val scope = rememberCoroutineScope()
 
     var editingId by remember { mutableStateOf<String?>(null) }
@@ -71,14 +72,10 @@ fun ProfilesScreen(
     var clearAllConfirm by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
 
-    // 从主页「编辑配置」跳进来时直接打开对应配置（运行中的配置除外）
+    // 从主页「编辑配置」跳进来时直接打开对应配置（运行中的也可以，保存时会问是否重载）
     LaunchedEffect(openProfileId) {
         if (openProfileId != null) {
-            if (openProfileId == runningId) {
-                message = "该配置正在运行，请先停止再编辑"
-            } else {
-                editingId = openProfileId
-            }
+            editingId = openProfileId
             onOpenHandled()
         }
     }
@@ -274,11 +271,18 @@ fun ProfilesScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(profile.name, style = MaterialTheme.typography.titleMedium)
-                            // 运行中的配置编辑/删除是禁用的，标出来用户才知道为什么点不动
                             if (profile.id == runningId) {
                                 StatusChip(
                                     text = "运行中",
                                     color = StatusRunning,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
+                            // 运行中改完没重载：还有一笔改动没生效，标出来
+                            if (profile.id == pendingReloadId) {
+                                StatusChip(
+                                    text = "待重载",
+                                    color = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.padding(start = 8.dp),
                                 )
                             }
@@ -296,17 +300,24 @@ fun ProfilesScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        // 运行中的配置允许编辑保存，但要把「保存 ≠ 生效」说清楚
+                        if (profile.id == runningId) {
+                            Text(
+                                text = if (profile.id == pendingReloadId) {
+                                    "已保存，尚未重载，仍在使用旧配置"
+                                } else {
+                                    "运行中，保存后需「重载配置」才生效"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (profile.id == pendingReloadId) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
                     }
-                    IconButton(
-                        onClick = {
-                            if (profile.id == runningId) {
-                                message = "「${profile.name}」正在运行，请先停止再编辑"
-                            } else {
-                                editingId = profile.id
-                            }
-                        },
-                        enabled = profile.id != runningId,
-                    ) {
+                    IconButton(onClick = { editingId = profile.id }) {
                         Icon(Icons.Filled.Edit, contentDescription = "编辑")
                     }
                     IconButton(onClick = { scope.launch { container.profiles.duplicate(profile.id) } }) {

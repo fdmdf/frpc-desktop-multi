@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,6 +55,7 @@ fun VisitorEditScreen(
     val store = container.configEditorStore
     val visitor by store.visitorDraft.collectAsStateWithLifecycle()
     var issues by remember { mutableStateOf<List<ValidationIssue>>(emptyList()) }
+    var confirmDiscard by remember { mutableStateOf(false) }
 
     // 防重入：旋转/重绘时若草稿已属于该下标则跳过初始化（避免丢失未保存输入）
     LaunchedEffect(visitorIndex) {
@@ -61,6 +63,17 @@ fun VisitorEditScreen(
         val existing = store.draft.value?.config?.visitors?.getOrNull(visitorIndex)
         store.beginVisitorEdit(visitorIndex, existing)
     }
+
+    // 返回 = 放弃：不保存就必须丢掉草稿，否则下次进来看到的还是上次没保存的内容
+    fun goBack() {
+        if (store.isVisitorDirty()) {
+            confirmDiscard = true
+        } else {
+            store.clearVisitor()
+            navigator.pop()
+        }
+    }
+    androidx.activity.compose.BackHandler { goBack() }
 
     val current = visitor ?: return
     val errorFields = remember(issues) { issues.map { it.formFieldKey() }.toSet() }
@@ -75,7 +88,7 @@ fun VisitorEditScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.visitor_edit)) },
                 navigationIcon = {
-                    IconButton(onClick = { navigator.pop() }) {
+                    IconButton(onClick = { goBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
@@ -251,6 +264,28 @@ fun VisitorEditScreen(
                 }
             }
         }
+    }
+
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text(stringResource(R.string.edit_discard_title)) },
+            text = { Text(stringResource(R.string.edit_discard_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDiscard = false
+                    store.clearVisitor()
+                    navigator.pop()
+                }) {
+                    Text(stringResource(R.string.action_discard))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscard = false }) {
+                    Text(stringResource(R.string.action_keep_editing))
+                }
+            },
+        )
     }
 }
 

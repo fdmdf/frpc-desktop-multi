@@ -57,8 +57,10 @@ import com.frpc.android.util.formatDuration
 import com.frpc.android.util.formatMemoryKb
 import com.frpc.android.util.formatPercent
 import com.frpc.shared.model.ProxyConfig
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
@@ -72,16 +74,20 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
     val adminReachable by FrpcSupervisor.adminReachable.collectAsStateWithLifecycle()
     val serverConnected by FrpcSupervisor.serverConnected.collectAsStateWithLifecycle()
     val loginError by FrpcSupervisor.loginError.collectAsStateWithLifecycle()
+    // 运行中改了配置但只存盘没重载：frpc 还在用旧配置，这里必须给个出口
+    val pendingReloadId by FrpcSupervisor.pendingReloadProfileId.collectAsStateWithLifecycle()
     val profiles by container.configRepository.profiles.collectAsStateWithLifecycle()
     val defaultId by container.settingsRepository.defaultProfileId.collectAsStateWithLifecycle()
 
     // 未设默认配置时回退到第一个，避免"有配置却显示还没有配置"
     val currentProfileId = state.profileId ?: defaultId ?: profiles.firstOrNull()?.id
     val currentProfile = profiles.firstOrNull { it.id == currentProfileId }
-    val scope = rememberCoroutineScope()
+    val uiScope = rememberCoroutineScope()
 
     // 启动前自检被拦下时弹出原因，并引导去配置页（引擎缺失只能重装，不给跳转）
     var blockedReason by remember { mutableStateOf<FrpcSupervisor.StartBlockReason?>(null) }
+    // 自检本身在后台线程做，期间先把按钮按住，避免连点重复拉起服务
+    var checking by remember { mutableStateOf(false) }
 
     // 运行时长秒级刷新
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -114,10 +120,12 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
 
     val proxies = proxiesOf(currentProfile)
     val visitors = currentProfile?.config?.visitors.orEmpty()
+    // 禁用的规则 frpc 不注册，既不占在线数也不该进分母（否则永远显示 0/1）
+    val enabledProxies = proxies.filter { it.enabled != false }
     // 在线数优先取 Admin API，其次日志推断
     val onlineCount = status?.all?.count { it.status == "running" }
         ?: logProxyStates.count { it.value.phase == LogProxyPhase.RUNNING }
-    val totalCount = proxies.size
+    val totalCount = enabledProxies.size
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -183,31 +191,37 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val running = state.phase == FrpcSupervisor.Phase.RUNNING
+                    // 端口探测涉及连/绑 socket，必须在后台做，别占主线程
+                    val busy = checking ||
+                        state.phase == FrpcSupervisor.Phase.STARTING ||
+                        state.phase == FrpcSupervisor.Phase.STOPPING
                     Button(
                         onClick = {
                             if (running) {
                                 context.startService(FrpcService.stopIntent(context))
                             } else {
                                 val profile = currentProfile ?: return@Button
-                                val reason = FrpcSupervisor.checkBeforeStart(profile)
-                                if (reason == null) {
-                                    ContextCompat.startForegroundService(
-                                        context,
-                                        FrpcService.startIntent(context, profile.id),
-                                    )
-                                } else {
-                                    blockedReason = reason
+                                checking = true
+                                uiScope.launch(Dispatchers.IO) {
+                                    val reason = FrpcSupervisor.checkBeforeStart(profile)
+                                    withContext(Dispatchers.Main) {
+                                        checking = false
+                                        if (reason == null) {
+                                            ContextCompat.startForegroundService(
+                                                context,
+                                                FrpcService.startIntent(context, profile.id),
+                                            )
+                                        } else {
+                                            blockedReason = reason
+                                        }
+                                    }
                                 }
                             }
                         },
-                        enabled = currentProfile != null &&
-                            state.phase != FrpcSupervisor.Phase.STARTING &&
-                            state.phase != FrpcSupervisor.Phase.STOPPING,
+                        enabled = currentProfile != null && !busy,
                         modifier = Modifier.weight(1f),
                     ) {
-                        if (state.phase == FrpcSupervisor.Phase.STARTING ||
-                            state.phase == FrpcSupervisor.Phase.STOPPING
-                        ) {
+                        if (busy) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp))
                         } else {
                             Text(
@@ -232,6 +246,25 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
             }
         }
 
+        // 「已保存但还没重载」：不提示的话，用户会以为改完就生效了
+        if (state.phase == FrpcSupervisor.Phase.RUNNING && pendingReloadId == currentProfileId) {
+            item {
+                SectionCard(title = stringResource(R.string.home_pending_reload_title)) {
+                    Text(
+                        text = stringResource(R.string.home_pending_reload_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Button(
+                        onClick = { context.startService(FrpcService.reloadIntent(context)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.action_reload))
+                    }
+                }
+            }
+        }
+
         // 配置切换（多个配置时）
         if (profiles.size > 1) {
             item {
@@ -247,7 +280,7 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                             FilterChip(
                                 selected = profile.id == currentProfileId,
                                 onClick = {
-                                    scope.launch {
+                                    uiScope.launch {
                                         container.settingsRepository.setDefaultProfileId(profile.id)
                                     }
                                 },
@@ -294,12 +327,17 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
         }
 
         // 分组标题用普通文字，不再用「空标题卡片」——空卡片会渲染成一个只有标题的方框
+        // 计数只算已启用的：禁用的规则不注册到 frps，混进总数会让「0/1 在线」看起来像故障
         item {
             GroupHeader(
                 text = if (proxies.isEmpty()) {
                     stringResource(R.string.home_proxies)
                 } else {
-                    stringResource(R.string.home_group_count, stringResource(R.string.home_proxies), proxies.size)
+                    stringResource(
+                        R.string.home_group_count,
+                        stringResource(R.string.home_proxies),
+                        totalCount,
+                    )
                 },
             )
         }

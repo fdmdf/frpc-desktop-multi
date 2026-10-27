@@ -25,7 +25,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "frpc-desktop-multi"
+rootProject.name = "Frpc-Android-Multi"
 
 // 一仓两端：共享配置模型 + Android 客户端 + 桌面客户端
 include(":shared")

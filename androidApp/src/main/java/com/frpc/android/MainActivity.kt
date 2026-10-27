@@ -138,6 +138,16 @@ fun FrpcApp(container: com.frpc.android.di.AppContainer) {
         navigator.pop()
     }
 
+    // 兜底：只要当前不在任何编辑页，编辑草稿就必须清干净。
+    // 覆盖「切底部 Tab 直接离开配置页」这类没走返回箭头的路径，
+    // 否则草稿会一直存活，下次点开同一份配置看到的还是上次没保存的内容。
+    LaunchedEffect(current) {
+        val inEditor = current is Screen.ServerEdit ||
+            current is Screen.ProxyEdit ||
+            current is Screen.VisitorEdit
+        if (!inEditor) container.configEditorStore.clearAll()
+    }
+
     Scaffold(
         bottomBar = {
             NavigationBar {

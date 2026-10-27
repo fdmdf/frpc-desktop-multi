@@ -8,7 +8,7 @@ import java.io.File
 import kotlin.system.exitProcess
 
 /**
- * 无界面工具：`frpc-desktop-multi --export-toml <profiles.json> <outDir>`
+ * 无界面工具：`Frpc-Android-Multi --export-toml <profiles.json> <outDir>`
  *
  * 把 App 里保存的档案（profiles.json，与运行时同一份结构）逐条用**应用自己的编码器**
  * 转成 frpc.toml（profile-<index>.toml），并用**应用自己的校验器**检查一遍。

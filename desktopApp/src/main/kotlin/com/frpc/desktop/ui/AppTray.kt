@@ -37,7 +37,7 @@ object AppTray {
         popup.addSeparator()
         addItem("退出", onQuit)
 
-        val trayIcon = TrayIcon(image, "frpc-desktop-multi", popup).apply { isImageAutoSize = true }
+        val trayIcon = TrayIcon(image, "Frpc-Android-Multi", popup).apply { isImageAutoSize = true }
         trayIcon.addActionListener { onShow() }
         SystemTray.getSystemTray().add(trayIcon)
         icon = trayIcon

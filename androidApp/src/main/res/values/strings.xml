@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">frpc-desktop-multi</string>
+    <string name="app_name">Frpc-Android-Multi</string>
 
     <!-- 导航 / 通用 -->
     <string name="nav_home">主页</string>
@@ -14,6 +14,9 @@
     <string name="action_start">启动</string>
     <string name="action_stop">停止</string>
     <string name="action_reload">重载配置</string>
+    <string name="action_save_and_reload">保存并重载</string>
+    <string name="action_save_only">仅保存</string>
+    <string name="action_rescan">重新扫描</string>
     <string name="action_add">添加</string>
     <string name="action_edit">编辑</string>
     <string name="action_copy">复制</string>
@@ -22,6 +25,8 @@
     <string name="action_share">分享</string>
     <string name="action_confirm">确定</string>
     <string name="action_retry">重试</string>
+    <string name="action_discard">放弃修改</string>
+    <string name="action_keep_editing">继续编辑</string>
 
     <!-- 主页 -->
     <string name="home_no_config">还没有配置，先去「配置」页新建一份</string>
@@ -88,10 +93,17 @@
     <string name="config_imported">已导入配置「%1$s」</string>
     <string name="config_imported_as_default">已导入配置「%1$s」并设为默认</string>
     <string name="config_running">运行中</string>
-    <string name="config_running_block_title">配置正在运行</string>
-    <string name="config_running_block_body">运行中的配置不能编辑：frpc 正在使用它，改动不会生效。请先停止服务，编辑保存后再启动。</string>
     <string name="config_back_to_list">返回配置列表</string>
-    <string name="config_running_cannot_edit">运行中，停止后才能编辑</string>
+    <!-- 运行中的配置允许编辑，但要说清「保存 ≠ 生效」 -->
+    <string name="config_running_edit_hint">运行中，保存后需「重载配置」才生效</string>
+    <string name="config_running_editing_title">该配置正在运行</string>
+    <string name="config_running_editing_body">可以直接改并保存，但 frpc 仍在使用旧配置，需要「重载配置」（或停止后重新启动）才会生效。</string>
+    <string name="config_save_running_title">保存运行中的配置</string>
+    <string name="config_save_running_body">保存后 frpc 仍在使用旧配置。是否立即重载让它生效？</string>
+    <string name="config_pending_reload_hint">已保存，尚未重载，仍在使用旧配置</string>
+    <string name="config_pending_reload">待重载</string>
+    <string name="home_pending_reload_title">配置尚未生效</string>
+    <string name="home_pending_reload_body">配置已保存但还没有重载，frpc 仍在使用旧配置。</string>
     <string name="config_running_cannot_delete">运行中，停止后才能删除</string>
     <string name="config_empty_name">配置名称不能为空</string>
     <string name="error_duplicate_profile_name">已存在同名配置「%1$s」，请换一个名称</string>
@@ -264,6 +276,10 @@
     <string name="field_fallback_to_hint">另建一个指向同一代理的 stcp 访问者，填它的访问者名称</string>
     <string name="field_fallback_timeout">等待时长（毫秒）</string>
     <string name="field_fallback_timeout_hint">留空 = 1000；超时还没打通就切兜底</string>
+
+    <!-- 未保存就退出 -->
+    <string name="edit_discard_title">放弃未保存的修改？</string>
+    <string name="edit_discard_body">还没点保存，返回后这些改动会丢掉。</string>
 
     <!-- 校验 -->
     <string name="validation_title">配置校验未通过</string>

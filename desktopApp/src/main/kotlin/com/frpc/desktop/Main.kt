@@ -128,7 +128,7 @@ object AppActivation {
 
 /**
  * 托盘自检：把托盘菜单弹到屏幕上截图，用来核对中文有没有渲染成方框。
- * 用法：frpc-desktop-multi.exe --tray-test <输出png>
+ * 用法：Frpc-Android-Multi.exe --tray-test <输出png>
  */
 private fun runTrayTest(args: Array<String>) {
     val target = File(args.getOrNull(args.indexOf("--tray-test") + 1) ?: "tray-test.png")
@@ -136,7 +136,7 @@ private fun runTrayTest(args: Array<String>) {
         println("tray not supported")
         exitProcess(4)
     }
-    AppTray.updateTooltip("frpc-desktop-multi · 运行中 · 代理 3/3 · 访问者 1/1")
+    AppTray.updateTooltip("Frpc-Android-Multi · 运行中 · 代理 3/3 · 访问者 1/1")
     AppTray.updateRunning(true)
     val popup = AppTray.popupForTest() ?: run { println("no popup"); exitProcess(5) }
     val frame = Frame().apply {
@@ -201,7 +201,7 @@ private fun app() = application {
     val trayProfiles by container.profiles.profiles.collectAsState()
     val activeProfile = trayProfiles.firstOrNull { it.id == runState.profileId }
     val trayTooltip = buildString {
-        append("frpc-desktop-multi")
+        append("Frpc-Android-Multi")
         when (runState.phase) {
             FrpcSupervisor.Phase.RUNNING -> {
                 append(" · 运行中")
@@ -254,7 +254,7 @@ private fun app() = application {
                     exitApplication()
                 }
             },
-            title = "frpc-desktop-multi",
+            title = "Frpc-Android-Multi",
             state = rememberWindowState(
                 width = 1280.dp,
                 height = 820.dp,
@@ -345,7 +345,7 @@ private fun Sidebar(
                 modifier = Modifier.size(22.dp),
             )
             Text(
-                text = "frpc-desktop-multi",
+                text = "Frpc-Android-Multi",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(start = 8.dp),
             )

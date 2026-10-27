@@ -52,6 +52,8 @@ fun HomeScreen(
     val profiles by container.profiles.profiles.collectAsState()
     val settings by container.settings.state.collectAsState()
     val state by container.supervisor.state.collectAsState()
+    // 运行中改了配置但只存盘没重载：frpc 还在用旧配置，这里必须给个出口
+    val pendingReloadId by container.supervisor.pendingReloadProfileId.collectAsState()
     val metrics by container.supervisor.metrics.collectAsState()
     val status by container.supervisor.status.collectAsState()
     val logStates by container.supervisor.proxyStates.collectAsState()
@@ -270,6 +272,21 @@ fun HomeScreen(
             }
         }
 
+        // 「已保存但还没重载」：不提示的话，用户会以为改完就生效了
+        if (running && pendingReloadId != null && pendingReloadId == state.profileId) {
+            SectionCard(title = "配置尚未生效") {
+                Text(
+                    text = "配置已保存但还没有重载，frpc 仍在使用旧配置。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Button(
+                    onClick = { container.supervisor.reload() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("重载配置") }
+            }
+        }
+
         SectionCard(title = "概览") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -477,7 +494,9 @@ private fun proxySummary(
     totalFromAdmin: Int?,
     onlineFromAdmin: Int?,
 ): String {
-    val total = totalFromAdmin ?: proxies.size
+    // 没有状态接口（admin 关闭）时按配置算，此时必须排除已禁用规则：
+    // frpc 不会注册它们，算进分母就成了永远凑不齐的 0/1
+    val total = totalFromAdmin ?: proxies.count { it.enabled != false }
     val online = onlineFromAdmin ?: 0
     return if (total > 0) "$online/$total" else "--"
 }

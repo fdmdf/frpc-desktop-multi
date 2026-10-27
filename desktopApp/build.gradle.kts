@@ -24,7 +24,7 @@ dependencies {
 // 同时写进 resources/VERSION，运行时读出来展示，避免界面上手写版本号又忘了改
 val appVersionRaw = System.getenv("APP_VERSION")
     ?: project.findProperty("appVersion")?.toString()
-    ?: "1.0.0"
+    ?: "1.1.0"
 val versionResource = layout.buildDirectory.file("generated/app-version/VERSION")
 val writeVersionResource = tasks.register("writeVersionResource") {
     outputs.file(versionResource)
@@ -72,22 +72,22 @@ compose.desktop {
         jvmArgs += listOf("-Dfile.encoding=UTF-8")
 
         nativeDistributions {
-            // Windows 用 app-image（zip 内 frpc-desktop-multi.exe 直接运行，自带 JRE）；
+            // Windows 用 app-image（zip 内 Frpc-Android-Multi.exe 直接运行，自带 JRE）；
             // Linux 出 deb/AppImage；macOS 出 Dmg。Msi 需要 WiX，本地构建时可再加
             targetFormats(TargetFormat.Exe, TargetFormat.AppImage, TargetFormat.Deb, TargetFormat.Dmg)
-            packageName = "frpc-desktop-multi"
+            packageName = "Frpc-Android-Multi"
             // jpackage 只接受 MAJOR.MINOR.BUILD，缺位补 0，避免 "1" / "1.0" 直接失败
             packageVersion = appVersionRaw.split('.').let { parts ->
                 (parts + List(3) { "0" }).take(3).joinToString(".")
             }
             // jpackage 的元信息会被写进 .cfg/注册表并按本地编码回读，
             // 非 ASCII 在 Windows(GBK) 下会抛 "Input length = 1"，这里保持纯 ASCII
-            description = "frpc-desktop-multi - frp client (desktop)"
-            copyright = "(c) 2026 frpc-desktop-multi contributors"
-            vendor = "frpc-desktop-multi"
+            description = "Frpc-Android-Multi - frp client (desktop)"
+            copyright = "(c) 2026 Frpc-Android-Multi contributors"
+            vendor = "Frpc-Android-Multi"
 
             windows {
-                menuGroup = "frpc-desktop-multi"
+                menuGroup = "Frpc-Android-Multi"
                 shortcut = true
                 dirChooser = true
                 // 安装包图标（由 docs/assets/icon.svg 生成，缺省时不指定）
@@ -97,7 +97,7 @@ compose.desktop {
             }
             macOS {
                 bundleID = "com.frpc.dash"
-                dockName = "frpc-desktop-multi"
+                dockName = "Frpc-Android-Multi"
             }
         }
     }

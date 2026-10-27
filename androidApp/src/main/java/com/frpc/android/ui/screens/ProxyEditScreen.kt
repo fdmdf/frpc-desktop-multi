@@ -26,6 +26,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +69,8 @@ fun ProxyEditScreen(
     val store = container.configEditorStore
     val proxy by store.proxyDraft.collectAsStateWithLifecycle()
     var issues by remember { mutableStateOf<List<ValidationIssue>>(emptyList()) }
+    // 改过但没保存就返回：先问一句，避免手滑点掉一堆输入
+    var confirmDiscard by remember { mutableStateOf(false) }
 
     // 防重入：旋转/重绘时若草稿已属于该下标则跳过初始化（避免丢失未保存输入）
     LaunchedEffect(proxyIndex) {
@@ -75,6 +78,18 @@ fun ProxyEditScreen(
         val existing = store.draft.value?.config?.proxies?.getOrNull(proxyIndex)
         store.beginProxyEdit(proxyIndex, existing)
     }
+
+    // 返回 = 放弃：不保存就必须把草稿丢掉，
+    // 否则下次进同一条规则会看到上次没保存的修改（历史 bug）
+    fun goBack() {
+        if (store.isProxyDirty()) {
+            confirmDiscard = true
+        } else {
+            store.clearProxy()
+            navigator.pop()
+        }
+    }
+    androidx.activity.compose.BackHandler { goBack() }
 
     val current = proxy ?: return
     // 用于实时展示 frps 上的完整代理名（前缀来自本配置的 user）
@@ -87,7 +102,7 @@ fun ProxyEditScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.proxy_edit)) },
                 navigationIcon = {
-                    IconButton(onClick = { navigator.pop() }) {
+                    IconButton(onClick = { goBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
@@ -515,6 +530,28 @@ fun ProxyEditScreen(
             }
         }
     }
+
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text(stringResource(R.string.edit_discard_title)) },
+            text = { Text(stringResource(R.string.edit_discard_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDiscard = false
+                    store.clearProxy()
+                    navigator.pop()
+                }) {
+                    Text(stringResource(R.string.action_discard))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscard = false }) {
+                    Text(stringResource(R.string.action_keep_editing))
+                }
+            },
+        )
+    }
 }
 
 /** 必填项标签加 * 标记 */
@@ -542,7 +579,9 @@ fun proxyTypeLabel(id: String): String = when (id) {
 @Composable
 private fun LocalPortPickerDialog(onDismiss: () -> Unit, onPick: (Int) -> Unit) {
     var ports by remember { mutableStateOf<List<ListeningPort>?>(null) }
-    LaunchedEffect(Unit) {
+    var scanToken by remember { mutableIntStateOf(0) }
+    LaunchedEffect(scanToken) {
+        ports = null
         ports = withContext(Dispatchers.IO) { LocalPorts.list() }
     }
 
@@ -586,6 +625,12 @@ private fun LocalPortPickerDialog(onDismiss: () -> Unit, onPick: (Int) -> Unit) 
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+        dismissButton = {
+            // 扫不到时（比如目标服务刚起来）给个重来一次的出口，不用退出再点进来
+            TextButton(onClick = { scanToken++ }) {
+                Text(stringResource(R.string.action_rescan))
+            }
         },
     )
 }

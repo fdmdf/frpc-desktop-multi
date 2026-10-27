@@ -67,6 +67,7 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
     val profiles by container.configRepository.profiles.collectAsStateWithLifecycle()
     val defaultId by container.settingsRepository.defaultProfileId.collectAsStateWithLifecycle()
     val supervisorState by FrpcSupervisor.state.collectAsStateWithLifecycle()
+    val pendingReloadId by FrpcSupervisor.pendingReloadProfileId.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ServerProfile?>(null) }
     var exportTarget by remember { mutableStateOf<ServerProfile?>(null) }
     var importError by remember { mutableStateOf<String?>(null) }
@@ -187,6 +188,7 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
                     profile = profile,
                     isDefault = profile.id == defaultId,
                     isRunning = profileRunning,
+                    pendingReload = pendingReloadId == profile.id,
                     onEdit = {
                         container.configEditorStore.beginEdit(profile)
                         navigator.push(Screen.ServerEdit(profile.id))
@@ -350,6 +352,8 @@ private fun ProfileCard(
     profile: ServerProfile,
     isDefault: Boolean,
     isRunning: Boolean,
+    /** 已保存但还没重载：运行中配置改完未生效的提示态 */
+    pendingReload: Boolean,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onExport: () -> Unit,
@@ -380,6 +384,13 @@ private fun ProfileCard(
                             modifier = Modifier.padding(start = 8.dp),
                         )
                     }
+                    if (pendingReload) {
+                        StatusChip(
+                            text = stringResource(R.string.config_pending_reload),
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
                     if (isDefault) {
                         StatusChip(
                             text = stringResource(R.string.config_default),
@@ -405,16 +416,25 @@ private fun ProfileCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                // 运行中的配置不允许编辑：frpc 正在使用它，改字段不会生效
+                // 运行中的配置允许编辑保存，但必须让人看到「还没生效」，
+                // 否则容易以为存盘即生效（真正生效要靠「重载配置」）
                 if (isRunning) {
                     Text(
-                        text = stringResource(R.string.config_running_cannot_edit),
+                        text = if (pendingReload) {
+                            stringResource(R.string.config_pending_reload_hint)
+                        } else {
+                            stringResource(R.string.config_running_edit_hint)
+                        },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (pendingReload) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
             }
-            TextButton(onClick = onEdit, enabled = !isRunning) {
+            TextButton(onClick = onEdit) {
                 Text(stringResource(R.string.action_edit))
             }
             Box {

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">frpc-desktop-multi</string>
+    <string name="app_name">Frpc-Android-Multi</string>
 
     <string name="nav_home">Home</string>
     <string name="nav_configs">Configs</string>
@@ -13,6 +13,9 @@
     <string name="action_start">Start</string>
     <string name="action_stop">Stop</string>
     <string name="action_reload">Reload</string>
+    <string name="action_save_and_reload">Save &amp; reload</string>
+    <string name="action_save_only">Save only</string>
+    <string name="action_rescan">Rescan</string>
     <string name="action_add">Add</string>
     <string name="action_edit">Edit</string>
     <string name="action_copy">Duplicate</string>
@@ -21,6 +24,8 @@
     <string name="action_share">Share</string>
     <string name="action_confirm">OK</string>
     <string name="action_retry">Retry</string>
+    <string name="action_discard">Discard</string>
+    <string name="action_keep_editing">Keep editing</string>
 
     <string name="home_no_config">No config yet. Create one under Configs first.</string>
     <string name="home_current_config">Active config</string>
@@ -84,10 +89,17 @@
     <string name="config_imported">Imported config \"%1$s\"</string>
     <string name="config_imported_as_default">Imported config \"%1$s\" and set as default</string>
     <string name="config_running">Running</string>
-    <string name="config_running_block_title">Config is running</string>
-    <string name="config_running_block_body">A running config cannot be edited: frpc is using it and changes would not take effect. Stop the service, edit, then start again.</string>
     <string name="config_back_to_list">Back to configs</string>
-    <string name="config_running_cannot_edit">Running — stop it to edit</string>
+    <!-- 运行中的配置允许编辑，但要说清「保存 ≠ 生效」 -->
+    <string name="config_running_edit_hint">Running — reload after saving to apply</string>
+    <string name="config_running_editing_title">This config is running</string>
+    <string name="config_running_editing_body">You can edit and save it, but frpc keeps using the old config until you reload (or stop and start again).</string>
+    <string name="config_save_running_title">Save a running config</string>
+    <string name="config_save_running_body">After saving, frpc still uses the old config. Reload now to apply the changes?</string>
+    <string name="config_pending_reload_hint">Saved but not reloaded — old config still in use</string>
+    <string name="config_pending_reload">Pending reload</string>
+    <string name="home_pending_reload_title">Changes not applied yet</string>
+    <string name="home_pending_reload_body">The config was saved but has not been reloaded, so frpc is still running the old one.</string>
     <string name="config_running_cannot_delete">Running — stop it to delete</string>
     <string name="config_empty_name">Config name cannot be empty</string>
     <string name="error_duplicate_profile_name">A profile named "%1$s" already exists. Choose another name.</string>
@@ -232,6 +244,8 @@
     <string name="field_fallback_timeout">Wait timeout (ms)</string>
     <string name="field_fallback_timeout_hint">Empty = 1000; falls back once punching exceeds this</string>
 
+    <string name="edit_discard_title">Discard unsaved changes?</string>
+    <string name="edit_discard_body">You have not saved yet. Going back drops these edits.</string>
     <string name="validation_title">Config validation failed</string>
     <string name="validation_warnings_title">Suggestions</string>
     <string name="reason_empty_required_field">%1$s is required</string>

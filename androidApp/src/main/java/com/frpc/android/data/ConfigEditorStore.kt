@@ -45,13 +45,21 @@ class ConfigEditorStore {
     /** 访问者草稿对应的列表下标 */
     private var visitorDraftIndex: Int? = null
 
+    // 进入编辑时的原始值快照：返回时据此判断是否真的改过（改过才值得提示"放弃修改"）
+    private var proxyOriginal: ProxyConfig? = null
+    private var visitorOriginal: VisitorConfig? = null
+    private var configOriginal: FrpcConfig? = null
+
     // ------------------------------------------------------------ 服务器配置
 
     fun beginNew() {
-        _draft.value = Draft(profileId = null, name = "", config = FrpcConfig(auth = com.frpc.shared.model.AuthConfig()))
+        val config = FrpcConfig(auth = com.frpc.shared.model.AuthConfig())
+        configOriginal = config
+        _draft.value = Draft(profileId = null, name = "", config = config)
     }
 
     fun beginEdit(profile: ServerProfile) {
+        configOriginal = profile.config
         _draft.value = Draft(
             profileId = profile.id,
             name = profile.name,
@@ -60,6 +68,9 @@ class ConfigEditorStore {
             lastUsedAt = profile.lastUsedAt,
         )
     }
+
+    /** 服务器配置草稿是否被改过（新建时只填了默认值的空草稿不算） */
+    fun isConfigDirty(): Boolean = _draft.value?.let { it.config != configOriginal } ?: false
 
     /** 草稿是否已属于目标配置（屏幕重入时据此跳过重复初始化） */
     fun hasDraft(profileId: String?): Boolean =
@@ -75,6 +86,14 @@ class ConfigEditorStore {
 
     fun clear() {
         _draft.value = null
+        configOriginal = null
+    }
+
+    /** 离开编辑页（返回列表 / 切 Tab）时的兜底：草稿与子草稿一并丢弃 */
+    fun clearAll() {
+        clear()
+        clearProxy()
+        clearVisitor()
     }
 
     /** 构建待保存的档案（保留原 id 与创建/使用时间，新建则生成新 id） */
@@ -100,12 +119,17 @@ class ConfigEditorStore {
 
     fun beginProxyEdit(index: Int, proxy: ProxyConfig?) {
         proxyDraftIndex = index
-        _proxyDraft.value = proxy ?: ProxyConfig(name = "", type = "tcp", localIP = "127.0.0.1")
+        val base = proxy ?: ProxyConfig(name = "", type = "tcp", localIP = "127.0.0.1")
+        proxyOriginal = base
+        _proxyDraft.value = base
     }
 
     /** 下标 index 的代理草稿是否已存在（屏幕重入/旋转时跳过重复初始化） */
     fun hasProxyDraft(index: Int): Boolean =
         proxyDraftIndex == index && _proxyDraft.value != null
+
+    /** 代理草稿是否被改过（新建时只带默认值的草稿不算） */
+    fun isProxyDirty(): Boolean = _proxyDraft.value?.let { it != proxyOriginal } ?: false
 
     fun updateProxy(transform: (ProxyConfig) -> ProxyConfig) {
         _proxyDraft.value = _proxyDraft.value?.let { transform(it) }
@@ -130,12 +154,17 @@ class ConfigEditorStore {
 
     fun beginVisitorEdit(index: Int, visitor: VisitorConfig?) {
         visitorDraftIndex = index
-        _visitorDraft.value = visitor ?: VisitorConfig(name = "", type = "stcp", serverName = "")
+        val base = visitor ?: VisitorConfig(name = "", type = "stcp", serverName = "")
+        visitorOriginal = base
+        _visitorDraft.value = base
     }
 
     /** 下标 index 的访问者草稿是否已存在 */
     fun hasVisitorDraft(index: Int): Boolean =
         visitorDraftIndex == index && _visitorDraft.value != null
+
+    /** 访问者草稿是否被改过 */
+    fun isVisitorDirty(): Boolean = _visitorDraft.value?.let { it != visitorOriginal } ?: false
 
     fun updateVisitor(transform: (VisitorConfig) -> VisitorConfig) {
         _visitorDraft.value = _visitorDraft.value?.let { transform(it) }

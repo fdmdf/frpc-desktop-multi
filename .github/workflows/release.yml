@@ -5,16 +5,16 @@ name: Release
 #   2) 手动 workflow_dispatch —— 补发/重发，版本号可填，留空用 androidApp 的 versionName
 #
 # 产物命名规范（PRODUCT-版本-系统-架构[-变体].扩展名）：
-#   frpc-desktop-multi-1.0.0-windows-x64-setup.exe    Windows 安装程序（自带 JRE，开始菜单快捷方式）
-#   frpc-desktop-multi-1.0.0-windows-x64.zip          Windows 便携版（解压即用）
-#   frpc-desktop-multi-1.0.0-linux-x64.tar.gz         Linux 通用包（解压运行 bin/frpc-desktop-multi）
-#   frpc-desktop-multi-1.0.0-linux-x64.deb            Debian / Ubuntu
-#   frpc-desktop-multi-1.0.0-linux-x64.AppImage       AppImage（可选，失败不阻塞发版）
-#   frpc-desktop-multi-1.0.0-macos-arm64.dmg          macOS Apple Silicon
-#   frpc-desktop-multi-1.0.0-macos-arm64.tar.gz       同上，.app 压缩包
-#   frpc-desktop-multi-1.0.0-macos-x64.dmg            macOS Intel
-#   frpc-desktop-multi-1.0.0-macos-x64.tar.gz         同上，.app 压缩包
-#   frpc-desktop-multi-1.0.0-android-arm64.apk        Android（签名密钥失效时才退化成 -unsigned）
+#   Frpc-Android-Multi-1.1.0-windows-x64-setup.exe    Windows 安装程序（自带 JRE，开始菜单快捷方式）
+#   Frpc-Android-Multi-1.1.0-windows-x64.zip          Windows 便携版（解压即用）
+#   Frpc-Android-Multi-1.1.0-linux-x64.tar.gz         Linux 通用包（解压运行 bin/Frpc-Android-Multi）
+#   Frpc-Android-Multi-1.1.0-linux-x64.deb            Debian / Ubuntu
+#   Frpc-Android-Multi-1.1.0-linux-x64.AppImage       AppImage（可选，失败不阻塞发版）
+#   Frpc-Android-Multi-1.1.0-macos-arm64.dmg          macOS Apple Silicon
+#   Frpc-Android-Multi-1.1.0-macos-arm64.tar.gz       同上，.app 压缩包
+#   Frpc-Android-Multi-1.1.0-macos-x64.dmg            macOS Intel
+#   Frpc-Android-Multi-1.1.0-macos-x64.tar.gz         同上，.app 压缩包
+#   Frpc-Android-Multi-1.1.0-android-arm64.apk        Android（签名密钥失效时才退化成 -unsigned）
 #   frpc-engine-VERSION.txt                           内置 frpc 引擎版本留档
 
 on:
@@ -45,7 +45,7 @@ concurrency:
 env:
   # 产品名 = 仓库名 = jpackage packageName。改这里必须同步 desktopApp/build.gradle.kts 的 packageName，
   # 否则 desktop job 会在 $BIN/app 下找不到同名目录而报「缺少产物」
-  PRODUCT: frpc-desktop-multi
+  PRODUCT: Frpc-Android-Multi
   FRP_VERSION: v0.71.1
 
 jobs:
@@ -525,33 +525,33 @@ jobs:
           }
 
           echo "== 必需产物 =="
-          check "frpc-desktop-multi-$V-windows-x64.zip"        required
-          check "frpc-desktop-multi-$V-windows-x64-setup.exe"  required
-          check "frpc-desktop-multi-$V-linux-x64.tar.gz"       required
-          check "frpc-desktop-multi-$V-linux-x64.deb"          required
-          check "frpc-desktop-multi-$V-macos-arm64.dmg"        required
-          check "frpc-desktop-multi-$V-macos-arm64.tar.gz"     required
-          check "frpc-desktop-multi-$V-macos-x64.dmg"          required
-          check "frpc-desktop-multi-$V-macos-x64.tar.gz"       required
+          check "Frpc-Android-Multi-$V-windows-x64.zip"        required
+          check "Frpc-Android-Multi-$V-windows-x64-setup.exe"  required
+          check "Frpc-Android-Multi-$V-linux-x64.tar.gz"       required
+          check "Frpc-Android-Multi-$V-linux-x64.deb"          required
+          check "Frpc-Android-Multi-$V-macos-arm64.dmg"        required
+          check "Frpc-Android-Multi-$V-macos-arm64.tar.gz"     required
+          check "Frpc-Android-Multi-$V-macos-x64.dmg"          required
+          check "Frpc-Android-Multi-$V-macos-x64.tar.gz"       required
           check "frpc-engine-VERSION.txt"            required
           # Android 签名与否决定文件名，两者任一存在即可
-          if [ -f "frpc-desktop-multi-$V-android-arm64.apk" ]; then
-            check "frpc-desktop-multi-$V-android-arm64.apk" required
+          if [ -f "Frpc-Android-Multi-$V-android-arm64.apk" ]; then
+            check "Frpc-Android-Multi-$V-android-arm64.apk" required
           else
-            check "frpc-desktop-multi-$V-android-arm64-unsigned.apk" required
+            check "Frpc-Android-Multi-$V-android-arm64-unsigned.apk" required
           fi
 
           echo "== 可选产物 =="
-          check "frpc-desktop-multi-$V-linux-x64.AppImage" optional
+          check "Frpc-Android-Multi-$V-linux-x64.AppImage" optional
 
           echo "== 多余文件（正常应为空） =="
           for f in *; do
             case "$f" in
-              frpc-desktop-multi-$V-windows-x64.zip|frpc-desktop-multi-$V-windows-x64-setup.exe|\
-              frpc-desktop-multi-$V-linux-x64.tar.gz|frpc-desktop-multi-$V-linux-x64.deb|frpc-desktop-multi-$V-linux-x64.AppImage|\
-              frpc-desktop-multi-$V-macos-arm64.dmg|frpc-desktop-multi-$V-macos-arm64.tar.gz|\
-              frpc-desktop-multi-$V-macos-x64.dmg|frpc-desktop-multi-$V-macos-x64.tar.gz|\
-              frpc-desktop-multi-$V-android-arm64.apk|frpc-desktop-multi-$V-android-arm64-unsigned.apk|\
+              Frpc-Android-Multi-$V-windows-x64.zip|Frpc-Android-Multi-$V-windows-x64-setup.exe|\
+              Frpc-Android-Multi-$V-linux-x64.tar.gz|Frpc-Android-Multi-$V-linux-x64.deb|Frpc-Android-Multi-$V-linux-x64.AppImage|\
+              Frpc-Android-Multi-$V-macos-arm64.dmg|Frpc-Android-Multi-$V-macos-arm64.tar.gz|\
+              Frpc-Android-Multi-$V-macos-x64.dmg|Frpc-Android-Multi-$V-macos-x64.tar.gz|\
+              Frpc-Android-Multi-$V-android-arm64.apk|Frpc-Android-Multi-$V-android-arm64-unsigned.apk|\
               frpc-engine-VERSION.txt) ;;
               *) echo "  [UNEXPECTED] $f" ;;
             esac
@@ -590,19 +590,19 @@ jobs:
           [ -n "${FRP:-}" ] || FRP="$FRP_VERSION"
 
           {
-            echo "## frpc-desktop-multi $V"
+            echo "## Frpc-Android-Multi $V"
             echo ""
             echo "frp 客户端一体化发布：**桌面端 + Android**，共用同一套配置模型与校验逻辑。"
             echo "内置 frpc 引擎：**$FRP**（各平台独立原生编译，非跨平台模拟）"
             echo ""
             echo "| 平台 | 文件 | 说明 |"
             echo "|---|---|---|"
-            echo "| Windows x64 | \`frpc-desktop-multi-$V-windows-x64-setup.exe\` | 双击安装，自带 JRE，含开始菜单快捷方式 |"
-            echo "| Windows x64 | \`frpc-desktop-multi-$V-windows-x64.zip\` | 便携版，解压后运行 \`frpc-desktop-multi.exe\` |"
-            echo "| Linux x64 | \`frpc-desktop-multi-$V-linux-x64.tar.gz\` / \`.deb\` | 解压运行 \`bin/frpc-desktop-multi\`，或 \`dpkg -i\` |"
-            echo "| macOS arm64 | \`frpc-desktop-multi-$V-macos-arm64.dmg\` | Apple Silicon；未签名，首次需右键打开 |"
-            echo "| macOS x64 | \`frpc-desktop-multi-$V-macos-x64.dmg\` | Intel；未签名，首次需右键打开 |"
-            echo "| Android arm64 | \`frpc-desktop-multi-$V-android-arm64.apk\` | Android 8.0+，允许未知来源安装 |"
+            echo "| Windows x64 | \`Frpc-Android-Multi-$V-windows-x64-setup.exe\` | 双击安装，自带 JRE，含开始菜单快捷方式 |"
+            echo "| Windows x64 | \`Frpc-Android-Multi-$V-windows-x64.zip\` | 便携版，解压后运行 \`Frpc-Android-Multi.exe\` |"
+            echo "| Linux x64 | \`Frpc-Android-Multi-$V-linux-x64.tar.gz\` / \`.deb\` | 解压运行 \`bin/Frpc-Android-Multi\`，或 \`dpkg -i\` |"
+            echo "| macOS arm64 | \`Frpc-Android-Multi-$V-macos-arm64.dmg\` | Apple Silicon；未签名，首次需右键打开 |"
+            echo "| macOS x64 | \`Frpc-Android-Multi-$V-macos-x64.dmg\` | Intel；未签名，首次需右键打开 |"
+            echo "| Android arm64 | \`Frpc-Android-Multi-$V-android-arm64.apk\` | Android 8.0+，允许未知来源安装 |"
             echo ""
             echo "macOS 的 \`.tar.gz\` 是同一个 \`.app\` 的压缩包（不便挂载 DMG 时用）。"
             echo ""
@@ -616,7 +616,7 @@ jobs:
             gh release edit "$TAG" --notes-file notes.md
             echo "已更新已存在的 Release $TAG"
           else
-            gh release create "$TAG" dist/* --title "frpc-desktop-multi $V" --notes-file notes.md
+            gh release create "$TAG" dist/* --title "Frpc-Android-Multi $V" --notes-file notes.md
             echo "已创建 Release $TAG"
           fi
 

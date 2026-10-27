@@ -8,6 +8,7 @@ import com.frpc.desktop.runtime.ProcMetrics
 import com.frpc.desktop.runtime.ProcessMetricsReader
 import com.frpc.shared.admin.FrpcAdminClient
 import com.frpc.shared.admin.ProxyStatusSnapshot
+import com.frpc.shared.net.PortCheck
 import com.frpc.shared.toml.FrpcToml
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.ArrayDeque
@@ -49,6 +52,23 @@ class FrpcSupervisor(
 
     private val _state = MutableStateFlow(RunState())
     val state: StateFlow<RunState> = _state.asStateFlow()
+
+    /**
+     * 已存盘但还没重载的配置 id。
+     *
+     * 运行中的配置允许直接编辑保存（旧做法是整页禁用，改个端口都得先停服务），
+     * 但 frpc 手里还是旧配置 —— 这个标记让界面把「保存 ≠ 生效」说清楚。
+     */
+    private val _pendingReloadProfileId = MutableStateFlow<String?>(null)
+    val pendingReloadProfileId: StateFlow<String?> = _pendingReloadProfileId.asStateFlow()
+
+    fun markPendingReload(profileId: String) {
+        _pendingReloadProfileId.value = profileId
+    }
+
+    fun clearPendingReload() {
+        _pendingReloadProfileId.value = null
+    }
 
     private val _logs = MutableStateFlow<List<LogLine>>(emptyList())
     val logs: StateFlow<List<LogLine>> = _logs.asStateFlow()
@@ -91,18 +111,23 @@ class FrpcSupervisor(
     private var watcherJob: Job? = null
     private var stopping = false
 
+    /** 启停串行锁：避免「停止」收尾把紧接着的「启动」状态覆盖掉 */
+    private val opMutex = Mutex()
+
     // ---------------------------------------------------------------- 对外操作
 
     fun start(profile: ServerProfile, isRestart: Boolean = false) {
         scope.launch {
-            // 已经在跑就先停掉，否则旧进程会变成孤儿继续占用端口
-            if (process?.isAlive == true) stopInternal()
-            startInternal(profile, isRestart)
+            opMutex.withLock {
+                // 已经在跑就先停掉，否则旧进程会变成孤儿继续占用端口
+                if (process?.isAlive == true) stopInternal()
+                startInternal(profile, isRestart)
+            }
         }
     }
 
     fun stop() {
-        scope.launch { stopInternal() }
+        scope.launch { opMutex.withLock { stopInternal() } }
     }
 
     /**
@@ -131,6 +156,8 @@ class FrpcSupervisor(
         _adminReachable.value = false
         _serverConnected.value = null
         _loginError.value = null
+        // 进程都停了，「待重载」自然失效
+        clearPendingReload()
         _state.value = RunState(phase = Phase.IDLE)
     }
 
@@ -183,20 +210,24 @@ class FrpcSupervisor(
     /** 热重载：先写回最新配置，再走 admin API；端口变化或无 admin 时整进程重启 */
     fun reload() {
         scope.launch {
-            val st = _state.value
-            val profile = profileStore.find(st.profileId) ?: return@launch
-            val client = adminClient
-            val portChanged = (profile.config.webServer?.port ?: 0) != st.adminPort
-            if (st.phase == Phase.RUNNING && client != null && !portChanged) {
-                runCatching { writeToml(profile) }
-                val ok = runCatching { client.reload() }.isSuccess
-                appendSystemLog(
-                    if (ok) LogLevel.INFO else LogLevel.ERROR,
-                    if (ok) "已通过 admin API 重载配置" else "admin API 重载失败",
-                )
-            } else {
-                stopInternal()
-                startInternal(profile)
+            opMutex.withLock {
+                val st = _state.value
+                val profile = profileStore.find(st.profileId) ?: return@withLock
+                val client = adminClient
+                val portChanged = (profile.config.webServer?.port ?: 0) != st.adminPort
+                if (st.phase == Phase.RUNNING && client != null && !portChanged) {
+                    runCatching { writeToml(profile) }
+                    val ok = runCatching { client.reload() }.isSuccess
+                    appendSystemLog(
+                        if (ok) LogLevel.INFO else LogLevel.ERROR,
+                        if (ok) "已通过 admin API 重载配置" else "admin API 重载失败",
+                    )
+                    if (ok) clearPendingReload()
+                } else {
+                    stopInternal()
+                    startInternal(profile)
+                    clearPendingReload()
+                }
             }
         }
     }
@@ -309,6 +340,7 @@ class FrpcSupervisor(
 
     private suspend fun stopInternal() {
         stopping = true
+        val adminPort = _state.value.adminPort
         _state.update { it.copy(phase = Phase.STOPPING) }
         stopPollers()
         val proc = process
@@ -323,6 +355,14 @@ class FrpcSupervisor(
         }
         process = null
         adminClient = null
+        // 等端口被内核收回去再对外宣布「已停止」，
+        // 否则停止后立刻启动会撞上上一次实例残留的监听/连接（见 PortCheck 注释）
+        if (adminPort > 0) {
+            val freed = PortCheck.awaitFree(adminPort, timeoutMs = 3000)
+            if (!freed) {
+                appendSystemLog(LogLevel.WARN, "端口 $adminPort 暂时还没释放，可能有其他程序占用")
+            }
+        }
         metricsReader.reset()
         _metrics.value = null
         _status.value = null

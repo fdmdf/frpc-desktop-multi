@@ -78,6 +78,9 @@ fun ConfigEditScreen(
     // 服务器端口的输入中间态：清空时不能跳回 7000（与桌面端一致的 P2 修复）
     var serverPortText by remember { mutableStateOf<String?>(null) }
     var nameError by remember { mutableStateOf<String?>(null) }
+    var confirmDiscard by remember { mutableStateOf(false) }
+    // 运行中保存：先问「要不要立刻重载」，别默默存盘让用户以为已经生效
+    var confirmSaveRunning by remember { mutableStateOf(false) }
 
     // 防重入：从代理/访问者编辑页返回时本屏幕会重新进入组合，
     // 若草稿已属于当前配置则跳过初始化，否则整个草稿（含已添加的代理）会被清空
@@ -90,6 +93,17 @@ fun ConfigEditScreen(
         }
     }
 
+    // 不保存就退出 = 放弃整份草稿：否则下次进这份配置看到的还是上次没保存的修改
+    fun goBack() {
+        if (store.isConfigDirty()) {
+            confirmDiscard = true
+        } else {
+            store.clear()
+            navigator.pop()
+        }
+    }
+    androidx.activity.compose.BackHandler { goBack() }
+
     val current = draft ?: return
     val config = current.config
 
@@ -99,13 +113,48 @@ fun ConfigEditScreen(
             .filter { it.severity == com.frpc.shared.validate.Severity.WARNING }
     }
 
-    // 运行中禁止编辑：配置正在被 frpc 使用，改字段没有任何意义（且容易误以为已生效）
-    if (editingRunning) {
-        RunningBlockScreen(
-            onBack = { navigator.pop() },
-            onStop = { context.startService(FrpcService.stopIntent(context)) },
-        )
-        return
+    /**
+     * 落盘 + 收尾。
+     *
+     * 运行中的配置也允许保存（旧做法是整页禁用编辑，改个端口都得先停服务），
+     * 但 frpc 手里拿的还是旧配置：
+     * - reload = true：保存后立刻重载，配置马上生效，清掉「待重载」标记
+     * - reload = false：只存盘，打上「待重载」标记，由主页/列表页提示用户还有一笔没生效的改动
+     */
+    fun doSave(reload: Boolean) {
+        serverPortText?.let { t -> store.update { it.copy(serverPort = t.toIntOrNull() ?: 0) } }
+        nameError = null
+        val issues = store.validate(::isPortInUse)
+        if (issues.any { it.severity == com.frpc.shared.validate.Severity.ERROR }) {
+            showValidation = issues
+            return
+        }
+        val profile = store.toProfile() ?: return
+        val dup = container.configRepository.profiles.value.any {
+            it.name == profile.name.trim() && it.id != profile.id
+        }
+        if (dup) {
+            // 同名配置无法区分，直接拦下（P5）
+            nameError = context.getString(R.string.error_duplicate_profile_name, profile.name.trim())
+            showValidation = null
+            return
+        }
+        scope.launch {
+            container.configRepository.upsert(profile)
+            if (container.settingsRepository.defaultProfileId.value == null) {
+                container.settingsRepository.setDefaultProfileId(profile.id)
+            }
+            store.clear()
+            if (editingRunning) {
+                if (reload) {
+                    FrpcSupervisor.clearPendingReload()
+                    context.startService(FrpcService.reloadIntent(context))
+                } else {
+                    FrpcSupervisor.markPendingReload(profile.id)
+                }
+            }
+            navigator.pop()
+        }
     }
 
     Scaffold(
@@ -119,40 +168,14 @@ fun ConfigEditScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navigator.pop() }) {
+                    IconButton(onClick = { goBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
                 actions = {
                     TextButton(onClick = {
-                        // 端口输入可能是空串/半成品：先落盘，解析失败给 0 让校验拦截
-                        serverPortText?.let { t ->
-                            store.update { it.copy(serverPort = t.toIntOrNull() ?: 0) }
-                        }
-                        nameError = null
-                        val issues = store.validate(::isPortInUse)
-                        if (issues.any { it.severity == com.frpc.shared.validate.Severity.ERROR }) {
-                            showValidation = issues
-                        } else {
-                            val profile = store.toProfile() ?: return@TextButton
-                            val dup = container.configRepository.profiles.value.any {
-                                it.name == profile.name.trim() && it.id != profile.id
-                            }
-                            if (dup) {
-                                // 同名配置无法区分，直接拦下（P5）
-                                nameError = context.getString(R.string.error_duplicate_profile_name, profile.name.trim())
-                                showValidation = null
-                            } else {
-                                scope.launch {
-                                    container.configRepository.upsert(profile)
-                                    if (container.settingsRepository.defaultProfileId.value == null) {
-                                        container.settingsRepository.setDefaultProfileId(profile.id)
-                                    }
-                                    store.clear()
-                                    navigator.pop()
-                                }
-                            }
-                        }
+                        // 运行中的配置：先问清楚要不要顺手重载，不要默默存盘
+                        if (editingRunning) confirmSaveRunning = true else doSave(reload = false)
                     }) {
                         Text(stringResource(R.string.action_save))
                     }
@@ -174,6 +197,18 @@ fun ConfigEditScreen(
                             text = msg,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+            // 运行中编辑：不拦着改，但把「保存 ≠ 生效」写在最上面，避免误判
+            if (editingRunning) {
+                item {
+                    SectionCard(title = stringResource(R.string.config_running_editing_title)) {
+                        Text(
+                            text = stringResource(R.string.config_running_editing_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -658,6 +693,58 @@ fun ConfigEditScreen(
             },
         )
     }
+
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text(stringResource(R.string.edit_discard_title)) },
+            text = { Text(stringResource(R.string.edit_discard_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDiscard = false
+                    store.clear()
+                    navigator.pop()
+                }) {
+                    Text(stringResource(R.string.action_discard))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscard = false }) {
+                    Text(stringResource(R.string.action_keep_editing))
+                }
+            },
+        )
+    }
+
+    // 运行中保存的三岔口：立刻重载 / 只存盘 / 取消
+    if (confirmSaveRunning) {
+        AlertDialog(
+            onDismissRequest = { confirmSaveRunning = false },
+            title = { Text(stringResource(R.string.config_save_running_title)) },
+            text = { Text(stringResource(R.string.config_save_running_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmSaveRunning = false
+                    doSave(reload = true)
+                }) {
+                    Text(stringResource(R.string.action_save_and_reload))
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        confirmSaveRunning = false
+                        doSave(reload = false)
+                    }) {
+                        Text(stringResource(R.string.action_save_only))
+                    }
+                    TextButton(onClick = { confirmSaveRunning = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            },
+        )
+    }
 }
 
 /** 代理列表行 */
@@ -732,49 +819,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedVisitors(
                 }
                 IconButton(onClick = { onDelete(index) }) {
                     Icon(Icons.Filled.Delete, contentDescription = null)
-                }
-            }
-        }
-    }
-}
-
-/**
- * 配置正在运行时进入编辑页的兜底界面：只提供「停止」与「返回」。
- * 列表页已经拦掉了入口，这里防止深链接/回退栈等路径绕过。
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RunningBlockScreen(onBack: () -> Unit, onStop: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.config_edit)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SectionCard(title = stringResource(R.string.config_running_block_title)) {
-                Text(
-                    text = stringResource(R.string.config_running_block_body),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.action_stop))
-                }
-                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.config_back_to_list))
                 }
             }
         }

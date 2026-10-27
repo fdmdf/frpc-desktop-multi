@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -82,48 +83,39 @@ fun ProfileEditScreen(
     val errors = issues.filter { it.severity == Severity.ERROR }
     val warnings = issues.filter { it.severity == Severity.WARNING }
 
-    // 运行中禁止编辑：frpc 正在使用这份配置，改字段不会生效
+    // 运行中的配置允许编辑保存（旧做法是整页禁用，改一个端口都要先停服务），
+    // 但必须让人看见「保存 ≠ 生效」，并在保存时给出是否立即重载的选择
     val runState by container.supervisor.state.collectAsState()
     val runningThis = initial != null &&
         runState.phase == FrpcSupervisor.Phase.RUNNING && runState.profileId == initial.id
-    if (runningThis) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                    Text("编辑配置", style = MaterialTheme.typography.headlineSmall)
-                }
-                OutlinedButton(onClick = onClose) { Text("返回配置列表") }
-            }
-            HorizontalDivider()
-            Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                SectionCard(title = "配置正在运行") {
-                    Text(
-                        text = "运行中的配置不能编辑：frpc 正在使用它，改动不会生效。请先停止服务，编辑保存后再启动。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Button(
-                        onClick = { container.supervisor.stop() },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("停止运行") }
-                }
-            }
-        }
-        return
-    }
+    var confirmSaveRunning by remember { mutableStateOf(false) }
 
     fun updateConfig(block: (FrpcConfig) -> FrpcConfig) {
         draft = draft.copy(config = block(draft.config))
+    }
+
+    /**
+     * 落盘 + 收尾。运行中的配置：
+     * - reload = true：保存后立刻重载，改动马上生效
+     * - reload = false：只存盘，打上「待重载」标记，由主页提示还有一笔改动没生效
+     */
+    fun save(reload: Boolean) {
+        scope.launch {
+            val saved = draft.copy(name = draft.name.ifBlank { "未命名配置" })
+            container.profiles.upsert(saved)
+            if (container.settings.state.value.defaultProfileId == null) {
+                container.settings.setDefaultProfileId(saved.id)
+            }
+            if (runningThis) {
+                if (reload) {
+                    container.supervisor.clearPendingReload()
+                    container.supervisor.reload()
+                } else {
+                    container.supervisor.markPendingReload(saved.id)
+                }
+            }
+            onClose()
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -147,14 +139,12 @@ fun ProfileEditScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = onClose) { Text("取消") }
                 Button(onClick = {
-                    // 端口输入框里可能还停留着空串/半成品文本：先落盘到 draft，
-                    // 解析失败给 0，让校验报「端口需在 1-65535」而不是悄悄保存旧值
+                    // 先做校验，运行中的配置再问要不要立刻重载（别校验都没过就弹窗）
                     updateConfig { it.copy(serverPort = serverPortText.toIntOrNull() ?: 0) }
                     draft.config.webServer?.let { ws ->
                         updateConfig { it.copy(webServer = ws.copy(port = adminPortText.toIntOrNull() ?: 0)) }
                     }
                     saveError = null
-                    // 保存时才真正试绑端口：端口换个字都要绑一次太浪费，留到落盘前查一遍就够
                     val currentIssues = ConfigValidator.validate(draft.config, portInUse = PortCheck::isInUse)
                     if (currentIssues.any { it.severity == Severity.ERROR }) {
                         showErrors = true
@@ -162,18 +152,12 @@ fun ProfileEditScreen(
                             it.name == draft.name.trim() && it.id != draft.id
                         }
                     ) {
-                        // 同名配置会让列表/删除确认无法区分，直接拦下
                         saveError = "已存在同名配置「${draft.name.trim()}」，请换一个名称"
                         showErrors = false
+                    } else if (runningThis) {
+                        confirmSaveRunning = true
                     } else {
-                        scope.launch {
-                            val saved = draft.copy(name = draft.name.ifBlank { "未命名配置" })
-                            container.profiles.upsert(saved)
-                            if (container.settings.state.value.defaultProfileId == null) {
-                                container.settings.setDefaultProfileId(saved.id)
-                            }
-                            onClose()
-                        }
+                        save(reload = false)
                     }
                 }) { Text("保存") }
             }
@@ -193,6 +177,16 @@ fun ProfileEditScreen(
                         text = saveError!!,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            // 运行中编辑：不拦着改，但把「保存 ≠ 生效」写在最上面
+            if (runningThis) {
+                SectionCard(title = "该配置正在运行") {
+                    Text(
+                        text = "可以直接改并保存，但 frpc 仍在使用旧配置，需要「重载配置」（或停止后重新启动）才会生效。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -725,6 +719,30 @@ fun ProfileEditScreen(
                 if (index < 0 || existing == null) list.add(visitor) else list[index] = visitor
                 updateConfig { it.copy(visitors = list) }
                 visitorEditing = null
+            },
+        )
+    }
+
+    // 运行中保存的三岔口：立刻重载 / 只存盘 / 取消
+    if (confirmSaveRunning) {
+        AlertDialog(
+            onDismissRequest = { confirmSaveRunning = false },
+            title = { Text("保存运行中的配置") },
+            text = { Text("保存后 frpc 仍在使用旧配置。是否立即重载让它生效？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmSaveRunning = false
+                    save(reload = true)
+                }) { Text("保存并重载") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        confirmSaveRunning = false
+                        save(reload = false)
+                    }) { Text("仅保存") }
+                    TextButton(onClick = { confirmSaveRunning = false }) { Text("取消") }
+                }
             },
         )
     }

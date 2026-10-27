@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# frpc-desktop-multi 端到端协议测试：真跑 frps + frpc，逐协议验证「能连上、能访问」。
+# Frpc-Android-Multi 端到端协议测试：真跑 frps + frpc，逐协议验证「能连上、能访问」。
 #
 #   bash scripts/e2e/e2e-protocols.sh
 #

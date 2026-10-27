@@ -107,4 +107,70 @@ class ConfigEditorStoreTest {
         assertNull(store.draft.value)
         assertFalse(store.hasDraft(null))
     }
+
+    /**
+     * 未保存就返回必须真丢掉：改过 → isDirty() 为真（弹确认）→ clearXxx 后草稿消失。
+     * 屏幕重入时 `hasProxyDraft` 为真才跳过初始化，所以「返回不清草稿」会让
+     * 上一次没保存的修改一直显示在编辑页里（用户报的 bug）。
+     */
+    @Test
+    fun proxyDraft_dirtyOnlyAfterEdit_andDiscardedOnClear() {
+        store.beginNew()
+        val existing = ProxyConfig(name = "web", type = "tcp", localIP = "127.0.0.1", localPort = 80)
+        store.beginProxyEdit(0, existing)
+        assertFalse(store.isProxyDirty(), "刚进编辑页不该算改过")
+
+        store.updateProxy { it.copy(localPort = 8080) }
+        assertTrue(store.isProxyDirty())
+
+        store.clearProxy()
+        assertFalse(store.hasProxyDraft(0))
+        assertNull(store.proxyDraft.value)
+        assertFalse(store.isProxyDirty())
+    }
+
+    @Test
+    fun visitorDraft_dirtyOnlyAfterEdit_andDiscardedOnClear() {
+        store.beginNew()
+        store.beginVisitorEdit(0, VisitorConfig(name = "v", type = "stcp", serverName = "secret"))
+        assertFalse(store.isVisitorDirty())
+        store.updateVisitor { it.copy(serverName = "secret2") }
+        assertTrue(store.isVisitorDirty())
+        store.clearVisitor()
+        assertFalse(store.hasVisitorDraft(0))
+        assertNull(store.visitorDraft.value)
+    }
+
+    @Test
+    fun newConfigDraft_notDirtyUntilTyped() {
+        store.beginNew()
+        assertFalse(store.isConfigDirty(), "新建的空草稿不该算改过")
+        store.update { it.copy(serverAddr = "frps.example.com") }
+        assertTrue(store.isConfigDirty())
+        store.clear()
+        assertFalse(store.isConfigDirty())
+    }
+
+    /** 离开编辑栈的兜底：草稿、代理草稿、访问者草稿一并清空 */
+    @Test
+    fun clearAll_wipesEverything() {
+        store.beginNew()
+        store.update { it.copy(serverAddr = "frps.example.com") }
+        store.beginProxyEdit(0, null)
+        store.updateProxy { it.copy(name = "ssh") }
+        store.beginVisitorEdit(0, null)
+        store.updateVisitor { it.copy(name = "v1") }
+
+        store.clearAll()
+
+        assertNull(store.draft.value)
+        assertNull(store.proxyDraft.value)
+        assertNull(store.visitorDraft.value)
+        assertFalse(store.hasDraft(null))
+        assertFalse(store.hasProxyDraft(0))
+        assertFalse(store.hasVisitorDraft(0))
+        assertFalse(store.isConfigDirty())
+        assertFalse(store.isProxyDirty())
+        assertFalse(store.isVisitorDirty())
+    }
 }
