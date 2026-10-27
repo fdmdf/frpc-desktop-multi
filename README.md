@@ -11,8 +11,8 @@
   </p>
 
   <p>
-    <a href="https://github.com/fdmdf/FrpcDash/releases/latest"><img src="https://img.shields.io/github/v/release/fdmdf/FrpcDash?label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
-    <a href="https://github.com/fdmdf/FrpcDash/actions/workflows/ci.yml"><img src="https://github.com/fdmdf/FrpcDash/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <a href="https://github.com/fdmdf/frpc-desktop-multi/releases/latest"><img src="https://img.shields.io/github/v/release/fdmdf/frpc-desktop-multi?label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
+    <a href="https://github.com/fdmdf/frpc-desktop-multi/actions/workflows/ci.yml"><img src="https://github.com/fdmdf/frpc-desktop-multi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   </p>
 </div>
 
@@ -54,9 +54,12 @@
 |---|---|---|
 | Windows x64 | `FrpcDash-<ver>-windows-x64-setup.exe` | 双击安装，自带 JRE，含开始菜单快捷方式 |
 | Windows x64 | `FrpcDash-<ver>-windows-x64.zip` | 便携版，解压即用 |
-| Linux x64 | `FrpcDash-<ver>-linux-x64.tar.gz` / `.deb` | 解压运行，或 `dpkg -i` |
+| Linux x64 | `FrpcDash-<ver>-linux-x64.tar.gz` / `.deb` | 解压运行 `bin/FrpcDash`，或 `dpkg -i` |
 | macOS arm64 | `FrpcDash-<ver>-macos-arm64.dmg` | Apple Silicon；未签名，首次需右键 → 打开 |
+| macOS x64 | `FrpcDash-<ver>-macos-x64.dmg` | Intel；未签名，首次需右键 → 打开 |
 | Android arm64 | `FrpcDash-<ver>-android-arm64.apk` | Android 8.0+，允许未知来源安装 |
+
+macOS 的 `.tar.gz` 是同一个 `.app` 的压缩包（不便挂载 DMG 时用）。Android 未配置签名 secret 时产物带 `-unsigned` 后缀。
 
 ## 快速开始
 

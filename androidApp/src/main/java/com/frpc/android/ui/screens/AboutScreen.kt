@@ -37,8 +37,8 @@ import com.frpc.android.di.AppContainer
 import com.frpc.android.ui.components.SectionCard
 import com.frpc.android.ui.nav.AppNavigator
 
-private const val REPO_URL = "https://github.com/fdmdf/FrpcDash"
-private const val ISSUES_URL = "https://github.com/fdmdf/FrpcDash/issues"
+private const val REPO_URL = "https://github.com/fdmdf/frpc-desktop-multi"
+private const val ISSUES_URL = "https://github.com/fdmdf/frpc-desktop-multi/issues"
 
 /**
  * 关于页：版本、内置引擎、来源与许可。

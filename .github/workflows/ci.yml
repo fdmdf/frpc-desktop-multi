@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, dev]
   pull_request:
   workflow_dispatch:
 
@@ -48,7 +48,35 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
+          # 仓库里没有 go.mod（frp 源码是构建期下载的），setup-go 的依赖缓存用不上，
+          # 下面改用 actions/cache 按 FRP_VERSION 显式缓存 GOCACHE / GOMODCACHE
           cache: false
+
+      - name: Resolve Go cache paths
+        id: gopaths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.gopaths.outputs.build }}
+            ${{ steps.gopaths.outputs.mod }}
+          key: ${{ runner.os }}-${{ runner.arch }}-go-${{ env.FRP_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-go-
+
+      # frp 源码按版本只下载一份，多个 job 复用（脚本命中缓存后不再走网络）
+      - name: Cache frp source
+        uses: actions/cache@v4
+        with:
+          path: .build/frpc-engine/src
+          key: frp-src-${{ env.FRP_VERSION }}
+
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build frpc engine (android/arm64)
@@ -96,7 +124,35 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
+          # 仓库里没有 go.mod（frp 源码是构建期下载的），setup-go 的依赖缓存用不上，
+          # 下面改用 actions/cache 按 FRP_VERSION 显式缓存 GOCACHE / GOMODCACHE
           cache: false
+
+      - name: Resolve Go cache paths
+        id: gopaths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.gopaths.outputs.build }}
+            ${{ steps.gopaths.outputs.mod }}
+          key: ${{ runner.os }}-${{ runner.arch }}-go-${{ env.FRP_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-go-
+
+      # frp 源码按版本只下载一份，多个 job 复用（脚本命中缓存后不再走网络）
+      - name: Cache frp source
+        uses: actions/cache@v4
+        with:
+          path: .build/frpc-engine/src
+          key: frp-src-${{ env.FRP_VERSION }}
+
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build frpc engine
@@ -183,7 +239,35 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
+          # 仓库里没有 go.mod（frp 源码是构建期下载的），setup-go 的依赖缓存用不上，
+          # 下面改用 actions/cache 按 FRP_VERSION 显式缓存 GOCACHE / GOMODCACHE
           cache: false
+
+      - name: Resolve Go cache paths
+        id: gopaths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.gopaths.outputs.build }}
+            ${{ steps.gopaths.outputs.mod }}
+          key: ${{ runner.os }}-${{ runner.arch }}-go-${{ env.FRP_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-go-
+
+      # frp 源码按版本只下载一份，多个 job 复用（脚本命中缓存后不再走网络）
+      - name: Cache frp source
+        uses: actions/cache@v4
+        with:
+          path: .build/frpc-engine/src
+          key: frp-src-${{ env.FRP_VERSION }}
+
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build frpc engine
