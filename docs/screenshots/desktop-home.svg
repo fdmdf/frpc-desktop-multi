@@ -1,0 +1,86 @@
+<svg font-family="-apple-system, Segoe UI, PingFang SC, Microsoft YaHei, sans-serif" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 520" width="820" height="520" role="img" aria-label="FrpcDash 桌面端主页">
+  <defs>
+  </defs>
+
+  <rect width="820" height="520" fill="#f3f4f6"/>
+  <!-- 窗口 -->
+  <rect x="8" y="8" width="804" height="504" rx="12" fill="#ffffff" stroke="#e5e7eb"/>
+  <!-- 标题栏 -->
+  <circle cx="28" cy="24" r="5" fill="#f87171"/>
+  <circle cx="46" cy="24" r="5" fill="#fbbf24"/>
+  <circle cx="64" cy="24" r="5" fill="#34d399"/>
+  <text fill="#6b7280" x="410" y="28"  font-size="11" text-anchor="middle">FrpcDash · 2.0.1</text>
+  <line x1="8" y1="38" x2="812" y2="38" stroke="#e5e7eb"/>
+
+  <!-- 侧边栏 -->
+  <path d="M8 38h176v462a12 12 0 0 1-12 12H20a12 12 0 0 1-12-12V38z" fill="#fbfcfd"/>
+  <line x1="184" y1="38" x2="184" y2="512" stroke="#e5e7eb"/>
+  <circle cx="30" cy="66" r="9" fill="#2563eb"/>
+  <path d="M26 66h8M30 62v8" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/>
+  <text fill="#111827" x="46" y="71"  font-size="13" font-weight="600">FrpcDash</text>
+
+  <rect x="16" y="96" width="152" height="30" rx="8" fill="#eef2ff"/>
+  <rect x="26" y="105" width="12" height="12" rx="3" fill="#2563eb"/>
+  <text fill="#2563eb" x="48" y="116"  font-size="12" font-weight="600">主页</text>
+
+  <rect x="26" y="143" width="12" height="12" rx="3" fill="#9ca3af"/>
+  <text fill="#6b7280" x="48" y="154"  font-size="12">配置</text>
+  <rect x="26" y="181" width="12" height="12" rx="3" fill="#9ca3af"/>
+  <text fill="#6b7280" x="48" y="192"  font-size="12">日志</text>
+  <rect x="26" y="219" width="12" height="12" rx="3" fill="#9ca3af"/>
+  <text fill="#6b7280" x="48" y="230"  font-size="12">监控</text>
+  <rect x="26" y="257" width="12" height="12" rx="3" fill="#9ca3af"/>
+  <text fill="#6b7280" x="48" y="268"  font-size="12">设置</text>
+
+  <!-- 标题 -->
+  <text fill="#111827" x="204" y="74"  font-size="17" font-weight="600">运行状态</text>
+  <text fill="#6b7280" x="204" y="92"  font-size="11">frpc 引擎 0.71.1</text>
+
+  <!-- 运行状态卡 -->
+  <rect x="200" y="104" width="600" height="86" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <rect x="216" y="118" width="60" height="20" rx="10" fill="#dcfce7"/>
+  <text x="246" y="132" fill="#15803d" font-size="11" font-weight="600" text-anchor="middle">运行中</text>
+  <text fill="#111827" x="288" y="133"  font-size="13" font-weight="600">工作电脑</text>
+  <text fill="#6b7280" x="216" y="156"  font-size="11">frps.example.com:7000 · PID 4821 · 启动于 12:31</text>
+  <rect x="216" y="164" width="80" height="20" rx="6" fill="#2563eb"/>
+  <text x="256" y="178" fill="#ffffff" font-size="11" text-anchor="middle">停止</text>
+  <rect x="304" y="164" width="80" height="20" rx="6" fill="#ffffff" stroke="#d1d5db"/>
+  <text fill="#111827" x="344" y="178"  font-size="11" text-anchor="middle">重载配置</text>
+  <rect x="392" y="164" width="80" height="20" rx="6" fill="#ffffff" stroke="#d1d5db"/>
+  <text fill="#111827" x="432" y="178"  font-size="11" text-anchor="middle">编辑配置</text>
+
+  <!-- 概览 -->
+  <rect x="200" y="200" width="600" height="76" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text fill="#6b7280" x="216" y="219"  font-size="11">概览</text>
+  <text fill="#111827" x="216" y="250"  font-size="15" font-weight="600">0.8%</text>
+  <text fill="#6b7280" x="216" y="266"  font-size="10">CPU</text>
+  <text fill="#111827" x="366" y="250"  font-size="15" font-weight="600">18.0 MB</text>
+  <text fill="#6b7280" x="366" y="266"  font-size="10">内存</text>
+  <text fill="#111827" x="516" y="250"  font-size="15" font-weight="600">00:32:14</text>
+  <text fill="#6b7280" x="516" y="266"  font-size="10">运行时长</text>
+  <text fill="#111827" x="666" y="250"  font-size="15" font-weight="600">3/3</text>
+  <text fill="#6b7280" x="666" y="266"  font-size="10">在线代理</text>
+
+  <!-- 代理规则 -->
+  <text fill="#2563eb" x="204" y="300"  font-size="12" font-weight="600">代理规则</text>
+
+  <rect x="200" y="310" width="600" height="52" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text fill="#111827" x="216" y="332"  font-size="12" font-weight="600">home-ssh</text>
+  <text fill="#6b7280" x="216" y="349"  font-size="10">TCP · 本地 127.0.0.1:22 → 远端 frps.example.com:6001</text>
+  <rect x="730" y="322" width="54" height="20" rx="10" fill="#dcfce7"/>
+  <text x="757" y="336" fill="#15803d" font-size="11" text-anchor="middle">在线</text>
+
+  <rect x="200" y="368" width="600" height="52" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text fill="#111827" x="216" y="390"  font-size="12" font-weight="600">blog-http</text>
+  <text fill="#6b7280" x="216" y="407"  font-size="10">HTTP · 本地 127.0.0.1:8080 → 远端 blog.example.com</text>
+  <rect x="730" y="380" width="54" height="20" rx="10" fill="#dcfce7"/>
+  <text x="757" y="394" fill="#15803d" font-size="11" text-anchor="middle">在线</text>
+
+  <!-- 访问者 -->
+  <text fill="#2563eb" x="204" y="442"  font-size="12" font-weight="600">访问者</text>
+  <rect x="200" y="452" width="600" height="52" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text fill="#111827" x="216" y="474"  font-size="12" font-weight="600">nas-stcp</text>
+  <text fill="#6b7280" x="216" y="491"  font-size="10">STCP · 本地 127.0.0.1:9000 → nas</text>
+  <rect x="730" y="464" width="54" height="20" rx="10" fill="#dcfce7"/>
+  <text x="757" y="478" fill="#15803d" font-size="11" text-anchor="middle">在线</text>
+</svg>

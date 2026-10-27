@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#0B57D0"/>
+  <!-- 上下两条反向箭头：内网 ↔ 公网 双向互通 -->
+  <rect x="112" y="150" width="240" height="44" rx="22" fill="#FFFFFF"/>
+  <path d="M344 100 L428 172 L344 244 Z" fill="#FFFFFF"/>
+  <rect x="160" y="318" width="240" height="44" rx="22" fill="#FFFFFF"/>
+  <path d="M168 268 L84 340 L168 412 Z" fill="#FFFFFF"/>
+</svg>

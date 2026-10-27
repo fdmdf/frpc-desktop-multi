@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E88E5"/>
+      <stop offset="100%" stop-color="#0B57D0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 圆角底板 -->
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+
+  <!-- 隧道拱门（内网穿透） -->
+  <path d="M150 366 V266 a106 106 0 0 1 212 0 V366"
+        fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round"/>
+
+  <!-- 数据流：源点 + 箭头 -->
+  <circle cx="196" cy="310" r="15" fill="#FFFFFF"/>
+  <path d="M216 310 H286" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+  <path d="M282 286 L322 310 L282 334 Z" fill="#FFFFFF"/>
+</svg>

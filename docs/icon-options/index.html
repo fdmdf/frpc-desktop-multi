@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>frpc-android 图标方案</title>
+<style>
+  :root { --brand:#0B57D0; --ink:#1A1C1E; --muted:#5B6068; --line:#E3E6EB; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:32px 28px 48px; background:#F6F7FA; color:var(--ink);
+         font-family:-apple-system,'PingFang SC','Microsoft YaHei',system-ui,sans-serif; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:26px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:20px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px 22px 18px; }
+  .head { display:flex; align-items:baseline; gap:10px; margin-bottom:4px; }
+  .tag { font-size:12px; font-weight:700; color:#fff; background:var(--brand); border-radius:6px; padding:2px 7px; }
+  .name { font-size:16px; font-weight:600; }
+  .desc { font-size:13px; color:var(--muted); line-height:1.6; margin:6px 0 16px; }
+  .row { display:flex; align-items:flex-end; gap:22px; padding:14px 0 4px; }
+  .row.dark { background:#1E1F22; border-radius:12px; padding:14px 18px; margin-top:12px; }
+  .box { text-align:center; }
+  .box span { display:block; font-size:11px; color:var(--muted); margin-top:6px; }
+  .row.dark .box span { color:#9AA0A6; }
+  img { display:block; border-radius:22%; }
+  .size { font-size:11px; color:#8A9099; }
+  .foot { margin-top:26px; font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+  <h1>frpc-android 图标方案（4 选 1）</h1>
+  <div class="sub">全部按 adaptive icon 安全区绘制，含小尺寸与深色底预览。<b>重点看 48 / 24 px</b>——桌面和状态栏就是这个尺寸。</div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="head"><span class="tag">A</span><span class="name">破壁箭头</span></div>
+      <div class="desc">方框 = 内网边界，箭头从框内直接穿出（边界被箭头打断）。语义最贴合「内网穿透」，缩小后依然是「框 + 箭头」，不会被看成交通工具。</div>
+      <div class="row">
+        <div class="box"><img src="option-a.svg" width="168" height="168"><span>168px</span></div>
+        <div class="box"><img src="option-a.svg" width="72" height="72"><span>72px</span></div>
+        <div class="box"><img src="option-a.svg" width="48" height="48"><span>48px</span></div>
+        <div class="box"><img src="option-a.svg" width="24" height="24"><span>24px</span></div>
+      </div>
+      <div class="row dark">
+        <div class="box"><img src="option-a.svg" width="72" height="72"><span>深色桌面</span></div>
+        <div class="box"><img src="option-a.svg" width="48" height="48"><span>48px</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head"><span class="tag">B</span><span class="name">双向互通</span></div>
+      <div class="desc">一对反向箭头，强调「内网 ↔ 公网」双向可达。最抽象、最不容易被误读成具体物体。</div>
+      <div class="row">
+        <div class="box"><img src="option-b.svg" width="168" height="168"><span>168px</span></div>
+        <div class="box"><img src="option-b.svg" width="72" height="72"><span>72px</span></div>
+        <div class="box"><img src="option-b.svg" width="48" height="48"><span>48px</span></div>
+        <div class="box"><img src="option-b.svg" width="24" height="24"><span>24px</span></div>
+      </div>
+      <div class="row dark">
+        <div class="box"><img src="option-b.svg" width="72" height="72"><span>深色桌面</span></div>
+        <div class="box"><img src="option-b.svg" width="48" height="48"><span>48px</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head"><span class="tag">C</span><span class="name">点对点直连</span></div>
+      <div class="desc">两个节点被箭头打通，表达「把内网服务点对点暴露出去」。最像网络拓扑图，但 24px 时两个节点会和箭头糊在一起。</div>
+      <div class="row">
+        <div class="box"><img src="option-c.svg" width="168" height="168"><span>168px</span></div>
+        <div class="box"><img src="option-c.svg" width="72" height="72"><span>72px</span></div>
+        <div class="box"><img src="option-c.svg" width="48" height="48"><span>48px</span></div>
+        <div class="box"><img src="option-c.svg" width="24" height="24"><span>24px</span></div>
+      </div>
+      <div class="row dark">
+        <div class="box"><img src="option-c.svg" width="72" height="72"><span>深色桌面</span></div>
+        <div class="box"><img src="option-c.svg" width="48" height="48"><span>48px</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head"><span class="tag">D</span><span class="name">f 字标</span></div>
+      <div class="desc">frp 的 f 做成几何字标，横杠延伸为箭头。像一个正经产品 logo，不依赖任何具象比喻。</div>
+      <div class="row">
+        <div class="box"><img src="option-d.svg" width="168" height="168"><span>168px</span></div>
+        <div class="box"><img src="option-d.svg" width="72" height="72"><span>72px</span></div>
+        <div class="box"><img src="option-d.svg" width="48" height="48"><span>48px</span></div>
+        <div class="box"><img src="option-d.svg" width="24" height="24"><span>24px</span></div>
+      </div>
+      <div class="row dark">
+        <div class="box"><img src="option-d.svg" width="72" height="72"><span>深色桌面</span></div>
+        <div class="box"><img src="option-d.svg" width="48" height="48"><span>48px</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">确定后我会做成 adaptive icon（前景/背景/单色三层）+ 状态栏小图标，并同步更新仓库里的 README 与截图。</div>
+</body>
+</html>

@@ -1,0 +1,51 @@
+# ---- Gradle / Kotlin ----
+.gradle/
+.kotlin/
+build/
+*/build/
+!gradle/wrapper/gradle-wrapper.jar
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ---- 运行时产物：引擎二进制由 scripts/build-frpc.sh 编译后打入，不入库 ----
+desktopApp/engine/
+androidApp/src/main/jniLibs/*/libfrpc.so
+androidApp/src/main/assets/frpc/VERSION
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 签名与密钥（绝不入库）----
+*.jks
+*.keystore
+*.p12
+keystore-password.txt
+keystore.b64
+
+# ---- 构建输出 ----
+dist/
+*.apk
+*.aab
+*.dmg
+*.deb
+*.AppImage
+*.zip
+*.tar.gz
+
+# ---- WorkBuddy 本地状态 ----
+.workbuddy/tmp/
+.workbuddy/memory/
+
+# 构建/测试缓存
+.build/

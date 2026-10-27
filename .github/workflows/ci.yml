@@ -1,0 +1,212 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FRP_VERSION: v0.71.1
+
+jobs:
+  # ---------------------------------------------------------------- 共享层单测
+  shared:
+    name: Shared model & tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: "Unit tests (shared: jvm + android)"
+        run: ./gradlew --no-daemon :shared:jvmTest :shared:testDebugUnitTest --console=plain
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-test-reports
+          path: shared/build/reports/tests/
+          retention-days: 7
+
+  # ---------------------------------------------------------------- Android
+  android:
+    name: Android (assemble + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: false
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build frpc engine (android/arm64)
+        env:
+          SKIP_X86_64: '1'
+        run: bash scripts/build-frpc.sh android
+
+      - name: Verify engine is a valid AArch64 ELF
+        run: |
+          python3 - <<'PY'
+          data = open('androidApp/src/main/jniLibs/arm64-v8a/libfrpc.so', 'rb').read(20)
+          assert data[:4] == b'\x7fELF', 'not an ELF binary'
+          assert data[4] == 2, 'not ELF64'
+          assert int.from_bytes(data[18:20], 'little') == 0xB7, 'not AArch64'
+          print('OK: ELF64 AArch64')
+          PY
+
+      - name: Unit tests (app)
+        run: ./gradlew --no-daemon :androidApp:testDebugUnitTest --console=plain
+
+      - name: Lint (non-blocking)
+        continue-on-error: true
+        run: ./gradlew --no-daemon :androidApp:lintDebug --console=plain
+
+      - name: Assemble debug APK
+        run: ./gradlew --no-daemon :androidApp:assembleDebug --console=plain
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrpcDash-debug-apk
+          path: androidApp/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+  # ---------------------------------------------------------------- 桌面端（Windows）
+  desktop-windows:
+    name: Desktop (Windows compile + smoke)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: false
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build frpc engine
+        shell: bash
+        run: bash scripts/build-frpc.sh desktop
+
+      - name: Compile desktop app
+        shell: bash
+        run: ./gradlew --no-daemon :desktopApp:compileKotlin --console=plain
+
+      - name: Smoke test (engine + local frps)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=".build/frpc-engine/src/github.com/fatedier/frp@${FRP_VERSION}"
+          mkdir -p "$SRC/web/frps/dist" e2e
+          echo placeholder > "$SRC/web/frps/dist/index.html"
+          ( cd "$SRC" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -tags frps -o "$GITHUB_WORKSPACE/e2e/frps.exe" ./cmd/frps )
+
+          # 本地起一个会回声的后端，验证 frpc 真能把流量转过去
+          python - <<'PY' &
+          import socket, threading
+          s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          s.bind(('127.0.0.1', 18001)); s.listen(8)
+          def h(c):
+              while True:
+                  d = c.recv(4096)
+                  if not d: break
+                  c.sendall(d)
+              c.close()
+          while True:
+              c, _ = s.accept(); threading.Thread(target=h, args=(c,), daemon=True).start()
+          PY
+          BACKEND_PID=$!
+
+          cat > e2e/frps.toml <<'EOF'
+          bindPort = 17000
+          auth.method = "token"
+          auth.token = "smoketoken"
+          allowPorts = [{ start = 17000, end = 17600 }]
+          EOF
+
+          cat > e2e/frpc.toml <<'EOF'
+          serverAddr = "127.0.0.1"
+          serverPort = 17000
+          loginFailExit = true
+          auth.method = "token"
+          auth.token = "smoketoken"
+          webServer.addr = "127.0.0.1"
+          webServer.port = 17400
+          webServer.user = "admin"
+          webServer.password = "admin"
+          [[proxies]]
+          name = "smoke-tcp"
+          type = "tcp"
+          localIP = "127.0.0.1"
+          localPort = 18001
+          remotePort = 17101
+          EOF
+
+          ./e2e/frps.exe -c e2e/frps.toml > e2e/frps.log 2>&1 &
+          FRPS_PID=$!
+          sleep 4
+
+          ./gradlew --no-daemon :desktopApp:run --console=plain --args="--smoke $(cygpath -m "$PWD/e2e/frpc.toml")" | tee e2e/smoke.log
+
+          grep -q "admin enabled=true" e2e/smoke.log
+          grep -q "reachable=true" e2e/smoke.log
+          grep -q "forward :17101" e2e/smoke.log
+          grep -q "after-stop phase=IDLE" e2e/smoke.log
+
+          kill $FRPS_PID $BACKEND_PID 2>/dev/null || true
+
+  # ---------------------------------------------------------------- 八协议端到端
+  protocols:
+    name: Protocols e2e (8 types)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: false
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build frpc engine
+        run: bash scripts/build-frpc.sh desktop
+
+      - name: Run protocol e2e (tcp/udp/http/https/stcp/xtcp/tcpmux/sudp)
+        run: |
+          # 默认 shell 没有 pipefail，脚本失败会被 tee 的 0 掩盖，这里显式打开
+          set -euo pipefail
+          # 导出 TOML 借道 :desktopApp:run，runner 无 DISPLAY，套一层 xvfb 最稳
+          if command -v xvfb-run >/dev/null 2>&1; then
+            xvfb-run -a bash scripts/e2e/e2e-protocols.sh 2>&1 | tee e2e.log
+          else
+            bash scripts/e2e/e2e-protocols.sh 2>&1 | tee e2e.log
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: protocol-e2e-logs
+          path: |
+            e2e.log
+            .build/e2e/*.log
+            .build/e2e/*.toml
+          retention-days: 7

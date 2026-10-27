@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#0B57D0"/>
+  <!-- 点对点直连：两个节点被箭头打通 -->
+  <circle cx="106" cy="256" r="52" fill="#FFFFFF"/>
+  <circle cx="406" cy="256" r="52" fill="#FFFFFF"/>
+  <rect x="172" y="236" width="104" height="40" rx="20" fill="#FFFFFF"/>
+  <path d="M264 206 L356 256 L264 306 Z" fill="#FFFFFF"/>
+</svg>

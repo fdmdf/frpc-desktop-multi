@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#0B57D0"/>
+  <!-- frp 的 f 字标：横杠延伸成穿透箭头 -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round">
+    <path d="M228 396 L228 200 C228 148 262 128 306 128"/>
+    <path d="M146 286 L306 286"/>
+  </g>
+  <path d="M296 240 L392 286 L296 332 Z" fill="#FFFFFF"/>
+</svg>
