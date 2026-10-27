@@ -72,22 +72,22 @@ compose.desktop {
         jvmArgs += listOf("-Dfile.encoding=UTF-8")
 
         nativeDistributions {
-            // Windows 用 app-image（zip 内 FrpcDash.exe 直接运行，自带 JRE）；
+            // Windows 用 app-image（zip 内 frpc-desktop-multi.exe 直接运行，自带 JRE）；
             // Linux 出 deb/AppImage；macOS 出 Dmg。Msi 需要 WiX，本地构建时可再加
             targetFormats(TargetFormat.Exe, TargetFormat.AppImage, TargetFormat.Deb, TargetFormat.Dmg)
-            packageName = "FrpcDash"
+            packageName = "frpc-desktop-multi"
             // jpackage 只接受 MAJOR.MINOR.BUILD，缺位补 0，避免 "1" / "1.0" 直接失败
             packageVersion = appVersionRaw.split('.').let { parts ->
                 (parts + List(3) { "0" }).take(3).joinToString(".")
             }
             // jpackage 的元信息会被写进 .cfg/注册表并按本地编码回读，
             // 非 ASCII 在 Windows(GBK) 下会抛 "Input length = 1"，这里保持纯 ASCII
-            description = "FrpcDash - frp client (desktop)"
-            copyright = "(c) 2026 FrpcDash contributors"
-            vendor = "FrpcDash"
+            description = "frpc-desktop-multi - frp client (desktop)"
+            copyright = "(c) 2026 frpc-desktop-multi contributors"
+            vendor = "frpc-desktop-multi"
 
             windows {
-                menuGroup = "FrpcDash"
+                menuGroup = "frpc-desktop-multi"
                 shortcut = true
                 dirChooser = true
                 // 安装包图标（由 docs/assets/icon.svg 生成，缺省时不指定）
@@ -97,7 +97,7 @@ compose.desktop {
             }
             macOS {
                 bundleID = "com.frpc.dash"
-                dockName = "FrpcDash"
+                dockName = "frpc-desktop-multi"
             }
         }
     }

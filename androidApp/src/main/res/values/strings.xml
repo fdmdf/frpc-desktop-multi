@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">FrpcDash</string>
+    <string name="app_name">frpc-desktop-multi</string>
 
     <!-- 导航 / 通用 -->
     <string name="nav_home">主页</string>

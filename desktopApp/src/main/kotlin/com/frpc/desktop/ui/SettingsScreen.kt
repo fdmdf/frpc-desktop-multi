@@ -140,7 +140,7 @@ fun SettingsScreen(container: AppContainer) {
 
         SectionCard(title = "关于") {
             Text(
-                text = "FrpcDash ${AppInfo.version}",
+                text = "frpc-desktop-multi ${AppInfo.version}",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(

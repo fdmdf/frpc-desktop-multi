@@ -1,8 +1,8 @@
-# FrpcDash · Wiki
+# frpc-desktop-multi · Wiki
 
 面向使用者的文档中心。项目主页见 [README](../../README.md)。
 
-FrpcDash = 桌面端（Windows / Linux / macOS）+ Android 端，两套客户端共用同一个 Kotlin Multiplatform 共享层（配置模型、`frpc.toml` 编解码、校验、admin API 客户端）。
+frpc-desktop-multi = 桌面端（Windows / Linux / macOS）+ Android 端，两套客户端共用同一个 Kotlin Multiplatform 共享层（配置模型、`frpc.toml` 编解码、校验、admin API 客户端）。
 
 ## 目录
 

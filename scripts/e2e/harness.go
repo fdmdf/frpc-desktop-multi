@@ -1,4 +1,4 @@
-// FrpcDash 端到端协议测试台（仅用 Go 标准库，无需任何外部依赖）。
+// frpc-desktop-multi 端到端协议测试台（仅用 Go 标准库，无需任何外部依赖）。
 //
 // 两个模式：
 //   go run harness.go serve   启动各协议所需的真实后端（TCP/UDP 回声、HTTP、HTTPS）

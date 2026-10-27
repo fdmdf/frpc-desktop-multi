@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">FrpcDash</string>
+    <string name="app_name">frpc-desktop-multi</string>
 
     <string name="nav_home">Home</string>
     <string name="nav_configs">Configs</string>

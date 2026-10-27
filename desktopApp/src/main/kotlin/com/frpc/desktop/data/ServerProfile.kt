@@ -25,7 +25,7 @@ data class ServerProfile(
 @Serializable
 data class ProfileBundle(
     val schemaVersion: Int = 1,
-    val app: String = "FrpcDash",
+    val app: String = "frpc-desktop-multi",
     val exportedAt: Long = System.currentTimeMillis(),
     val profiles: List<ServerProfile> = emptyList(),
 )

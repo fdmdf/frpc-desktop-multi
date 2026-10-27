@@ -5,17 +5,17 @@ name: Release
 #   2) 手动 workflow_dispatch —— 补发/重发，版本号可填，留空用 androidApp 的 versionName
 #
 # 产物命名规范（PRODUCT-版本-系统-架构[-变体].扩展名）：
-#   FrpcDash-1.0.0-windows-x64-setup.exe    Windows 安装程序（自带 JRE，开始菜单快捷方式）
-#   FrpcDash-1.0.0-windows-x64.zip          Windows 便携版（解压即用）
-#   FrpcDash-1.0.0-linux-x64.tar.gz         Linux 通用包（解压运行 bin/FrpcDash）
-#   FrpcDash-1.0.0-linux-x64.deb            Debian / Ubuntu
-#   FrpcDash-1.0.0-linux-x64.AppImage       AppImage（可选，失败不阻塞发版）
-#   FrpcDash-1.0.0-macos-arm64.dmg          macOS Apple Silicon
-#   FrpcDash-1.0.0-macos-arm64.tar.gz       同上，.app 压缩包
-#   FrpcDash-1.0.0-macos-x64.dmg            macOS Intel
-#   FrpcDash-1.0.0-macos-x64.tar.gz         同上，.app 压缩包
-#   FrpcDash-1.0.0-android-arm64.apk        Android（未签名时加 -unsigned 后缀）
-#   frpc-engine-VERSION.txt                 内置 frpc 引擎版本留档
+#   frpc-desktop-multi-1.0.0-windows-x64-setup.exe    Windows 安装程序（自带 JRE，开始菜单快捷方式）
+#   frpc-desktop-multi-1.0.0-windows-x64.zip          Windows 便携版（解压即用）
+#   frpc-desktop-multi-1.0.0-linux-x64.tar.gz         Linux 通用包（解压运行 bin/frpc-desktop-multi）
+#   frpc-desktop-multi-1.0.0-linux-x64.deb            Debian / Ubuntu
+#   frpc-desktop-multi-1.0.0-linux-x64.AppImage       AppImage（可选，失败不阻塞发版）
+#   frpc-desktop-multi-1.0.0-macos-arm64.dmg          macOS Apple Silicon
+#   frpc-desktop-multi-1.0.0-macos-arm64.tar.gz       同上，.app 压缩包
+#   frpc-desktop-multi-1.0.0-macos-x64.dmg            macOS Intel
+#   frpc-desktop-multi-1.0.0-macos-x64.tar.gz         同上，.app 压缩包
+#   frpc-desktop-multi-1.0.0-android-arm64.apk        Android（签名密钥失效时才退化成 -unsigned）
+#   frpc-engine-VERSION.txt                           内置 frpc 引擎版本留档
 
 on:
   push:
@@ -29,6 +29,10 @@ on:
         description: '跳过「发布版本 == 构建文件版本」一致性校验（紧急发版用）'
         type: boolean
         default: false
+      allow_unsigned_apk:
+        description: '强制放行未签名 APK（签名密钥失效等紧急情况；产物装不上手机）'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -39,8 +43,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # 产品名 = jpackage packageName。与仓库名 frpc-desktop-multi 区分：仓库名是代码地址，产品名是 App 名字
-  PRODUCT: FrpcDash
+  # 产品名 = 仓库名 = jpackage packageName。改这里必须同步 desktopApp/build.gradle.kts 的 packageName，
+  # 否则 desktop job 会在 $BIN/app 下找不到同名目录而报「缺少产物」
+  PRODUCT: frpc-desktop-multi
   FRP_VERSION: v0.71.1
 
 jobs:
@@ -447,9 +452,16 @@ jobs:
             cp "$DIR/androidApp-release.apk" "$OUT/$PRODUCT-$V-android-arm64.apk"
             SIGNED=yes
           elif [ -f "$DIR/androidApp-release-unsigned.apk" ]; then
+            # 未签名 APK 装不上手机，默认视为不合格产物直接终止，避免悄悄发出去
+            if [ "${{ github.event.inputs.allow_unsigned_apk }}" != "true" ]; then
+              echo "::error::产出未签名 APK，签名未生效。未签名 APK 无法安装到手机，已终止本 job。"
+              echo "::error::请核对仓库 4 个 secret：KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD 是否齐全且互相匹配。"
+              echo "::error::确需放行请用 workflow_dispatch 触发并勾选 allow_unsigned_apk。"
+              exit 1
+            fi
             cp "$DIR/androidApp-release-unsigned.apk" "$OUT/$PRODUCT-$V-android-arm64-unsigned.apk"
             SIGNED=no
-            echo "::warning::产出未签名 APK。配置 KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD 四个 secret 后会自动签名。"
+            echo "::warning::已按输入放行未签名 APK，该产物无法通过普通方式安装到手机。"
           else
             echo "::error::未找到 release APK。$DIR 实际内容如下："
             ls -la "$DIR"
@@ -513,33 +525,33 @@ jobs:
           }
 
           echo "== 必需产物 =="
-          check "FrpcDash-$V-windows-x64.zip"        required
-          check "FrpcDash-$V-windows-x64-setup.exe"  required
-          check "FrpcDash-$V-linux-x64.tar.gz"       required
-          check "FrpcDash-$V-linux-x64.deb"          required
-          check "FrpcDash-$V-macos-arm64.dmg"        required
-          check "FrpcDash-$V-macos-arm64.tar.gz"     required
-          check "FrpcDash-$V-macos-x64.dmg"          required
-          check "FrpcDash-$V-macos-x64.tar.gz"       required
+          check "frpc-desktop-multi-$V-windows-x64.zip"        required
+          check "frpc-desktop-multi-$V-windows-x64-setup.exe"  required
+          check "frpc-desktop-multi-$V-linux-x64.tar.gz"       required
+          check "frpc-desktop-multi-$V-linux-x64.deb"          required
+          check "frpc-desktop-multi-$V-macos-arm64.dmg"        required
+          check "frpc-desktop-multi-$V-macos-arm64.tar.gz"     required
+          check "frpc-desktop-multi-$V-macos-x64.dmg"          required
+          check "frpc-desktop-multi-$V-macos-x64.tar.gz"       required
           check "frpc-engine-VERSION.txt"            required
           # Android 签名与否决定文件名，两者任一存在即可
-          if [ -f "FrpcDash-$V-android-arm64.apk" ]; then
-            check "FrpcDash-$V-android-arm64.apk" required
+          if [ -f "frpc-desktop-multi-$V-android-arm64.apk" ]; then
+            check "frpc-desktop-multi-$V-android-arm64.apk" required
           else
-            check "FrpcDash-$V-android-arm64-unsigned.apk" required
+            check "frpc-desktop-multi-$V-android-arm64-unsigned.apk" required
           fi
 
           echo "== 可选产物 =="
-          check "FrpcDash-$V-linux-x64.AppImage" optional
+          check "frpc-desktop-multi-$V-linux-x64.AppImage" optional
 
           echo "== 多余文件（正常应为空） =="
           for f in *; do
             case "$f" in
-              FrpcDash-$V-windows-x64.zip|FrpcDash-$V-windows-x64-setup.exe|\
-              FrpcDash-$V-linux-x64.tar.gz|FrpcDash-$V-linux-x64.deb|FrpcDash-$V-linux-x64.AppImage|\
-              FrpcDash-$V-macos-arm64.dmg|FrpcDash-$V-macos-arm64.tar.gz|\
-              FrpcDash-$V-macos-x64.dmg|FrpcDash-$V-macos-x64.tar.gz|\
-              FrpcDash-$V-android-arm64.apk|FrpcDash-$V-android-arm64-unsigned.apk|\
+              frpc-desktop-multi-$V-windows-x64.zip|frpc-desktop-multi-$V-windows-x64-setup.exe|\
+              frpc-desktop-multi-$V-linux-x64.tar.gz|frpc-desktop-multi-$V-linux-x64.deb|frpc-desktop-multi-$V-linux-x64.AppImage|\
+              frpc-desktop-multi-$V-macos-arm64.dmg|frpc-desktop-multi-$V-macos-arm64.tar.gz|\
+              frpc-desktop-multi-$V-macos-x64.dmg|frpc-desktop-multi-$V-macos-x64.tar.gz|\
+              frpc-desktop-multi-$V-android-arm64.apk|frpc-desktop-multi-$V-android-arm64-unsigned.apk|\
               frpc-engine-VERSION.txt) ;;
               *) echo "  [UNEXPECTED] $f" ;;
             esac
@@ -578,19 +590,19 @@ jobs:
           [ -n "${FRP:-}" ] || FRP="$FRP_VERSION"
 
           {
-            echo "## FrpcDash $V"
+            echo "## frpc-desktop-multi $V"
             echo ""
             echo "frp 客户端一体化发布：**桌面端 + Android**，共用同一套配置模型与校验逻辑。"
             echo "内置 frpc 引擎：**$FRP**（各平台独立原生编译，非跨平台模拟）"
             echo ""
             echo "| 平台 | 文件 | 说明 |"
             echo "|---|---|---|"
-            echo "| Windows x64 | \`FrpcDash-$V-windows-x64-setup.exe\` | 双击安装，自带 JRE，含开始菜单快捷方式 |"
-            echo "| Windows x64 | \`FrpcDash-$V-windows-x64.zip\` | 便携版，解压后运行 \`FrpcDash.exe\` |"
-            echo "| Linux x64 | \`FrpcDash-$V-linux-x64.tar.gz\` / \`.deb\` | 解压运行 \`bin/FrpcDash\`，或 \`dpkg -i\` |"
-            echo "| macOS arm64 | \`FrpcDash-$V-macos-arm64.dmg\` | Apple Silicon；未签名，首次需右键打开 |"
-            echo "| macOS x64 | \`FrpcDash-$V-macos-x64.dmg\` | Intel；未签名，首次需右键打开 |"
-            echo "| Android arm64 | \`FrpcDash-$V-android-arm64.apk\` | Android 8.0+，允许未知来源安装 |"
+            echo "| Windows x64 | \`frpc-desktop-multi-$V-windows-x64-setup.exe\` | 双击安装，自带 JRE，含开始菜单快捷方式 |"
+            echo "| Windows x64 | \`frpc-desktop-multi-$V-windows-x64.zip\` | 便携版，解压后运行 \`frpc-desktop-multi.exe\` |"
+            echo "| Linux x64 | \`frpc-desktop-multi-$V-linux-x64.tar.gz\` / \`.deb\` | 解压运行 \`bin/frpc-desktop-multi\`，或 \`dpkg -i\` |"
+            echo "| macOS arm64 | \`frpc-desktop-multi-$V-macos-arm64.dmg\` | Apple Silicon；未签名，首次需右键打开 |"
+            echo "| macOS x64 | \`frpc-desktop-multi-$V-macos-x64.dmg\` | Intel；未签名，首次需右键打开 |"
+            echo "| Android arm64 | \`frpc-desktop-multi-$V-android-arm64.apk\` | Android 8.0+，允许未知来源安装 |"
             echo ""
             echo "macOS 的 \`.tar.gz\` 是同一个 \`.app\` 的压缩包（不便挂载 DMG 时用）。"
             echo ""
@@ -604,7 +616,7 @@ jobs:
             gh release edit "$TAG" --notes-file notes.md
             echo "已更新已存在的 Release $TAG"
           else
-            gh release create "$TAG" dist/* --title "FrpcDash $V" --notes-file notes.md
+            gh release create "$TAG" dist/* --title "frpc-desktop-multi $V" --notes-file notes.md
             echo "已创建 Release $TAG"
           fi
 

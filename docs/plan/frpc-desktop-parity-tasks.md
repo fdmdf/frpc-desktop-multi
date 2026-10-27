@@ -1,4 +1,4 @@
-# FrpcDash × frpc-desktop 功能对齐任务清单
+# frpc-desktop-multi × frpc-desktop 功能对齐任务清单
 
 > 对照对象：`luckjiawei/frpc-desktop`（v2.0.0，Tauri 2 + Vue3；桌面端单 frps 模型）
 > 对照结果：**能力缺口 26 项**，按「配置表达能力 → 配置操作效率 → 引擎与运行 → 系统集成 → Android 对齐」分 6 批推进。
@@ -14,7 +14,7 @@
 
 ## 0. 先厘清两边的产品模型差异（决定哪些能抄、哪些不能抄）
 
-| 维度 | frpc-desktop | FrpcDash | 影响 |
+| 维度 | frpc-desktop | frpc-desktop-multi | 影响 |
 |---|---|---|---|
 | 服务端 | 一个 frps，全局唯一配置 | 多份 `ServerProfile`，每份一个 frps | 它的「设置页」= 我们的「档案编辑页」，页面不能一一对应 |
 | 代理与访问者 | 都用 `[[proxies]]` 表达，访问者靠 `visitorsModel=visitors` 区分 | `proxies` / `visitors` 两段独立，贴合 frp schema | **不要改成它的单表模型**，我们已支持 `fallbackTo`/`keepTunnelOpen` 且语义正确 |
@@ -23,13 +23,13 @@
 | 引擎 | 多版本管理（下载/导入/切换） | 内置单一版本 + 自定义路径 | **最大缺口** |
 | 平台 | 桌面三端 | 桌面三端 + Android | Android 需独立排期 |
 
-一句话结论：**frpc-desktop 强在「配置字段覆盖度 + 配置操作效率 + frp 版本管理 + 系统集成」，FrpcDash 强在「运行态可观测性（admin API / 资源曲线 / 登录态）+ 多档案 + 双端一致」。补齐方向应是前者，不要动后者。**
+一句话结论：**frpc-desktop 强在「配置字段覆盖度 + 配置操作效率 + frp 版本管理 + 系统集成」，frpc-desktop-multi 强在「运行态可观测性（admin API / 资源曲线 / 登录态）+ 多档案 + 双端一致」。补齐方向应是前者，不要动后者。**
 
 ---
 
 ## 1. 现状证据（按代码位置）
 
-| 能力 | frpc-desktop | FrpcDash 现状 | 结论 |
+| 能力 | frpc-desktop | frpc-desktop-multi 现状 | 结论 |
 |---|---|---|---|
 | 传输心跳 | `heartbeatInterval` / `heartbeatTimeout` / `tcpMuxKeepaliveInterval` | `TransportConfig` 无这三个字段（`shared/.../model/FrpcConfig.kt:72`） | 缺 |
 | 连接侧绑定/代理 | `connectServerLocalIP` / `proxyURL` | 模型有字段，**UI 未暴露**（同上 :80-83） | 半缺 |
@@ -205,7 +205,7 @@
 
 #### T18 关于页：版本检查 — S
 - **目标**：知道有没有新版本。
-- **改动**：`SettingsScreen.kt:141-151` 扩为「关于」卡片：当前版本、引擎版本、检查更新（`GET /repos/<owner>/FrpcDash/releases/latest`，比对 `tag_name`）、GitHub / 文档 / 反馈三个链接。
+- **改动**：`SettingsScreen.kt:141-151` 扩为「关于」卡片：当前版本、引擎版本、检查更新（`GET /repos/<owner>/frpc-desktop-multi/releases/latest`，比对 `tag_name`）、GitHub / 文档 / 反馈三个链接。
 - **注意**：请求失败静默降级为「检查失败，稍后再试」，不弹错误框；不自动下载，只跳转 release 页。
 - **验收**：断网时点检查 → 提示失败但不崩；有新版时显示版本号并可点开浏览器。
 
@@ -222,7 +222,7 @@
 #### T20 静默启动 — S
 - **目标**：开机自启时不弹窗，直接进托盘并自动连接。
 - **改动**：`Main.kt:92-110` 的 `main()` 增加 `--silent` 解析（与已有 `--screenshot`/`--smoke` 同一套分支），`Main.kt:152` 的 `windowVisible` 初值改为 `!silent`；与 `closeToTray`、`autoStartOnLaunch` 的组合逻辑写清楚（静默 + 自动连接 = 后台起隧道）。
-- **验收**：`FrpcDash.exe --silent` 启动后无窗口、托盘有图标、tooltip 显示运行中；点托盘「显示」能打开窗口。
+- **验收**：`frpc-desktop-multi.exe --silent` 启动后无窗口、托盘有图标、tooltip 显示运行中；点托盘「显示」能打开窗口。
 
 #### T21 首次使用引导 — M
 - **目标**：新用户 3 步上手（frpc-desktop 用 intro.js）。
@@ -303,8 +303,8 @@ desktopApp/engine/frpc.exe verify -c <outDir>/<profile>.toml   # Linux/macOS 去
 bash scripts/e2e/e2e-protocols.sh
 
 # 桌面无界面自检（批次4/5 必做）
-<安装目录>/FrpcDash.exe --smoke <frpc.toml>
-<安装目录>/FrpcDash.exe --tray-test tray.png
+<安装目录>/frpc-desktop-multi.exe --smoke <frpc.toml>
+<安装目录>/frpc-desktop-multi.exe --tray-test tray.png
 ```
 
 手工回归清单（每批结束跑一遍）：

@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="docs/assets/icon.svg" width="96" height="96" alt="FrpcDash" />
-  <h1>FrpcDash</h1>
+  <img src="docs/assets/icon.svg" width="96" height="96" alt="frpc-desktop-multi" />
+  <h1>frpc-desktop-multi</h1>
   <p><b>frp 内网穿透的可视化客户端</b> · Windows / Linux / macOS / Android<br>配置、启停、日志、监控，全在一个界面里</p>
 
   <p>
@@ -52,14 +52,14 @@
 
 | 平台 | 文件 | 说明 |
 |---|---|---|
-| Windows x64 | `FrpcDash-<ver>-windows-x64-setup.exe` | 双击安装，自带 JRE，含开始菜单快捷方式 |
-| Windows x64 | `FrpcDash-<ver>-windows-x64.zip` | 便携版，解压即用 |
-| Linux x64 | `FrpcDash-<ver>-linux-x64.tar.gz` / `.deb` | 解压运行 `bin/FrpcDash`，或 `dpkg -i` |
-| macOS arm64 | `FrpcDash-<ver>-macos-arm64.dmg` | Apple Silicon；未签名，首次需右键 → 打开 |
-| macOS x64 | `FrpcDash-<ver>-macos-x64.dmg` | Intel；未签名，首次需右键 → 打开 |
-| Android arm64 | `FrpcDash-<ver>-android-arm64.apk` | Android 8.0+，允许未知来源安装 |
+| Windows x64 | `frpc-desktop-multi-<ver>-windows-x64-setup.exe` | 双击安装，自带 JRE，含开始菜单快捷方式 |
+| Windows x64 | `frpc-desktop-multi-<ver>-windows-x64.zip` | 便携版，解压即用 |
+| Linux x64 | `frpc-desktop-multi-<ver>-linux-x64.tar.gz` / `.deb` | 解压运行 `bin/frpc-desktop-multi`，或 `dpkg -i` |
+| macOS arm64 | `frpc-desktop-multi-<ver>-macos-arm64.dmg` | Apple Silicon；未签名，首次需右键 → 打开 |
+| macOS x64 | `frpc-desktop-multi-<ver>-macos-x64.dmg` | Intel；未签名，首次需右键 → 打开 |
+| Android arm64 | `frpc-desktop-multi-<ver>-android-arm64.apk` | Android 8.0+，允许未知来源安装 |
 
-macOS 的 `.tar.gz` 是同一个 `.app` 的压缩包（不便挂载 DMG 时用）。Android 未配置签名 secret 时产物带 `-unsigned` 后缀。
+macOS 的 `.tar.gz` 是同一个 `.app` 的压缩包（不便挂载 DMG 时用）。Android APK 由仓库签名密钥签名，签名未生效时工作流会直接终止，不会发出装不上的产物。
 
 ## 快速开始
 
