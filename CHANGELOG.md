@@ -2,6 +2,15 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.3.1] - 2026-10-28
+
+### 修复
+
+- **桌面端托盘右键菜单的中文渲染成方框（□□□）**：菜单原本用 AWT 的 `PopupMenu`，
+  Windows 上菜单由系统按菜单字体绘制，`MenuItem.setFont` 不生效，而该字体不含中文字形。
+  改成 **Swing 的 `JPopupMenu`**（菜单项由 Java 自己绘制，组件字体一定生效），
+  L&F 默认值与组件字体都显式设为中文字体，并用 1x1 透明窗口作弹出锚点、右键在鼠标位置弹出。
+
 ## [1.3.0] - 2026-10-28
 
 ### 变更

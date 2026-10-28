@@ -56,7 +56,6 @@ import com.frpc.desktop.ui.SettingsScreen
 import kotlinx.coroutines.delay
 import java.awt.Desktop
 import java.awt.Dimension
-import java.awt.Frame
 import java.awt.Rectangle
 import java.awt.Robot
 import java.io.File
@@ -139,16 +138,11 @@ private fun runTrayTest(args: Array<String>) {
     AppTray.updateTooltip("Frpc-Android-Multi · 运行中 · 代理 3/3 · 访问者 1/1")
     AppTray.updateRunning(true)
     val popup = AppTray.popupForTest() ?: run { println("no popup"); exitProcess(5) }
-    val frame = Frame().apply {
-        isUndecorated = true
-        setSize(1, 1)
-        setLocation(40, 40)
-        isVisible = true
-    }
-    popup.show(frame, 60, 60)
+    // 菜单由 AppTray 自己弹（内部带一个 1x1 透明锚点窗口），这里只需给出屏幕坐标
+    AppTray.showMenuAt(60, 60)
     Thread.sleep(1_200)
-    // PopupMenu 不是 Component，取不到自身坐标：按 show() 的锚点推算（frame 40,40 + 60,60）
-    val shot = Robot().createScreenCapture(Rectangle(90, 90, 240, 170))
+    // 菜单左上角就是锚点 (60,60)，往右下铺开，多留一点边距
+    val shot = Robot().createScreenCapture(Rectangle(55, 55, 240, 170))
     ImageIO.write(shot, "png", target)
     println("saved: ${target.absolutePath}")
     exitProcess(0)
