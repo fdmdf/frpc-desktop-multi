@@ -5,16 +5,16 @@ name: Release
 #   2) 手动 workflow_dispatch —— 补发/重发，版本号可填，留空用 androidApp 的 versionName
 #
 # 产物命名规范（PRODUCT-版本-系统-架构[-变体].扩展名）：
-#   Frpc-Android-Multi-1.3.2-windows-x64-setup.exe    Windows 安装程序（自带 JRE，开始菜单快捷方式）
-#   Frpc-Android-Multi-1.3.2-windows-x64.zip          Windows 便携版（解压即用）
-#   Frpc-Android-Multi-1.3.2-linux-x64.tar.gz         Linux 通用包（解压运行 bin/Frpc-Android-Multi）
-#   Frpc-Android-Multi-1.3.2-linux-x64.deb            Debian / Ubuntu
-#   Frpc-Android-Multi-1.3.2-linux-x64.AppImage       AppImage（可选，失败不阻塞发版）
-#   Frpc-Android-Multi-1.3.2-macos-arm64.dmg          macOS Apple Silicon
-#   Frpc-Android-Multi-1.3.2-macos-arm64.tar.gz       同上，.app 压缩包
-#   Frpc-Android-Multi-1.3.2-macos-x64.dmg            macOS Intel
-#   Frpc-Android-Multi-1.3.2-macos-x64.tar.gz         同上，.app 压缩包
-#   Frpc-Android-Multi-1.3.2-android-arm64.apk        Android（签名密钥失效时才退化成 -unsigned）
+#   Frpc-Android-Multi-1.3.3-windows-x64-setup.exe    Windows 安装程序（自带 JRE，开始菜单快捷方式）
+#   Frpc-Android-Multi-1.3.3-windows-x64.zip          Windows 便携版（解压即用）
+#   Frpc-Android-Multi-1.3.3-linux-x64.tar.gz         Linux 通用包（解压运行 bin/Frpc-Android-Multi）
+#   Frpc-Android-Multi-1.3.3-linux-x64.deb            Debian / Ubuntu
+#   Frpc-Android-Multi-1.3.3-linux-x64.AppImage       AppImage（可选，失败不阻塞发版）
+#   Frpc-Android-Multi-1.3.3-macos-arm64.dmg          macOS Apple Silicon
+#   Frpc-Android-Multi-1.3.3-macos-arm64.tar.gz       同上，.app 压缩包
+#   Frpc-Android-Multi-1.3.3-macos-x64.dmg            macOS Intel
+#   Frpc-Android-Multi-1.3.3-macos-x64.tar.gz         同上，.app 压缩包
+#   Frpc-Android-Multi-1.3.3-android-arm64.apk        Android（签名密钥失效时才退化成 -unsigned）
 #   frpc-engine-VERSION.txt                           内置 frpc 引擎版本留档
 
 on:

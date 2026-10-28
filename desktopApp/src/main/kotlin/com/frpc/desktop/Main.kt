@@ -58,23 +58,17 @@ import com.frpc.desktop.ui.LogScreen
 import com.frpc.desktop.ui.MonitorScreen
 import com.frpc.desktop.ui.ProfilesScreen
 import com.frpc.desktop.ui.SettingsScreen
-import com.frpc.desktop.ui.TrayActions
-import com.frpc.desktop.ui.TrayRunState
+import com.frpc.desktop.ui.TrayEvent
 import com.frpc.desktop.ui.TrayState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.Desktop
-import java.awt.Color
 import java.awt.Dimension
-import java.awt.Rectangle
-import java.awt.Robot
 import java.io.File
 import java.net.URI
-import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
-import javax.swing.SwingUtilities
 import kotlin.system.exitProcess
 
 private fun screenshotMode(args: Array<String>) {
@@ -141,72 +135,26 @@ object AppActivation {
 
 /**
  * 托盘自检：把托盘菜单**离屏渲染**成 PNG，用来核对
- * 中文有没有渲染成方框、图标/分隔线/勾选态是否正常、深浅色两套配色对不对。
+ * 中文有没有渲染成方框、行高/内边距/分隔线是否正常、深浅色两套配色对不对。
  *
- * 不用 Robot 截屏的原因：菜单是重量级弹层（独立窗口），在无交互桌面 / CI 上只能拍到桌面底色。
- * `printAll()` 走的是同一套 Swing 绘制代码，字体、图标、配色、间距都能如实反映。
+ * 不用 Robot 截屏的原因：菜单是独立窗口，在无交互桌面 / CI 上只能拍到桌面底色。
+ * `printAll()` 走的是同一套绘制代码，字体、配色、间距都能如实反映。
  *
  * 用法：Frpc-Android-Multi.exe --tray-test <输出png>
- * 产出 <输出png>（深色）与 <输出png 去掉扩展名>-light.png（浅色）两张图。
+ * 产出 <输出png>（深色）、<输出png 去掉扩展名>-light.png（浅色）、
+ * -disabled.png（禁用态）三张图。
  */
 private fun runTrayTest(args: Array<String>) {
     val target = File(args.getOrNull(args.indexOf("--tray-test") + 1) ?: "tray-test.png")
-    if (!AppTray.install(
-            TrayActions(
-                onShowWindow = {}, onHideWindow = {}, onToggleRun = {}, onReload = {},
-                onOpenStatusPage = {}, onOpenSettings = {}, onCheckUpdate = {}, onAbout = {},
-                onQuit = {}, onAutoStartChange = {}, onCloseToTrayChange = {},
-            ),
-        )
-    ) {
-        println("tray not supported")
-        exitProcess(4)
-    }
-    AppTray.updateTooltip("Frpc-Android-Multi · 运行中 · 代理 3/3 · 访问者 1/1")
-
-    /** 按当前菜单状态离屏渲染一张；bg 模拟托盘所在的桌面底色 */
-    fun renderMenu(bg: Color): BufferedImage {
-        val popup = AppTray.popupForTest() ?: run { println("no popup"); exitProcess(5) }
-        val pref = popup.preferredSize
-        val w = if (pref.width > 20) pref.width else 320
-        val h = if (pref.height > 20) pref.height else 400
-        popup.setSize(w, h)
-        popup.validate()
-        popup.doLayout()
-        val img = BufferedImage(w + 16, h + 16, BufferedImage.TYPE_INT_ARGB)
-        val g = img.createGraphics()
-        g.color = bg
-        g.fillRect(0, 0, img.width, img.height)
-        g.translate(8, 8)
-        popup.printAll(g)
-        g.dispose()
-        println("menu: items=${popup.componentCount} size=${popup.size}")
-        return img
-    }
-
-    var darkShot: BufferedImage? = null
-    var lightShot: BufferedImage? = null
-    SwingUtilities.invokeAndWait {
-        // 运行中 + 有配置 + 状态页可用：菜单项最全、禁用态最少的一条路径
-        val full = TrayState(
-            windowVisible = true,
-            run = TrayRunState.RUNNING,
-            canStart = true,
-            statusPort = 7400,
-            autoStart = true,
-            closeToTray = false,
-            dark = true,
-        )
-        AppTray.update(full)
-        darkShot = renderMenu(Color(0x2B, 0x2B, 0x2B))
-        AppTray.update(full.copy(dark = false))
-        lightShot = renderMenu(Color(0xFA, 0xFA, 0xFA))
-    }
-    ImageIO.write(darkShot ?: run { exitProcess(6) }, "png", target)
-    val lightFile = File(target.parentFile, target.nameWithoutExtension + "-light.png")
-    ImageIO.write(lightShot ?: run { exitProcess(6) }, "png", lightFile)
+    fun sibling(suffix: String) = File(target.parentFile, target.nameWithoutExtension + suffix)
+    ImageIO.write(AppTray.renderPreview(dark = true), "png", target)
+    ImageIO.write(AppTray.renderPreview(dark = false), "png", sibling("-light.png"))
+    ImageIO.write(AppTray.renderPreview(dark = true, disabled = true), "png", sibling("-disabled.png"))
+    ImageIO.write(AppTray.renderPreview(dark = false, hover = 1), "png", sibling("-hover.png"))
     println("saved: ${target.absolutePath}")
-    println("saved: ${lightFile.absolutePath}")
+    println("saved: ${sibling("-light.png").absolutePath}")
+    println("saved: ${sibling("-disabled.png").absolutePath}")
+    println("saved: ${sibling("-hover.png").absolutePath}")
     exitProcess(0)
 }
 
@@ -228,8 +176,6 @@ private fun app() = application {
     var showAbout by remember { mutableStateOf(false) }
     // 主窗口句柄：托盘菜单要把隐藏的窗口重新唤到前台
     var awtWindow by remember { mutableStateOf<java.awt.Window?>(null) }
-    // 更新检查的结果会就地替换托盘菜单里「检查更新」那一项的文案
-    var checkUpdateJob by remember { mutableStateOf<UpdateChecker.Result?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
     val uiScope = rememberCoroutineScope()
 
@@ -256,11 +202,9 @@ private fun app() = application {
     fun runCheckUpdate() {
         if (checkingUpdate) return
         checkingUpdate = true
-        checkUpdateJob = null
         uiScope.launch(Dispatchers.IO) {
             val result = UpdateChecker.check(AppInfo.version)
             checkingUpdate = false
-            checkUpdateJob = result
             // 有新版就直接打开下载页：托盘气泡通知是系统绘制的，中文同样会变成方框
             if (result.state == UpdateChecker.State.AVAILABLE) {
                 openBrowser(UpdateChecker.RELEASES_PAGE)
@@ -300,8 +244,8 @@ private fun app() = application {
     val proxyStatus by container.supervisor.status.collectAsState()
     val visitorsOnline by container.supervisor.visitors.collectAsState()
     val activeCounts by container.supervisor.activeCounts.collectAsState()
-    val trayProfiles by container.profiles.profiles.collectAsState()
-    val activeProfile = trayProfiles.firstOrNull { it.id == runState.profileId }
+    val trayProfileList by container.profiles.profiles.collectAsState()
+    val activeProfile = trayProfileList.firstOrNull { it.id == runState.profileId }
     val trayTooltip = buildString {
         append("Frpc-Android-Multi")
         when (runState.phase) {
@@ -329,81 +273,35 @@ private fun app() = application {
         }
     }
 
-    // 系统托盘：AWT 实现（Compose 的 Tray 无法设菜单字体，中文会渲染成方框）
-    LaunchedEffect(Unit) {
-        AppTray.install(
-            TrayActions(
-                onShowWindow = {
-                    windowVisible = true
-                    awtWindow?.toFront()
-                },
-                onHideWindow = { windowVisible = false },
-                onToggleRun = {
-                    if (container.supervisor.state.value.phase == FrpcSupervisor.Phase.RUNNING) {
-                        container.supervisor.stop()
-                    } else {
-                        val s = container.settings.state.value
-                        val profile = container.profiles.find(s.defaultProfileId)
-                            ?: container.profiles.profiles.value.firstOrNull()
-                        profile?.let { container.supervisor.start(it) }
-                    }
-                },
-                onReload = { container.supervisor.reload() },
-                onOpenStatusPage = {
-                    val port = container.supervisor.state.value.adminPort
-                    if (port > 0) openBrowser("http://127.0.0.1:$port/static/")
-                },
-                onOpenSettings = {
-                    tab = Tab.SETTINGS
-                    windowVisible = true
-                    awtWindow?.toFront()
-                },
-                onCheckUpdate = { runCheckUpdate() },
-                onAbout = {
-                    windowVisible = true
-                    showAbout = true
-                },
-                onQuit = { quitApp() },
-                onAutoStartChange = { v -> container.settings.update { it.copy(autoStartOnLaunch = v) } },
-                onCloseToTrayChange = { v -> container.settings.update { it.copy(closeToTray = v) } },
-            ),
-        )
+    /** 托盘事件的唯一分发点；界面状态的读写都在 Compose 侧，托盘只负责渲染 */
+    fun handleTrayEvent(event: TrayEvent) {
+        when (event) {
+            TrayEvent.ShowWindow -> {
+                windowVisible = true
+                awtWindow?.toFront()
+            }
+
+            TrayEvent.OpenSettings -> {
+                tab = Tab.SETTINGS
+                windowVisible = true
+                awtWindow?.toFront()
+            }
+
+            TrayEvent.About -> {
+                windowVisible = true
+                showAbout = true
+            }
+
+            TrayEvent.Quit -> quitApp()
+        }
     }
 
-    val trayRunState = when (runState.phase) {
-        FrpcSupervisor.Phase.RUNNING -> TrayRunState.RUNNING
-        FrpcSupervisor.Phase.STARTING -> TrayRunState.STARTING
-        FrpcSupervisor.Phase.STOPPING -> TrayRunState.STOPPING
-        else -> TrayRunState.IDLE
-    }
-    val updateLabel = when {
-        checkingUpdate -> "正在检查更新…"
-        checkUpdateJob?.state == UpdateChecker.State.AVAILABLE ->
-            "有新版本 ${checkUpdateJob?.version}（点击查看）"
-        checkUpdateJob?.state == UpdateChecker.State.UP_TO_DATE ->
-            "已是最新 ${checkUpdateJob?.version}"
-        checkUpdateJob?.state == UpdateChecker.State.FAILED -> "检查更新失败，点此重试"
-        else -> "检查更新"
-    }
+    // 系统托盘：AWT 实现（Compose 的 Tray 无法设菜单字体，中文会渲染成方框）
+    LaunchedEffect(Unit) { AppTray.install(::handleTrayEvent) }
+
     LaunchedEffect(trayTooltip) { AppTray.updateTooltip(trayTooltip) }
-    LaunchedEffect(
-        windowVisible, trayRunState, trayProfiles.size, runState.adminPort, runState.adminEnabled,
-        settings.autoStartOnLaunch, settings.closeToTray, darkMenu, updateLabel, checkingUpdate,
-    ) {
-        AppTray.update(
-            TrayState(
-                windowVisible = windowVisible,
-                run = trayRunState,
-                canStart = trayProfiles.isNotEmpty(),
-                statusPort = runState.adminPort.takeIf { runState.adminEnabled && it > 0 },
-                autoStart = settings.autoStartOnLaunch,
-                closeToTray = settings.closeToTray,
-                dark = darkMenu,
-                updateLabel = updateLabel,
-                updateEnabled = !checkingUpdate,
-            ),
-        )
-    }
+    // 托盘菜单只有一套状态要同步：深浅色（主题切了就推一次）
+    LaunchedEffect(darkMenu) { AppTray.update(TrayState(dark = darkMenu)) }
     DisposableEffect(Unit) { onDispose { AppTray.remove() } }
 
     if (windowVisible) {

@@ -14,15 +14,9 @@
  *   desktopApp/src/main/resources/tray/tray-<n>.png        彩色透明（Windows / Linux 托盘）
  *   desktopApp/src/main/resources/tray/tray-mac.png        macOS 模板图 @1x（22px，纯黑 + alpha）
  *   desktopApp/src/main/resources/tray/tray-mac@2x.png     macOS 模板图 @2x（44px）
- *   desktopApp/src/main/resources/tray/menu/<n>.png        菜单项字形 @1x（16px，纯黑 + alpha）
- *   desktopApp/src/main/resources/tray/menu/<n>@2x.png     菜单项字形 @2x（32px）
  *   desktopApp/src/main/resources/icon.png                 512 带 alpha（窗口/任务栏图标）
  *   desktopApp/icon.ico                                    多尺寸 ICO（16..256）
  *   .build/icon-preview-{dark,light}.png                   深浅背景合成预览（--preview 时输出）
- *
- * 菜单字形为什么是「预渲染 PNG」而不是运行时读 SVG：Java 标准库没有 SVG 渲染器，
- * ImageIO 也不认 .svg（详见 AppTray.kt 顶部的格式说明）。字形统一存成纯黑 + alpha 的
- * 蒙版，运行时按菜单前景色重新着色，深浅色主题各出一份颜色，不需要两套资源。
  */
 import javax.imageio.ImageIO;
 import java.awt.AlphaComposite;
@@ -52,8 +46,6 @@ public class GenTrayIcons {
     static final int MAC_1X = 22, MAC_2X = 44;
     /** ICO 内嵌尺寸（Windows Explorer / 任务栏各视图按需取用，避免缩放发虚） */
     static final int[] ICO_SIZES = {16, 20, 24, 32, 40, 48, 64, 128, 256};
-    /** 菜单项字形：@1x=16（96/120 DPI）、@2x=32（192+ DPI 与 HiDPI 屏） */
-    static final int[] GLYPH_SIZES = {16, 32};
 
     public static void main(String[] args) throws Exception {
         File root = new File(args.length > 0 ? args[0] : ".");
@@ -69,14 +61,6 @@ public class GenTrayIcons {
         write(drawTemplate(MAC_1X), new File(trayDir, "tray-mac.png"));
         write(drawTemplate(MAC_2X), new File(trayDir, "tray-mac@2x.png"));
 
-        File menuDir = new File(trayDir, "menu");
-        menuDir.mkdirs();
-        for (Glyph g : Glyph.values()) {
-            for (int n : GLYPH_SIZES) {
-                write(drawGlyph(g, n), new File(menuDir, g.file + (n > 16 ? "@2x" : "") + ".png"));
-            }
-        }
-
         // 窗口/任务栏用的大图：保留完整细节（拱门 + 圆点 + 箭头），透明背景
         write(drawColor(512), new File(resDir, "icon.png"));
 
@@ -89,10 +73,7 @@ public class GenTrayIcons {
             previewDir.mkdirs();
             write(previewSheet(false), new File(previewDir, "icon-preview-light.png"));
             write(previewSheet(true), new File(previewDir, "icon-preview-dark.png"));
-            write(menuSheet(false), new File(previewDir, "menu-preview-light.png"));
-            write(menuSheet(true), new File(previewDir, "menu-preview-dark.png"));
             System.out.println("  -> .build/icon-preview-{light,dark}.png（深浅背景放大对照图）");
-            System.out.println("  -> .build/menu-preview-{light,dark}.png（菜单字形 × 深浅背景）");
         }
         if (check) {
             for (int n : COLOR_SIZES) { checkPng(new File(trayDir, "tray-" + n + ".png")); }
@@ -303,174 +284,6 @@ public class GenTrayIcons {
         return a;
     }
 
-    // ---------- 菜单项字形 ----------
-
-    /** 托盘菜单里每一项左侧的小图标；file 决定输出文件名 */
-    enum Glyph {
-        WINDOW("window"),   // 显示 / 隐藏主窗口
-        PLAY("play"),       // 启动 frpc
-        STOP("stop"),       // 停止 frpc
-        RELOAD("reload"),   // 重载配置
-        WEB("web"),         // 打开状态页
-        GEAR("gear"),       // 设置
-        UPDATE("update"),   // 检查更新
-        INFO("info"),       // 关于
-        QUIT("quit"),       // 退出
-        BOX("box"),         // 未勾选（菜单里的开关项）
-        BOX_CHECK("box-check"); // 已勾选
-
-        final String file;
-        Glyph(String file) { this.file = file; }
-    }
-
-    /**
-     * 菜单字形：纯黑 + alpha 的蒙版（运行时按前景色着色），8 倍超采样后降采样。
-     * 全部按 1.0 归一化坐标绘制，线宽统一 0.085~0.095，16px 下仍有 1.3~1.5px 实边。
-     */
-    static BufferedImage drawGlyph(Glyph kind, int size) {
-        int ss = Math.min(256, size * 8);
-        BufferedImage big = new BufferedImage(ss, ss, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = setup(big);
-        g.setComposite(AlphaComposite.Src); // 只写形状，透明区保持 0
-        g.setColor(Color.BLACK);
-        float u = ss;
-        switch (kind) {
-            case WINDOW: {
-                g.setStroke(new BasicStroke(u * 0.090f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                // 窗口外框 + 标题栏分隔线（不画标题栏实心块：16px 下会和外框糊在一起）
-                g.draw(new RoundRectangle2D.Float(
-                    u * 0.14f, u * 0.20f, u * 0.72f, u * 0.60f, u * 0.16f, u * 0.16f));
-                g.draw(new java.awt.geom.Line2D.Float(u * 0.14f, u * 0.40f, u * 0.86f, u * 0.40f));
-                break;
-            }
-            case PLAY: {
-                Path2D p = new Path2D.Float();
-                p.moveTo(u * 0.32f, u * 0.18f);
-                p.lineTo(u * 0.82f, u * 0.50f);
-                p.lineTo(u * 0.32f, u * 0.82f);
-                p.closePath();
-                g.fill(p);
-                break;
-            }
-            case STOP: {
-                g.fill(new RoundRectangle2D.Float(
-                    u * 0.24f, u * 0.24f, u * 0.52f, u * 0.52f, u * 0.14f, u * 0.14f));
-                break;
-            }
-            case RELOAD: {
-                float cx = u * 0.5f, cy = u * 0.5f, r = u * 0.32f;
-                g.setStroke(new BasicStroke(u * 0.095f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                // 缺口开在右下（280°~350°，70°），箭头接在弧的末端 280° 处，尖端朝缺口方向伸出。
-                // 箭头必须比弧线明显更宽（half 0.10 > 描边半宽 0.0475），否则会被弧线吞掉看不出来
-                g.draw(new java.awt.geom.Arc2D.Float(
-                    cx - r, cy - r, r * 2f, r * 2f, 350f, 290f, java.awt.geom.Arc2D.OPEN));
-                // 屏幕坐标：角度 θ 对应 (cx + r·cosθ, cy - r·sinθ)；θ 增大 = 视觉上逆时针
-                float th = (float) Math.toRadians(280);
-                // 半径外扩一点：箭头要明显探到圆弧之外，否则会和弧线叠在一起看不出来
-                float rr = r + u * 0.040f;
-                float px = (float) (cx + rr * Math.cos(th));
-                float py = (float) (cy - rr * Math.sin(th));
-                float tx = (float) -Math.sin(th), ty = (float) -Math.cos(th); // 切线（θ 增大方向）
-                arrowHead(g, px, py, tx, ty, u * 0.13f, u * 0.100f);
-                break;
-            }
-            case WEB: {
-                g.setStroke(new BasicStroke(u * 0.080f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g.draw(new java.awt.geom.Ellipse2D.Float(u * 0.13f, u * 0.13f, u * 0.74f, u * 0.74f));
-                g.draw(new java.awt.geom.Line2D.Float(u * 0.13f, u * 0.50f, u * 0.87f, u * 0.50f));
-                g.draw(new java.awt.geom.Ellipse2D.Float(u * 0.31f, u * 0.13f, u * 0.38f, u * 0.74f));
-                break;
-            }
-            case GEAR: {
-                // 齿轮 = 8 条朝外的粗短齿 + 一圈轮体 + 中间挖掉一个轮毂孔。
-                // （早先用「虚线粗描边绕圆」画齿，实际出来是一圈断掉的散点，识别度很差）
-                float cx = u * 0.5f, cy = u * 0.5f;
-                g.setStroke(new BasicStroke(u * 0.130f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                for (int i = 0; i < 8; i++) {
-                    double a = Math.toRadians(i * 45);
-                    float ca = (float) Math.cos(a), sa = (float) Math.sin(a);
-                    g.draw(new java.awt.geom.Line2D.Float(
-                        cx + ca * u * 0.24f, cy + sa * u * 0.24f,
-                        cx + ca * u * 0.41f, cy + sa * u * 0.41f));
-                }
-                g.setStroke(new BasicStroke(u * 0.150f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND));
-                float r = u * 0.255f;
-                g.draw(new java.awt.geom.Ellipse2D.Float(cx - r, cy - r, r * 2f, r * 2f));
-                // 轮毂孔用 DstOut 挖：涂背景色会留下不透明像素，托盘上就是个白点
-                g.setComposite(AlphaComposite.DstOut);
-                float ir = u * 0.100f;
-                g.fill(new java.awt.geom.Ellipse2D.Float(cx - ir, cy - ir, ir * 2f, ir * 2f));
-                g.setComposite(AlphaComposite.Src);
-                break;
-            }
-            case UPDATE: {
-                g.setStroke(new BasicStroke(u * 0.090f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                // 竖线 + 实心箭头（下载/更新）+ 底线托盘
-                g.draw(new java.awt.geom.Line2D.Float(u * 0.5f, u * 0.20f, u * 0.5f, u * 0.66f));
-                Path2D head = new Path2D.Float();
-                head.moveTo(u * 0.5f, u * 0.82f);
-                head.lineTo(u * 0.27f, u * 0.56f);
-                head.lineTo(u * 0.73f, u * 0.56f);
-                head.closePath();
-                g.fill(head);
-                g.draw(new java.awt.geom.Line2D.Float(u * 0.24f, u * 0.88f, u * 0.76f, u * 0.88f));
-                break;
-            }
-            case INFO: {
-                g.setStroke(new BasicStroke(u * 0.085f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g.draw(new java.awt.geom.Ellipse2D.Float(u * 0.12f, u * 0.12f, u * 0.76f, u * 0.76f));
-                g.fill(new java.awt.geom.Ellipse2D.Float(u * 0.44f, u * 0.25f, u * 0.12f, u * 0.12f));
-                g.setStroke(new BasicStroke(u * 0.105f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g.draw(new java.awt.geom.Line2D.Float(u * 0.5f, u * 0.46f, u * 0.5f, u * 0.72f));
-                break;
-            }
-            case BOX:
-            case BOX_CHECK: {
-                // 开关项的勾选框：BOX 只画外框，BOX_CHECK 是实心框 + 用 DstOut 挖出的对勾
-                // （对勾必须挖成透明，涂背景色会在深色菜单上留下一个方块）
-                g.setStroke(new BasicStroke(u * 0.090f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                RoundRectangle2D box = new RoundRectangle2D.Float(
-                    u * 0.15f, u * 0.15f, u * 0.70f, u * 0.70f, u * 0.20f, u * 0.20f);
-                if (kind == Glyph.BOX_CHECK) {
-                    g.fill(box);
-                    g.setComposite(AlphaComposite.DstOut);
-                    Path2D tick = new Path2D.Float();
-                    tick.moveTo(u * 0.29f, u * 0.52f);
-                    tick.lineTo(u * 0.43f, u * 0.67f);
-                    tick.lineTo(u * 0.73f, u * 0.33f);
-                    g.setStroke(new BasicStroke(u * 0.115f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                    g.draw(tick);
-                    g.setComposite(AlphaComposite.Src);
-                } else {
-                    g.draw(box);
-                }
-                break;
-            }
-            case QUIT: {
-                float cx = u * 0.5f, cy = u * 0.54f, r = u * 0.30f;
-                g.setStroke(new BasicStroke(u * 0.095f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                // 电源符号：缺口留在正下方（240°~300°），中间一根竖线
-                g.draw(new java.awt.geom.Arc2D.Float(
-                    cx - r, cy - r, r * 2f, r * 2f, 300f, 300f, java.awt.geom.Arc2D.OPEN));
-                g.draw(new java.awt.geom.Line2D.Float(cx, cy - u * 0.04f, cx, u * 0.20f));
-                break;
-            }
-        }
-        g.dispose();
-        return ss == size ? big : areaAverage(big, size);
-    }
-
-    /** 在 (px,py) 处沿 (tx,ty) 方向画一个实心箭头（tip 在前，底边在两侧） */
-    static void arrowHead(Graphics2D g, float px, float py, float tx, float ty, float len, float half) {
-        float nx = -ty, ny = tx; // 法线
-        Path2D p = new Path2D.Float();
-        p.moveTo(px + tx * len, py + ty * len);
-        p.lineTo(px - tx * len * 0.2f + nx * half, py - ty * len * 0.2f + ny * half);
-        p.lineTo(px - tx * len * 0.2f - nx * half, py - ty * len * 0.2f - ny * half);
-        p.closePath();
-        g.fill(p);
-    }
-
     // ---------- 输出 ----------
 
     static void write(BufferedImage img, File f) throws Exception {
@@ -535,42 +348,5 @@ public class GenTrayIcons {
         }
         g.dispose();
         return sheet;
-    }
-
-    /**
-     * 菜单字形预览：一行 16px（放大 5 倍）+ 一行 32px（放大 3 倍），
-     * 字形按「深色背景用浅色字形、浅色背景用深色字形」着色后合成，就是托盘菜单的实际观感。
-     */
-    static BufferedImage menuSheet(boolean dark) {
-        Glyph[] glyphs = Glyph.values();
-        int cols = 3, src = 32, zoom = 4, cell = src * zoom + 24;
-        int rows = (glyphs.length + cols - 1) / cols;
-        int w = cell * cols, h = cell * rows;
-        BufferedImage sheet = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = sheet.createGraphics();
-        Color bg = dark ? new Color(0x2B, 0x2B, 0x2B) : new Color(0xF7, 0xF7, 0xF7);
-        Color fg = dark ? new Color(0xEE, 0xEE, 0xEE) : new Color(0x1F, 0x1F, 0x1F);
-        g.setColor(bg);
-        g.fillRect(0, 0, w, h);
-        for (int i = 0; i < glyphs.length; i++) {
-            BufferedImage img = tint(drawGlyph(glyphs[i], src), fg);
-            int x = (i % cols) * cell + 12, y = (i / cols) * cell + 12;
-            g.drawImage(img, x, y, src * zoom, src * zoom, null);
-        }
-        g.dispose();
-        return sheet;
-    }
-
-    /** 与 AppTray 运行时一致的着色：保留 alpha，RGB 换成前景色 */
-    static BufferedImage tint(BufferedImage src, Color fg) {
-        BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
-        for (int y = 0; y < src.getHeight(); y++) {
-            for (int x = 0; x < src.getWidth(); x++) {
-                int argb = src.getRGB(x, y);
-                int a = (argb >>> 24) & 0xff;
-                out.setRGB(x, y, (a << 24) | (fg.getRed() << 16) | (fg.getGreen() << 8) | fg.getBlue());
-            }
-        }
-        return out;
     }
 }
