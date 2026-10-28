@@ -102,8 +102,10 @@ compose.desktop {
                 // Dock/Finder 图标暂用默认（托盘图标是另做的模板图，已适配深浅色菜单栏）
             }
             linux {
-                // Linux 的 jpackage 接受 PNG，直接用同一份 512 主图标
-                iconFile.set(file("icon.png"))
+                // Linux 的 jpackage 接受 PNG，直接用同一份 512 主图标。
+                // 注意路径：图标在 src/main/resources 下，不是 desktopApp 根目录
+                val png = file("src/main/resources/icon.png")
+                if (png.exists()) iconFile.set(png)
             }
         }
     }
