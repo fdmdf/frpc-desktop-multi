@@ -821,7 +821,7 @@ private fun describeProxy(proxy: ProxyConfig): String = buildString {
     if (proxy.enabled == false) append(" · 已禁用")
 }
 
-/** 访问者摘要：本机监听 → frps 上实际查找的代理名（含 serverUser / 本机 user 前缀） */
+/** 访问者摘要：本机监听 · 访问 frps 上实际查找的代理名（含 serverUser / 本机 user 前缀） */
 private fun describeVisitor(visitor: VisitorConfig, localUser: String?): String = buildString {
     append(visitor.type.uppercase())
     if (visitor.bindPort < 0) {
@@ -829,7 +829,8 @@ private fun describeVisitor(visitor: VisitorConfig, localUser: String?): String 
     } else {
         append(" · 本地 ").append(visitor.bindAddr).append(":").append(visitor.bindPort)
     }
-    append(" → ")
+    // 访问者没有远程端口，用「访问」而不是箭头，避免被读成指向某个端口
+    append(" · 访问 ")
     append(
         com.frpc.shared.model.FrpcNaming.targetServerProxyName(localUser, visitor.serverUser, visitor.serverName),
     )

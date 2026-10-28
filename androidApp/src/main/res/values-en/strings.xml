@@ -29,6 +29,9 @@
 
     <string name="home_no_config">No config yet. Create one under Configs first.</string>
     <string name="home_current_config">Active config</string>
+    <string name="home_switch_config_title">Switch config</string>
+    <string name="home_switch_config_body">frpc is running \"%1$s\". Switching to \"%2$s\" stops the current process and starts it again with the new config, so live connections drop.</string>
+    <string name="home_switch_config_confirm">Switch and restart</string>
     <string name="home_status">Status</string>
     <string name="home_pid">PID</string>
     <string name="home_uptime">Uptime</string>
@@ -222,6 +225,8 @@
     <string name="visitors_empty">No visitors yet</string>
     <string name="home_visitors">Visitors</string>
     <string name="visitor_no_listen">Not listening</string>
+    <!-- A visitor has no remote port, so the summary must not use an arrow -->
+    <string name="visitor_target_label">Target</string>
     <string name="visitor_new">New visitor</string>
     <string name="visitor_edit">Edit visitor</string>
     <string name="visitor_intro">A visitor connects out to someone else\'s secret proxy and opens a local port for your programs</string>

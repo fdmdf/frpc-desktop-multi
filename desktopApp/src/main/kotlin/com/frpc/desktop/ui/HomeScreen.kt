@@ -41,7 +41,9 @@ import com.frpc.desktop.engine.FrpcSupervisor
 import com.frpc.desktop.engine.LogProxyPhase
 import com.frpc.desktop.data.ServerProfile
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun HomeScreen(
@@ -58,6 +60,7 @@ fun HomeScreen(
     val status by container.supervisor.status.collectAsState()
     val logStates by container.supervisor.proxyStates.collectAsState()
     val visitorsOnline by container.supervisor.visitors.collectAsState()
+    val activeCounts by container.supervisor.activeCounts.collectAsState()
     val adminReachable by container.supervisor.adminReachable.collectAsState()
     val serverConnected by container.supervisor.serverConnected.collectAsState()
     val loginError by container.supervisor.loginError.collectAsState()
@@ -67,6 +70,8 @@ fun HomeScreen(
 
     // 启动前自检被拦下时弹出原因（对齐参考项目的 B1001 / B1006 拦截）
     var blockedReason by remember { mutableStateOf<String?>(null) }
+    // 运行中选了别的配置：先确认，再「停止当前 → 用新配置启动」，不能只改默认配置
+    var switchTarget by remember { mutableStateOf<ServerProfile?>(null) }
 
     // 运行时长每秒刷新
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -143,7 +148,14 @@ fun HomeScreen(
                     selected = currentProfile ?: profiles.first(),
                     options = profiles,
                     optionLabel = { it.name },
-                    onSelect = { container.settings.setDefaultProfileId(it.id) },
+                    onSelect = { target ->
+                        if (running && target.id != currentProfile?.id) {
+                            // 运行中不能只改默认：首页会显示 A、frpc 还在跑 B，两边分叉最难排查
+                            switchTarget = target
+                        } else {
+                            container.settings.setDefaultProfileId(target.id)
+                        }
+                    },
                     modifier = Modifier.width(280.dp),
                 )
             }
@@ -319,7 +331,13 @@ fun HomeScreen(
                 )
                 StatTile(
                     "在线代理",
-                    proxySummary(proxies, status?.all?.size, status?.all?.count { it.status == "running" }),
+                    proxySummary(
+                        proxies,
+                        // 运行中拿 frpc 真正加载的那份配置，未运行时按当前显示的配置算
+                        if (running) activeCounts.proxies else enabledProxies.size,
+                        status?.all?.size,
+                        status?.all?.count { it.status == "running" },
+                    ),
                     Modifier.weight(1f),
                 )
             }
@@ -422,6 +440,7 @@ fun HomeScreen(
                     }) {
                         Icon(Icons.Filled.ContentCopy, contentDescription = "复制访问地址")
                     }
+                    StatusChip(label, color)
                     // 行内启停：运行中改完立刻 reload，不用进编辑页
                     Switch(
                         checked = proxy.enabled != false,
@@ -429,7 +448,6 @@ fun HomeScreen(
                             currentProfile?.let { setProxyEnabled(it, proxy.name, on) }
                         },
                     )
-                    StatusChip(label, color)
                 }
             }
         }
@@ -468,11 +486,12 @@ fun HomeScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(visitor.name, style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = "${visitor.type.uppercase()} · 本地 $listen → $target",
+                            text = "${visitor.type.uppercase()} · 本地 $listen · 访问 $target",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    StatusChip(label, color)
                     // 行内启停：与代理一致，改完立刻 reload
                     Switch(
                         checked = visitor.enabled != false,
@@ -480,12 +499,53 @@ fun HomeScreen(
                             currentProfile?.let { setVisitorEnabled(it, visitor.name, on) }
                         },
                     )
-                    StatusChip(label, color)
                 }
             }
         }
 
         Box(modifier = Modifier.padding(bottom = 8.dp))
+    }
+
+    // 运行中切换配置：必须让 frpc 真正换过去，只改默认会让「显示的」和「跑着的」分叉
+    switchTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { switchTarget = null },
+            title = { Text("切换配置") },
+            text = {
+                Text(
+                    "frpc 正在运行「${currentProfile?.name.orEmpty()}」。切换到「${target.name}」" +
+                        "会停止当前进程并用新配置重新启动，现有连接会中断。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        switchTarget = null
+                        scope.launch {
+                            container.settings.setDefaultProfileId(target.id)
+                            container.supervisor.stop()
+                            // 先等旧进程退出再自检：它还占着状态接口端口时，
+                            // checkBeforeStart 会把「自己占的端口」误报成端口冲突
+                            withTimeoutOrNull(10_000) {
+                                container.supervisor.state.first {
+                                    it.phase == FrpcSupervisor.Phase.IDLE ||
+                                        it.phase == FrpcSupervisor.Phase.ERROR
+                                }
+                            }
+                            val reason = container.supervisor.checkBeforeStart(target)
+                            if (reason == null) {
+                                container.supervisor.start(target)
+                            } else {
+                                blockedReason = reason
+                            }
+                        }
+                    },
+                ) { Text("切换并重启") }
+            },
+            dismissButton = {
+                TextButton(onClick = { switchTarget = null }) { Text("取消") }
+            },
+        )
     }
 
     // 启动前自检未通过：给出可读原因，并可直接跳到配置页修正，而不是只在日志里留一行
@@ -518,12 +578,14 @@ private fun copyToClipboard(text: String) {
 
 private fun proxySummary(
     proxies: List<com.frpc.shared.model.ProxyConfig>,
+    effectiveTotal: Int,
     totalFromAdmin: Int?,
     onlineFromAdmin: Int?,
 ): String {
-    // 没有状态接口（admin 关闭）时按配置算，此时必须排除已禁用规则：
-    // frpc 不会注册它们，算进分母就成了永远凑不齐的 0/1
-    val total = totalFromAdmin ?: proxies.count { it.enabled != false }
+    // 没有状态接口（admin 关闭）时按生效配置算：
+    // 一是排除已禁用规则（frpc 不注册它们，算进分母就是永远凑不齐的 0/1），
+    // 二是用 frpc 真正加载的那份配置，否则禁用后未重载时会出现「在线 3 / 总 2」
+    val total = totalFromAdmin ?: effectiveTotal
     val online = onlineFromAdmin ?: 0
     return if (total > 0) "$online/$total" else "--"
 }

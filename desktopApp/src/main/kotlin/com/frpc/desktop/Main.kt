@@ -198,6 +198,7 @@ private fun app() = application {
     val runState by container.supervisor.state.collectAsState()
     val proxyStatus by container.supervisor.status.collectAsState()
     val visitorsOnline by container.supervisor.visitors.collectAsState()
+    val activeCounts by container.supervisor.activeCounts.collectAsState()
     val trayProfiles by container.profiles.profiles.collectAsState()
     val activeProfile = trayProfiles.firstOrNull { it.id == runState.profileId }
     val trayTooltip = buildString {
@@ -205,16 +206,18 @@ private fun app() = application {
         when (runState.phase) {
             FrpcSupervisor.Phase.RUNNING -> {
                 append(" · 运行中")
-                // 分母只算启用的：禁用的规则 frpc 不注册，算进去就成了永远凑不齐的 0/1
-                val proxyTotal = activeProfile?.config?.proxies?.count { it.enabled != false } ?: 0
+                // 分母与「在线数」同口径：用 frpc 真正加载的那份配置，
+                // 否则禁用一条但没重载时，托盘会出现「在线 3 / 总 2」这种分子大于分母的数字
+                val proxyTotal = activeCounts.proxies
                 if (proxyTotal > 0) {
                     val online = proxyStatus?.all?.count { it.status == "running" } ?: 0
                     append(" · 代理 ").append(online).append('/').append(proxyTotal)
                 }
-                val visitorTotal = activeProfile?.config?.visitors?.count { it.enabled != false } ?: 0
+                val visitorTotal = activeCounts.visitors
                 if (visitorTotal > 0) {
-                    val vOnline = activeProfile!!.config.visitors
-                        .count { it.enabled != false && it.name in visitorsOnline }
+                    // 运行中删掉当前档案时 activeProfile 会是 null，这里不能强解引用
+                    val vOnline = activeProfile?.config?.visitors
+                        ?.count { it.enabled != false && it.name in visitorsOnline } ?: 0
                     append(" · 访问者 ").append(vOnline).append('/').append(visitorTotal)
                 }
             }

@@ -247,7 +247,8 @@ fun MonitorScreen(container: AppContainer) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(text = visitor.name, style = MaterialTheme.typography.titleMedium)
                             Text(
-                                text = visitor.type.uppercase() + " · " + listen + " → " + target,
+                                text = visitor.type.uppercase() + " · " + listen + " · " +
+                                    stringResource(R.string.visitor_target_label) + " " + target,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

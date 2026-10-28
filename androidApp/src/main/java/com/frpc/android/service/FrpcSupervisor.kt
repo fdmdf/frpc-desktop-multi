@@ -50,6 +50,19 @@ object FrpcSupervisor {
         val isActive: Boolean get() = phase == Phase.STARTING || phase == Phase.RUNNING || phase == Phase.STOPPING
     }
 
+    /**
+     * frpc **当前真正加载的那份配置**里启用中的规则数（代理 / 访问者）。
+     *
+     * 界面列表来自「最新保存的配置」：禁一条但不重载时，列表少一条、frpc 却还在跑它，
+     * 直接拿最新配置算分母就会出现「在线 3 / 总 2」这种分子大于分母的数字。
+     * 这份快照只在 frpc 真正加载配置时更新（启动 / 重载成功 / 自动重启），
+     * 所以拿它当分母才和「在线数」是同一套口径。
+     */
+    data class ActiveRuleCounts(
+        val proxies: Int = 0,
+        val visitors: Int = 0,
+    )
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private lateinit var appContext: FrpcApplication
@@ -74,6 +87,17 @@ object FrpcSupervisor {
     /** 已注册的访问者名字（admin API 不返回 visitor，来自 "visitor added: [...]" 日志） */
     private val _visitors = MutableStateFlow<Set<String>>(emptySet())
     val visitors: StateFlow<Set<String>> = _visitors.asStateFlow()
+
+    /** frpc 当前生效配置里启用中的规则数（口径见 [ActiveRuleCounts]） */
+    private val _activeCounts = MutableStateFlow(ActiveRuleCounts())
+    val activeCounts: StateFlow<ActiveRuleCounts> = _activeCounts.asStateFlow()
+
+    private fun rememberActiveCounts(profile: ServerProfile) {
+        _activeCounts.value = ActiveRuleCounts(
+            proxies = profile.config.proxies.count { it.enabled != false },
+            visitors = profile.config.visitors.count { it.enabled != false },
+        )
+    }
 
     /**
      * 与 frps 的登录状态（P4）：null=未知，false=最近一次登录失败，true=登录成功。
@@ -209,7 +233,11 @@ object FrpcSupervisor {
                         if (ok) LogLevel.INFO else LogLevel.ERROR,
                         if (ok) "已通过 admin API 重载配置" else "admin API 重载失败",
                     )
-                    if (ok) clearPendingReload()
+                    if (ok) {
+                        // 重载成功 = frpc 现在跑的就是这份最新配置
+                        rememberActiveCounts(profile)
+                        clearPendingReload()
+                    }
                 } else {
                     stopInternal()
                     startInternal(profile)
@@ -255,6 +283,8 @@ object FrpcSupervisor {
         try {
             val binary = binaryManager.ensureInstalled()
             val tomlFile = writeToml(profile)
+            // toml 落盘的这一刻起，frpc 用的就是这份配置：分母以此为准
+            rememberActiveCounts(profile)
             val builder = ProcessBuilder(binary.absolutePath, "-c", tomlFile.absolutePath)
                 .directory(appContext.filesDir)
                 .redirectErrorStream(true)
@@ -307,6 +337,8 @@ object FrpcSupervisor {
     private suspend fun stopInternal() {
         stopping = true
         val adminPort = _state.value.adminPort
+        // 停止后界面按「当前显示的配置」算数，这份快照不再有意义
+        _activeCounts.value = ActiveRuleCounts()
         _state.update { it.copy(phase = Phase.STOPPING) }
         appendSystemLog(LogLevel.INFO, "正在停止 frpc…")
         runCatching { adminClient?.stop() }

@@ -827,7 +827,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedVisitors(
                         },
                     )
                     Text(
-                        text = visitor.type.uppercase() + " → " + visitor.serverName +
+                        text = visitor.type.uppercase() + " · " +
+                            stringResource(R.string.visitor_target_label) + " " + visitor.serverName +
                             if (enabled) "" else " · " + stringResource(R.string.proxy_status_disabled),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

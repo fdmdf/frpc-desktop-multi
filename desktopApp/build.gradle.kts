@@ -24,7 +24,7 @@ dependencies {
 // 同时写进 resources/VERSION，运行时读出来展示，避免界面上手写版本号又忘了改
 val appVersionRaw = System.getenv("APP_VERSION")
     ?: project.findProperty("appVersion")?.toString()
-    ?: "1.2.0"
+    ?: "1.3.0"
 val versionResource = layout.buildDirectory.file("generated/app-version/VERSION")
 val writeVersionResource = tasks.register("writeVersionResource") {
     outputs.file(versionResource)

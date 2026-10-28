@@ -202,7 +202,7 @@ fun MonitorScreen(container: AppContainer) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(visitor.name, style = MaterialTheme.typography.titleSmall)
                             Text(
-                                text = "${visitor.type.uppercase()} · $listen → $target",
+                                text = "${visitor.type.uppercase()} · 本地 $listen · 访问 $target",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

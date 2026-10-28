@@ -98,8 +98,15 @@ class FrpcService : Service() {
         val st = FrpcSupervisor.state.value
         val container = (applicationContext as FrpcApplication).container
         val profile = container.configRepository.find(st.profileId)
-        // 分母只算启用的：禁用的规则 frpc 不注册，算进去就会出现「0/1 在线」这种假故障
-        val total = profile?.config?.proxies?.count { it.enabled != false } ?: 0
+        // 分母与「在线数」同口径：运行中就用 frpc 真正加载的那份配置
+        // （禁用一条但没重载时，最新配置会少一条，frpc 却还在跑它 → 分子大于分母）
+        val counts = FrpcSupervisor.activeCounts.value
+        val runningNow = st.phase == FrpcSupervisor.Phase.RUNNING
+        val total = if (runningNow) {
+            counts.proxies
+        } else {
+            profile?.config?.proxies?.count { it.enabled != false } ?: 0
+        }
         // Admin 优先，其次日志推断（与主页保持一致）
         val online = FrpcSupervisor.status.value?.all?.count { it.status == "running" }
             ?: FrpcSupervisor.logProxyStates.value.count { it.value.phase == LogProxyPhase.RUNNING }
@@ -107,7 +114,11 @@ class FrpcService : Service() {
             ?.let { formatDuration(System.currentTimeMillis() - it) }
             ?: "--"
         // 访问者同样只注册一次，状态取自日志
-        val visitorTotal = profile?.config?.visitors?.count { it.enabled != false } ?: 0
+        val visitorTotal = if (runningNow) {
+            counts.visitors
+        } else {
+            profile?.config?.visitors?.count { it.enabled != false } ?: 0
+        }
         val visitorOnline = profile?.config?.visitors
             ?.count { it.enabled != false && it.name in FrpcSupervisor.visitors.value } ?: 0
         return StatusNotificationData(

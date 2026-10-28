@@ -60,8 +60,13 @@ import com.frpc.android.util.formatPercent
 import com.frpc.shared.model.ProxyConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+
+/** 切换配置时等旧进程退出的上限：超时就不再等，交给 supervisor 自己串行处理 */
+private const val SWITCH_STOP_TIMEOUT_MS = 10_000L
 
 @Composable
 fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
@@ -70,6 +75,7 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
     val status by FrpcSupervisor.status.collectAsStateWithLifecycle()
     val logProxyStates by FrpcSupervisor.logProxyStates.collectAsStateWithLifecycle()
     val visitorsOnline by FrpcSupervisor.visitors.collectAsStateWithLifecycle()
+    val activeCounts by FrpcSupervisor.activeCounts.collectAsStateWithLifecycle()
     val stats by FrpcSupervisor.stats.collectAsStateWithLifecycle()
     val cpu by FrpcSupervisor.cpuPercent.collectAsStateWithLifecycle()
     val adminReachable by FrpcSupervisor.adminReachable.collectAsStateWithLifecycle()
@@ -89,6 +95,8 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
     var blockedReason by remember { mutableStateOf<FrpcSupervisor.StartBlockReason?>(null) }
     // 自检本身在后台线程做，期间先把按钮按住，避免连点重复拉起服务
     var checking by remember { mutableStateOf(false) }
+    // 运行中点了别的配置：先确认，再「停止当前 → 用新配置启动」，而不是偷偷改默认配置
+    var switchTarget by remember { mutableStateOf<ServerProfile?>(null) }
 
     // 运行时长秒级刷新
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -127,7 +135,13 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
     // 在线数优先取 Admin API，其次日志推断
     val onlineCount = status?.all?.count { it.status == "running" }
         ?: logProxyStates.count { it.value.phase == LogProxyPhase.RUNNING }
-    val totalCount = enabledProxies.size
+    // 分母必须与「在线数」同口径：运行中就拿 frpc 真正加载的那份配置来算，
+    // 否则点开关禁用一条（还没重载）会出现「在线 3 / 总 2」这种分子大于分母的数字
+    val totalCount = if (state.phase == FrpcSupervisor.Phase.RUNNING) {
+        activeCounts.proxies
+    } else {
+        enabledProxies.size
+    }
 
     // 行内启停：与桌面端一致，首页直接开关，不必进配置页翻开关。
     // 运行中改完不会自动生效（frpc 拿的还是旧配置），所以记一笔「待重载」给出口
@@ -309,8 +323,15 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                             FilterChip(
                                 selected = profile.id == currentProfileId,
                                 onClick = {
-                                    uiScope.launch {
-                                        container.settingsRepository.setDefaultProfileId(profile.id)
+                                    if (profile.id == currentProfileId) return@FilterChip
+                                    if (state.phase == FrpcSupervisor.Phase.RUNNING) {
+                                        // 运行中不能只改默认：那样首页显示的是 A、frpc 跑的还是 B，
+                                        // 两边分叉最难排查。切成真正生效的那份（停止 → 用新配置启动）
+                                        switchTarget = profile
+                                    } else {
+                                        uiScope.launch {
+                                            container.settingsRepository.setDefaultProfileId(profile.id)
+                                        }
                                     }
                                 },
                                 label = { Text(profile.name, maxLines = 1) },
@@ -365,7 +386,8 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                     stringResource(
                         R.string.home_group_count,
                         stringResource(R.string.home_proxies),
-                        totalCount,
+                        // 标题跟「列表里有多少条」走；概览里的分母才跟 frpc 生效配置走
+                        enabledProxies.size,
                     )
                 },
             )
@@ -453,11 +475,11 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                             )
                         }
                     }
+                    StatusChip(text = label, color = color)
                     Switch(
                         checked = proxy.enabled != false,
                         onCheckedChange = { on -> setRuleEnabled(proxy.name, on, isVisitor = false) },
                     )
-                    StatusChip(text = label, color = color)
                 }
             }
         }
@@ -510,22 +532,73 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                                     append(stringResource(R.string.proxy_local_label))
                                     append(" ")
                                     append(listen)
-                                    append(" → ")
+                                    append(" · ")
+                                    append(stringResource(R.string.visitor_target_label))
+                                    append(" ")
                                     append(target)
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        StatusChip(text = label, color = color)
                         Switch(
                             checked = visitor.enabled != false,
                             onCheckedChange = { on -> setRuleEnabled(visitor.name, on, isVisitor = true) },
                         )
-                        StatusChip(text = label, color = color)
                     }
                 }
             }
         }
+    }
+
+    // 运行中切换配置：必须让 frpc 真正换到那份配置，只改默认会让「首页显示的」和「实际跑的」分叉
+    switchTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { switchTarget = null },
+            title = { Text(stringResource(R.string.home_switch_config_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.home_switch_config_body,
+                        currentProfile?.name.orEmpty(),
+                        target.name,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        switchTarget = null
+                        uiScope.launch {
+                            container.settingsRepository.setDefaultProfileId(target.id)
+                            context.startService(FrpcService.stopIntent(context))
+                            // 先等旧进程退出再自检：它还占着状态接口端口时，
+                            // checkBeforeStart 会把「自己占的端口」误报成端口冲突
+                            withTimeoutOrNull(SWITCH_STOP_TIMEOUT_MS) {
+                                FrpcSupervisor.state.first { !it.isActive }
+                            }
+                            val reason = withContext(Dispatchers.IO) {
+                                FrpcSupervisor.checkBeforeStart(target)
+                            }
+                            if (reason == null) {
+                                ContextCompat.startForegroundService(
+                                    context,
+                                    FrpcService.startIntent(context, target.id),
+                                )
+                            } else {
+                                blockedReason = reason
+                            }
+                        }
+                    },
+                ) { Text(stringResource(R.string.home_switch_config_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { switchTarget = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 
     // 启动前自检未通过：说清原因并给出下一步，而不是让 frpc 默默退出后被自动重启掩盖

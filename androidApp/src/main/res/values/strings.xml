@@ -31,6 +31,9 @@
     <!-- 主页 -->
     <string name="home_no_config">还没有配置，先去「配置」页新建一份</string>
     <string name="home_current_config">当前配置</string>
+    <string name="home_switch_config_title">切换配置</string>
+    <string name="home_switch_config_body">frpc 正在运行「%1$s」。切换到「%2$s」会停止当前进程并用新配置重新启动，现有连接会中断。</string>
+    <string name="home_switch_config_confirm">切换并重启</string>
     <string name="home_status">运行状态</string>
     <string name="home_pid">进程 PID</string>
     <string name="home_uptime">运行时长</string>
@@ -255,6 +258,8 @@
     <string name="visitors_empty">还没有访问者规则</string>
     <string name="home_visitors">访问者</string>
     <string name="visitor_no_listen">不监听端口</string>
+    <!-- 访问者没有「远程端口」，摘要里不能用 →，否则会被读成指向一个端口 -->
+    <string name="visitor_target_label">访问</string>
     <string name="visitor_new">新建访问者</string>
     <string name="visitor_edit">编辑访问者</string>
     <string name="visitor_intro">访问者 = 主动连接别人的私密代理，在本机开一个端口给本地程序用</string>
