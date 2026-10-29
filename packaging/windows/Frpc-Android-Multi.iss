@@ -131,10 +131,12 @@ CloseApplications=yes
 CloseApplicationsFilter=frpc.exe,{#MyAppExeName}
 RestartApplications=no
 
-; 唯一语言：简体中文。MessagesFile 用 ISCC 自带的 ChineseSimplified.isl，
+; 唯一语言：简体中文。MessagesFile 用仓库自带的 ChineseSimplified.isl（与本 .iss 同目录），
+; 不要用 compiler:Languages\ChineseSimplified.isl —— runner 上的 Inno Setup 6.7.1 没装这个
+; 语言文件（v1.3.4 首发报 couldn't open include file），随仓库走才稳。
 ; 下面的 [Messages] 再逐条覆盖，不留给英文默认值任何机会。
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 
 [Messages]
 ; ⚠ 转义规则（别再改回去）：
