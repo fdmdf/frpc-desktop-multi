@@ -249,6 +249,12 @@ jobs:
           set -euo pipefail
           V="${{ needs.version.outputs.version }}"
 
+          # 必须关掉 Git Bash(MSYS) 的 POSIX 路径转换：它会把 /DMyAppVersion=1.3.4 这类
+          # 以 / 开头的参数当成路径改写成 C:/Program Files/Git/DMyAppVersion=1.3.4，
+          # ISCC 便认不出这是选项，全按「脚本文件名」算 —— 实测报错
+          # "You may not specify more than one script filename."（v1.3.4 首次发版踩到）。
+          export MSYS2_ARG_CONV_EXCL="*"
+
           ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
           if [ ! -f "$ISCC" ]; then
             echo "::notice::runner 未预装 Inno Setup 6，尝试用 choco 安装"
@@ -277,8 +283,8 @@ jobs:
 
           # 同一份 .iss 出两个包：用户级（默认，免 UAC）与机器级（/DMyMachineInstall=1，需 UAC）。
           # 两个变体分别落在 build/inno/user 与 build/inno/machine，互不干扰。
-          "$ISCC" "$ISS" "/DMyAppVersion=$V" "/DMySourceDir=$SRC" "/DMyIconFile=$ICO" "/DMyOutputDir=$OUT"
-          "$ISCC" "$ISS" "/DMyAppVersion=$V" "/DMySourceDir=$SRC" "/DMyIconFile=$ICO" "/DMyOutputDir=$OUT" "/DMyMachineInstall=1"
+          "$ISCC" "/DMyAppVersion=$V" "/DMySourceDir=$SRC" "/DMyIconFile=$ICO" "/DMyOutputDir=$OUT" "$ISS"
+          "$ISCC" "/DMyAppVersion=$V" "/DMySourceDir=$SRC" "/DMyIconFile=$ICO" "/DMyOutputDir=$OUT" "/DMyMachineInstall=1" "$ISS"
 
           echo ""
           echo "== Inno Setup 产出 =="
