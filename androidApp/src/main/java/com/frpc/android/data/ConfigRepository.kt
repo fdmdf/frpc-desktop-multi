@@ -1,5 +1,6 @@
 package com.frpc.android.data
 
+import com.frpc.shared.model.ServerProfile
 import com.frpc.shared.toml.FrpcToml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -3,15 +3,12 @@ package com.frpc.android.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -43,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
+import com.frpc.android.BuildConfig.VERSION_NAME
 import com.frpc.android.R
 import com.frpc.android.data.AppLanguage
 import com.frpc.android.data.ThemeMode
@@ -227,7 +225,7 @@ fun SettingsScreen(container: AppContainer, navigator: AppNavigator) {
                 title = stringResource(R.string.settings_about_open),
                 subtitle = stringResource(
                     R.string.settings_about_summary,
-                    com.frpc.android.BuildConfig.VERSION_NAME,
+                    VERSION_NAME,
                 ),
                 icon = Icons.Outlined.Info,
                 onClick = { navigator.push(Screen.About) },

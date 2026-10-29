@@ -35,8 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.frpc.desktop.AppContainer
+import com.frpc.shared.model.FrpcNaming
+import com.frpc.shared.model.ServerProfile
+import com.frpc.shared.model.TlsConfig
 import com.frpc.shared.net.PortCheck
-import com.frpc.desktop.data.ServerProfile
 import com.frpc.desktop.engine.FrpcSupervisor
 import com.frpc.shared.model.AuthConfig
 import com.frpc.shared.model.FrpcConfig
@@ -391,7 +393,7 @@ fun ProfileEditScreen(
                         checked = transport.tls?.enable ?: true,
                         onCheckedChange = { v ->
                             updateConfig {
-                                it.copy(transport = transport.copy(tls = (transport.tls ?: com.frpc.shared.model.TlsConfig()).copy(enable = v)))
+                                it.copy(transport = transport.copy(tls = (transport.tls ?: TlsConfig()).copy(enable = v)))
                             }
                         },
                         supportingText = "frp ≥ v0.50 默认开启；frps 关了 TLS 时才需要在这里关掉",
@@ -480,7 +482,7 @@ fun ProfileEditScreen(
                     Text(if (showTlsAdvanced) "收起 TLS 证书" else "TLS 高级（双向认证 / 私有 CA）")
                 }
                 if (showTlsAdvanced) {
-                    val tls = transport.tls ?: com.frpc.shared.model.TlsConfig()
+                    val tls = transport.tls ?: TlsConfig()
                     FilePathField(
                         value = tls.certFile,
                         onValueChange = { v -> updateConfig { it.copy(transport = transport.copy(tls = tls.copy(certFile = v))) } },
@@ -832,7 +834,7 @@ private fun describeVisitor(visitor: VisitorConfig, localUser: String?): String 
     // 访问者没有远程端口，用「访问」而不是箭头，避免被读成指向某个端口
     append(" · 访问 ")
     append(
-        com.frpc.shared.model.FrpcNaming.targetServerProxyName(localUser, visitor.serverUser, visitor.serverName),
+        FrpcNaming.targetServerProxyName(localUser, visitor.serverUser, visitor.serverName),
     )
     // 禁用态两端都能在列表里直接切换，这里也要显示出来（frpc 不会去连对方）
     if (visitor.enabled == false) append(" · 已禁用")

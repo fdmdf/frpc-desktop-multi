@@ -39,7 +39,13 @@ import androidx.compose.ui.unit.dp
 import com.frpc.desktop.AppContainer
 import com.frpc.desktop.engine.FrpcSupervisor
 import com.frpc.desktop.engine.LogProxyPhase
-import com.frpc.desktop.data.ServerProfile
+import com.frpc.shared.format.formatDateTime
+import com.frpc.shared.format.formatDuration
+import com.frpc.shared.format.formatMemoryKb
+import com.frpc.shared.format.formatPercent
+import com.frpc.shared.model.FrpcNaming
+import com.frpc.shared.model.ProxyConfig
+import com.frpc.shared.model.ServerProfile
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -473,7 +479,7 @@ fun HomeScreen(
             }
             val listen = if (visitor.bindPort < 0) "不监听端口" else "${visitor.bindAddr}:${visitor.bindPort}"
             // 卡片上显示 frps 实际查找的名字（含 serverUser / 本机 user 前缀），跨设备时才好排查
-            val target = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
+            val target = FrpcNaming.targetServerProxyName(
                 currentProfile?.config?.user, visitor.serverUser, visitor.serverName,
             )
 
@@ -577,7 +583,7 @@ private fun copyToClipboard(text: String) {
 }
 
 private fun proxySummary(
-    proxies: List<com.frpc.shared.model.ProxyConfig>,
+    proxies: List<ProxyConfig>,
     effectiveTotal: Int,
     totalFromAdmin: Int?,
     onlineFromAdmin: Int?,

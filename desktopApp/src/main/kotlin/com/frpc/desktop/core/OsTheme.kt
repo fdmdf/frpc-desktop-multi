@@ -1,5 +1,9 @@
 package com.frpc.desktop.core
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
 /**
@@ -8,19 +12,76 @@ import java.util.concurrent.TimeUnit
  * Windows L&F 并不会可靠地跟随系统深色模式（常见症状是菜单黑底黑字），
  * 所以托盘菜单的配色由我们自己决定 —— 这就需要一个可靠的深浅色判断。
  *
- * 探测结果只缓存一次：短时间内系统主题不会变，而托盘菜单每次构建都要读这个值，
- * 每次都 fork 一个进程太浪费。
+ * ## 为什么拆成「缓存读」+「异步探测」
+ * Windows 的探测要 `ProcessBuilder("reg", "query", ...)` + `waitFor`，
+ * 创建进程 + `reg.exe` 冷启动通常 150~600ms（杀软介入可能到 1s）。
+ * 原来的 `prefersDark()` 是同步的，而调用点在 `Main.kt` 的 `remember {}` 里 ——
+ * 也就是 **EDT 上**，而且排在 `Window(...)` 之前，等于每次冷启动都先卡住窗口创建。
+ *
+ * 现在的用法：
+ * - 首帧走 [prefersDarkCached]，拿不到就按浅色先渲染（绝不阻塞）；
+ * - 同时由 [prefersDarkAsync] 在 `Dispatchers.IO` 上探测一次，结果回来再刷新配色。
+ *
+ * 只 fork 一次：探测结果写进 [cached]，之后的调用全是缓存命中。
+ * Linux / 未知平台只读环境变量（不 fork），所以 [prefersDarkCached] 能立刻给出答案。
  */
 object OsTheme {
+
+    @Volatile
     private var cached: Boolean? = null
 
-    fun prefersDark(): Boolean {
+    @Volatile
+    private var probeStarted = false
+
+    /** 需要 fork 外部命令的平台；只有这些才值得异步（Linux 读环境变量是瞬时的） */
+    private fun needsProcess(): Boolean = isWindows() || isMac()
+
+    /**
+     * 首帧用：能立刻给出的就给，需要 fork 的返回 `null`（调用方按浅色渲染，别阻塞）。
+     * 返回 `null` 不代表"探测过且是浅色"，只是"还没探测出来"。
+     */
+    fun prefersDarkCached(): Boolean? {
         cached?.let { return it }
-        val value = when {
-            isWindows() -> windowsDark()
-            isMac() -> macDark()
-            else -> linuxDark()
+        if (needsProcess()) return null
+        val value = linuxDark()
+        cached = value
+        return value
+    }
+
+    /**
+     * 在后台探测一次并把结果写进缓存；完成后在**主线程**回调 [onReady]。
+     *
+     * 幂等：只会 fork 一次（[probeStarted] 闸门），重复调用不会多起进程。
+     * 不需要 fork 的平台（Linux）直接同步回调，连协程都不用起。
+     */
+    fun prefersDarkAsync(scope: CoroutineScope, onReady: (Boolean) -> Unit) {
+        if (!needsProcess()) {
+            val value = prefersDarkCached() ?: false
+            onReady(value)
+            return
         }
+        cached?.let { onReady(it); return }
+        if (probeStarted) return
+        probeStarted = true
+        scope.launch(Dispatchers.IO) {
+            val started = System.currentTimeMillis()
+            val value = runCatching { probe() }.getOrDefault(false)
+            cached = value
+            StartupTrace.span("osTheme.probe", started)
+            withContext(Dispatchers.Main) { onReady(value) }
+        }
+    }
+
+    /** 同步探测（会 fork 一次外部命令）：只在 IO 线程 / 单元测试里直接调用 */
+    fun probe(): Boolean {
+        cached?.let { return it }
+        val value = runCatching {
+            when {
+                isWindows() -> windowsDark()
+                isMac() -> macDark()
+                else -> linuxDark()
+            }
+        }.getOrDefault(false)
         cached = value
         return value
     }

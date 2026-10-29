@@ -13,8 +13,10 @@ android {
         applicationId = "com.frpc.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.3.3"
+        // versionCode 只增不减：已装 1.3.3（versionCode=7）的用户若装到更小的号会
+        // INSTALL_FAILED_VERSION_DOWNGRADE，必须先卸载。本次 Windows 桌面端修复发 1.3.4
+        versionCode = 8
+        versionName = "1.3.4"
     }
 
     signingConfigs {
@@ -82,7 +84,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // 未引入 lifecycle-viewmodel-compose：本 App 没有 ViewModel，状态由 FrpcSupervisor /
+    // 各 Repository 以 StateFlow 暴露、Compose 用 collectAsStateWithLifecycle 收集。
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
@@ -91,8 +94,8 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
-    implementation(libs.compose.ui.tooling.preview)
-    debugImplementation(libs.compose.ui.tooling)
+    // 未引入 ui-tooling / ui-tooling-preview：代码里没有任何 @Preview，强大的调试工具
+    // 也用不上，留着只会让 debug 包白白多一份依赖。以后要加预览时把这两条加回来即可。
 
     testImplementation(kotlin("test"))
 }

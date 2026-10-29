@@ -35,6 +35,7 @@ import com.frpc.desktop.AppContainer
 import com.frpc.desktop.core.AppPaths
 import com.frpc.desktop.engine.LogLevel
 import com.frpc.desktop.engine.LogLine
+import com.frpc.shared.format.formatLogTime
 import kotlinx.coroutines.delay
 import java.awt.Desktop
 import java.awt.FileDialog

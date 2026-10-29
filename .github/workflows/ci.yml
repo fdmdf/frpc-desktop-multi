@@ -14,6 +14,68 @@ env:
   FRP_VERSION: v0.71.1
 
 jobs:
+  # ---------------------------------------------------------------- 发布流水线自检
+  # 目的：把「改了 release.yml 却忘了同步产物清单 / workflow 名字里混进 ": " /
+  # .iss 丢了 UTF-8 BOM」这几类只在发版时才炸的问题，提前到 PR 阶段。
+  manifest:
+    name: Release manifest consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release artifact manifest
+        run: |
+          set -euo pipefail
+          # runner 自带 PyYAML；万一镜像变了先补装，装不上就直接失败而不是静默跳过
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet --user pyyaml
+          python3 -c 'import yaml' || {
+            echo "::error::python3 无法 import yaml，产物清单自检无法进行"
+            exit 1
+          }
+          python3 scripts/ci/check-release-manifest.py
+
+      - name: Lint workflow YAML
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import yaml
+
+          # name: 的值里出现 ": " 会让 YAML 解析失败（整个 workflow 直接挂掉）。
+          # 加了引号就能活（现有 "Unit tests (shared: jvm + android)" 就是例子），
+          # 所以这里以解析结果为准，再把带 ": " 的名字列出来提醒保持引号。
+          offenders = []
+          for p in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
+              with open(p, encoding="utf-8") as f:
+                  doc = yaml.safe_load(f)
+              assert isinstance(doc, dict) and doc.get("jobs"), p
+              for jn, job in doc["jobs"].items():
+                  names = [("job", jn, job.get("name"))]
+                  names += [("step", jn, st.get("name")) for st in job.get("steps") or []]
+                  for kind, where, name in names:
+                      if name and ": " in name:
+                          offenders.append(f"{p} jobs.{where} {kind} name {name!r}")
+              print("ok:", p, "->", len(doc["jobs"]), "jobs")
+
+          if offenders:
+              print()
+              print("::warning::以下名字含 \": \"，在 YAML 里必须加引号，否则整个 workflow 会解析失败：")
+              for o in offenders:
+                  print("::warning::  -", o)
+          PY
+
+      - name: Check Inno Setup script encoding
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          p = "packaging/windows/Frpc-Android-Multi.iss"
+          with open(p, "rb") as f:
+              head = f.read(3)
+          # 无 BOM 时 ISCC 在 en-US 的 runner 上按 ANSI 读，中文会整片乱码
+          assert head == b"\xef\xbb\xbf", \
+              f"{p} 缺少 UTF-8 BOM（首 3 字节为 {head!r}），安装向导中文会乱码"
+          print("ok:", p, "UTF-8 with BOM")
+          PY
+
   # ---------------------------------------------------------------- 共享层单测
   shared:
     name: Shared model & tests

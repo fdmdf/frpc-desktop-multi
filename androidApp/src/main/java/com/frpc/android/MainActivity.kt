@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.Activity
 import android.content.Context
 import com.frpc.android.data.AppLanguage
+import com.frpc.android.di.AppContainer
 import com.frpc.android.util.LocaleHelper
 import com.frpc.android.data.ThemeMode
 import com.frpc.android.ui.nav.AppNavigator
@@ -114,7 +115,7 @@ private data class TabItem(
 )
 
 @Composable
-fun FrpcApp(container: com.frpc.android.di.AppContainer) {
+fun FrpcApp(container: AppContainer) {
     val navigator = androidx.compose.runtime.remember { AppNavigator() }
     val current = navigator.current
 

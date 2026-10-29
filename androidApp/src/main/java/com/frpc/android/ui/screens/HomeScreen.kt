@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.frpc.android.R
-import com.frpc.android.data.ServerProfile
 import com.frpc.android.di.AppContainer
 import com.frpc.android.service.FrpcService
 import com.frpc.android.service.FrpcSupervisor
@@ -62,11 +61,13 @@ import com.frpc.android.ui.theme.StatusError
 import com.frpc.android.ui.theme.StatusIdle
 import com.frpc.android.ui.theme.StatusRunning
 import com.frpc.android.ui.theme.StatusStarting
-import com.frpc.android.util.formatClock
-import com.frpc.android.util.formatDuration
-import com.frpc.android.util.formatMemoryKb
-import com.frpc.android.util.formatPercent
+import com.frpc.shared.format.formatClock
+import com.frpc.shared.format.formatDuration
+import com.frpc.shared.format.formatMemoryKb
+import com.frpc.shared.format.formatPercent
+import com.frpc.shared.model.FrpcNaming
 import com.frpc.shared.model.ProxyConfig
+import com.frpc.shared.model.ServerProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -452,7 +453,7 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                             "${visitor.bindAddr}:${visitor.bindPort}"
                         }
                         // 显示 frps 上实际查找的名字（含对方设备前缀 / 本机前缀），跨设备才好排查
-                        val target = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
+                        val target = FrpcNaming.targetServerProxyName(
                             currentProfile?.config?.user, visitor.serverUser, visitor.serverName,
                         )
                         RuleCardRow(

@@ -304,7 +304,6 @@ bash scripts/e2e/e2e-protocols.sh
 
 # 桌面无界面自检（批次4/5 必做）
 <安装目录>/frpc-desktop-multi.exe --smoke <frpc.toml>
-<安装目录>/frpc-desktop-multi.exe --tray-test tray.png
 ```
 
 手工回归清单（每批结束跑一遍）：

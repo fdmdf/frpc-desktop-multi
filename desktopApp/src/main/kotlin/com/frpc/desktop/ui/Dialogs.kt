@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.frpc.shared.model.FrpcNaming
 import com.frpc.shared.net.ListeningPort
 import com.frpc.shared.net.LocalPorts
 import com.frpc.shared.model.ProxyConfig
@@ -198,7 +199,7 @@ fun ProxyEditDialog(
                 Text(
                     // frp 会用 {user}.{name} 作为最终代理名（user 为空则不加前缀）
                     text = "在 frps 上的名字：" +
-                        com.frpc.shared.model.FrpcNaming.targetServerProxyName(localUser, null, name.ifBlank { "…" }),
+                        FrpcNaming.targetServerProxyName(localUser, null, name.ifBlank { "…" }),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -735,14 +736,14 @@ fun VisitorEditDialog(
                     Text(
                         // frp：serverUser 非空用它，留空用本机 user，最终名 = 前缀 + "." + 代理名
                         "frps 上实际查找：${
-                            com.frpc.shared.model.FrpcNaming.targetServerProxyName(
+                            FrpcNaming.targetServerProxyName(
                                 localUser, serverUser.trim().ifBlank { null }, serverName.ifBlank { "…" },
                             )
                         }",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    com.frpc.shared.model.FrpcNaming.splitPrefixedName(serverName)?.let { (prefix, rest) ->
+                    FrpcNaming.splitPrefixedName(serverName)?.let { (prefix, rest) ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 "要访问 $prefix 的 $rest？代理名不该带前缀，点右侧自动拆开",

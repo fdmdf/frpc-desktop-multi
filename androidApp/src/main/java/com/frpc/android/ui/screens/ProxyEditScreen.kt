@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.frpc.android.R
 import com.frpc.android.di.AppContainer
+import com.frpc.shared.model.FrpcNaming
 import com.frpc.shared.net.ListeningPort
 import com.frpc.shared.net.LocalPorts
 import com.frpc.android.ui.components.DropdownField
@@ -172,7 +173,7 @@ fun ProxyEditScreen(
                     // frp 会用 {user}.{name} 作为最终代理名（user 为空则不加前缀）
                     text = stringResource(
                         R.string.proxy_full_name,
-                        com.frpc.shared.model.FrpcNaming.targetServerProxyName(
+                        FrpcNaming.targetServerProxyName(
                             localUser, null, current.name.ifBlank { "…" },
                         ),
                     ),

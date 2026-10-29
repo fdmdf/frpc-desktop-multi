@@ -1,7 +1,9 @@
 package com.frpc.android.data
 
+import com.frpc.shared.model.AuthConfig
 import com.frpc.shared.model.FrpcConfig
 import com.frpc.shared.model.ProxyConfig
+import com.frpc.shared.model.ServerProfile
 import com.frpc.shared.model.VisitorConfig
 import com.frpc.shared.validate.ConfigValidator
 import com.frpc.shared.validate.ValidationIssue
@@ -53,7 +55,7 @@ class ConfigEditorStore {
     // ------------------------------------------------------------ 服务器配置
 
     fun beginNew() {
-        val config = FrpcConfig(auth = com.frpc.shared.model.AuthConfig())
+        val config = FrpcConfig(auth = AuthConfig())
         configOriginal = config
         _draft.value = Draft(profileId = null, name = "", config = config)
     }
