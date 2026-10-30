@@ -2,10 +2,9 @@ package com.frpc.android.service
 
 import com.frpc.android.FrpcApplication
 import com.frpc.android.data.ConfigRepository
+import com.frpc.android.data.ServerProfile
 import com.frpc.shared.admin.FrpcAdminClient
 import com.frpc.shared.admin.ProxyStatusSnapshot
-import com.frpc.shared.logs.FrpcErrorHints
-import com.frpc.shared.model.ServerProfile
 import com.frpc.shared.net.PortCheck
 import com.frpc.shared.runtime.CpuUsageTracker
 import com.frpc.shared.runtime.ProcessStats
@@ -407,7 +406,7 @@ object FrpcSupervisor {
                 proc.inputStream.bufferedReader().forEachLine { line ->
                     appendLog(FrpcLogParser.parse(line))
                     // frp 报错太原始：追加一条人话说明，用户不用查文档
-                    FrpcErrorHints.hintFor(line)?.let { hint ->
+                    com.frpc.shared.logs.FrpcErrorHints.hintFor(line)?.let { hint ->
                         appendSystemLog(LogLevel.WARN, hint)
                     }
                 }

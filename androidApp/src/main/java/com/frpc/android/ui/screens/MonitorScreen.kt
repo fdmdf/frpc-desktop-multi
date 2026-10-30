@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
@@ -32,19 +33,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.frpc.android.R
 import com.frpc.android.di.AppContainer
 import com.frpc.android.service.FrpcSupervisor
-import com.frpc.android.service.LogProxyPhase.ERROR
-import com.frpc.android.service.LogProxyPhase.RUNNING
 import com.frpc.android.ui.components.SectionCard
 import com.frpc.android.ui.components.StatusChip
 import com.frpc.android.ui.theme.StatusError
 import com.frpc.android.ui.theme.StatusIdle
 import com.frpc.android.ui.theme.StatusRunning
 import com.frpc.android.ui.theme.StatusStarting
-import com.frpc.shared.admin.ProxyStatusItem
-import com.frpc.shared.format.formatDuration
-import com.frpc.shared.format.formatMemoryKb
-import com.frpc.shared.format.formatPercent
-import com.frpc.shared.model.FrpcNaming
+import com.frpc.android.util.formatDuration
+import com.frpc.android.util.formatMemoryKb
+import com.frpc.android.util.formatPercent
 import kotlinx.coroutines.delay
 
 @Composable
@@ -206,9 +203,9 @@ fun MonitorScreen(container: AppContainer) {
                             }
                         }
                         val (label, color) = when (logState.phase) {
-                            RUNNING ->
+                            com.frpc.android.service.LogProxyPhase.RUNNING ->
                                 stringResource(R.string.proxy_status_online) to StatusRunning
-                            ERROR ->
+                            com.frpc.android.service.LogProxyPhase.ERROR ->
                                 stringResource(R.string.proxy_status_error) to StatusError
                             else -> stringResource(R.string.proxy_status_pending) to StatusStarting
                         }
@@ -238,7 +235,7 @@ fun MonitorScreen(container: AppContainer) {
                     "${visitor.bindAddr}:${visitor.bindPort}"
                 }
                 // 显示 frps 上实际查找的名字（含对方设备前缀 / 本机前缀）
-                val target = FrpcNaming.targetServerProxyName(
+                val target = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
                     profile?.config?.user, visitor.serverUser, visitor.serverName,
                 )
                 SectionCard {
@@ -310,8 +307,8 @@ private fun LineChart(values: List<Float>, modifier: Modifier = Modifier) {
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.itemsCounted(
-    items: List<ProxyStatusItem>,
-    content: @Composable (ProxyStatusItem) -> Unit,
+    items: List<com.frpc.shared.admin.ProxyStatusItem>,
+    content: @Composable (com.frpc.shared.admin.ProxyStatusItem) -> Unit,
 ) {
     items(items.size) { index -> content(items[index]) }
 }

@@ -11,27 +11,11 @@ import java.util.concurrent.TimeUnit
  */
 class EngineManager(private val settings: SettingsStore) {
 
-    /**
-     * 内置引擎版本，读一次就缓存。
-     *
-     * 为什么缓存：这个值在 `Main.kt` 的 `Sidebar(version = ...)` 与三处界面文案里都是
-     * **每次重组就地读一遍** `/engine/VERSION`，而 `status` / `metrics` 两个 Flow
-     * 每 2~4s 就会触发一次重组 —— 等于稳态也在反复开资源流。版本号进程内不会变，
-     * 缓存没有任何副作用。
-     */
-    @Volatile
-    private var bundledVersionCache: String? = null
-
-    fun bundledVersion(): String {
-        bundledVersionCache?.let { return it }
-        val value = runCatching {
-            javaClass.getResourceAsStream("/engine/VERSION")
-                ?.bufferedReader()?.use { it.readText().trim() }
-                .orEmpty()
-        }.getOrDefault("").ifBlank { "unknown" }
-        bundledVersionCache = value
-        return value
-    }
+    fun bundledVersion(): String = runCatching {
+        javaClass.getResourceAsStream("/engine/VERSION")
+            ?.bufferedReader()?.use { it.readText().trim() }
+            .orEmpty()
+    }.getOrDefault("").ifBlank { "unknown" }
 
     /** 设置里指定且存在的自定义引擎优先，否则用内置解压出来的 */
     fun engineFile(): File {

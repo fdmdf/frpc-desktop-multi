@@ -30,10 +30,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.frpc.android.R
 import com.frpc.android.di.AppContainer
+import com.frpc.android.service.FrpcLogParser
 import com.frpc.android.service.FrpcSupervisor
 import com.frpc.android.service.LogLevel
 import com.frpc.android.ui.components.MonoText
-import com.frpc.shared.format.formatLogTime
+import com.frpc.android.util.formatLogTime
 import kotlinx.coroutines.delay
 
 @Composable

@@ -27,13 +27,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import com.frpc.desktop.AppContainer
 import com.frpc.desktop.engine.FrpcSupervisor
-import com.frpc.desktop.engine.LogProxyPhase.ERROR
-import com.frpc.desktop.engine.LogProxyPhase.PENDING
-import com.frpc.desktop.engine.LogProxyPhase.RUNNING
-import com.frpc.shared.format.formatDuration
-import com.frpc.shared.format.formatMemoryKb
-import com.frpc.shared.format.formatPercent
-import com.frpc.shared.model.FrpcNaming
 import kotlinx.coroutines.delay
 
 @Composable
@@ -175,14 +168,14 @@ fun MonitorScreen(container: AppContainer) {
                         Text(name, style = MaterialTheme.typography.titleSmall)
                         StatusChip(
                             text = when (logState.phase) {
-                                RUNNING -> "在线（日志）"
-                                PENDING -> "启动中"
-                                ERROR -> "错误"
+                                com.frpc.desktop.engine.LogProxyPhase.RUNNING -> "在线（日志）"
+                                com.frpc.desktop.engine.LogProxyPhase.PENDING -> "启动中"
+                                com.frpc.desktop.engine.LogProxyPhase.ERROR -> "错误"
                             },
                             color = when (logState.phase) {
-                                RUNNING -> StatusRunning
-                                PENDING -> StatusStarting
-                                ERROR -> StatusError
+                                com.frpc.desktop.engine.LogProxyPhase.RUNNING -> StatusRunning
+                                com.frpc.desktop.engine.LogProxyPhase.PENDING -> StatusStarting
+                                com.frpc.desktop.engine.LogProxyPhase.ERROR -> StatusError
                             },
                         )
                     }
@@ -196,7 +189,7 @@ fun MonitorScreen(container: AppContainer) {
                 visitors.forEach { visitor ->
                     val online = visitor.name in visitorsOnline
                     val listen = if (visitor.bindPort < 0) "不监听端口" else "${visitor.bindAddr}:${visitor.bindPort}"
-                    val target = FrpcNaming.targetServerProxyName(
+                    val target = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
                         profiles.firstOrNull { it.id == state.profileId }?.config?.user,
                         visitor.serverUser,
                         visitor.serverName,

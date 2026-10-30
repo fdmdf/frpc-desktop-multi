@@ -40,7 +40,6 @@ import com.frpc.android.ui.components.validationMessage
 import com.frpc.android.ui.nav.AppNavigator
 import com.frpc.shared.model.AuthConfig
 import com.frpc.shared.model.FrpcConfig
-import com.frpc.shared.model.FrpcNaming
 import com.frpc.shared.validate.ConfigValidator
 import com.frpc.shared.validate.Severity
 import com.frpc.shared.validate.ValidationIssue
@@ -80,7 +79,7 @@ fun VisitorEditScreen(
     val errorFields = remember(issues) { issues.map { it.formFieldKey() }.toSet() }
     // frp 的拼接规则：serverUser 非空用它，留空用本机 user；这里实时展示最终会查找的名字
     val localUser = store.draft.collectAsStateWithLifecycle().value?.config?.user
-    val targetName = FrpcNaming.targetServerProxyName(
+    val targetName = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
         localUser, current.serverUser, current.serverName,
     )
 
@@ -172,7 +171,7 @@ fun VisitorEditScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                FrpcNaming.splitPrefixedName(current.serverName)?.let { (prefix, rest) ->
+                com.frpc.shared.model.FrpcNaming.splitPrefixedName(current.serverName)?.let { (prefix, rest) ->
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Text(
                             text = stringResource(R.string.visitor_target_suggestion, prefix, rest),

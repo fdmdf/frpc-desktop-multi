@@ -1,16 +1,13 @@
 package com.frpc.desktop.data
 
-import com.frpc.shared.model.ServerProfile
 import com.frpc.shared.toml.FrpcToml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
@@ -34,23 +31,10 @@ class ProfileStore(private val file: File) {
     private val _loadErrors = MutableStateFlow<List<String>>(emptyList())
     val loadErrors: StateFlow<List<String>> = _loadErrors.asStateFlow()
 
-    /**
-     * [load] 是否已经跑完（不管成功失败）。
-     *
-     * 存在的意义：开机自启的「自动连接」以前是 `delay(500)` 之后直接取列表，
-     * 配置多 / 磁盘慢时 500ms 到了列表还是空的 ⇒ 默认档案找不到 ⇒
-     * **自动连接静默失败**（既不启动也不报错）。现在改成等这个信号（带超时兜底）。
-     */
-    private val _loaded = MutableStateFlow(false)
-    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
-
     suspend fun load() = withContext(Dispatchers.IO) {
         mutex.withLock {
             _loadErrors.value = emptyList()
-            if (!file.exists()) {
-                _loaded.value = true
-                return@withContext
-            }
+            if (!file.exists()) return@withContext
             runCatching {
                 // 先按 JsonElement 解析，再逐条解码：跳过损坏条目而不是让整份配置失效
                 val rawList = json.decodeFromString<List<kotlinx.serialization.json.JsonElement>>(file.readText())
@@ -71,23 +55,8 @@ class ProfileStore(private val file: File) {
                 // 整份文件都读不出来（非法 JSON 等）：保留为一条整体错误提示
                 _loadErrors.value = listOf("配置文件解析失败：${e.message ?: "未知错误"}")
             }
-            // 解析失败也算「加载完成」：等的一方不该被永久挂住，
-            // 它拿到空列表走的是"没有可连的配置"这条正常分支，而不是静默失败
-            _loaded.value = true
         }
-    }
-
-    /**
-     * 等首次 [load] 完成；已经完成过就立即返回。
-     *
-     * @param timeoutMs 兜底超时：磁盘被占住 / 文件锁死时不能把自动连接永久挂住，
-     *   超时也返回（调用方按当前列表处理，最差是"没配置可连"而不是永远不连）。
-     */
-    suspend fun awaitLoaded(timeoutMs: Long = 5_000L) {
-        if (_loaded.value) return
-        withTimeoutOrNull(timeoutMs) {
-            _loaded.first { it }
-        }
+        Unit
     }
 
     fun find(id: String?): ServerProfile? =

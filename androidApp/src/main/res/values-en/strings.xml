@@ -297,12 +297,6 @@
     <string name="settings_theme_system">Follow system</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
-    <string name="settings_group_appearance">Appearance</string>
-    <string name="settings_group_startup">Startup</string>
-    <string name="settings_group_danger">Danger zone</string>
-    <string name="settings_about_open">About &amp; license</string>
-    <string name="settings_about_summary">Version %1$s · source and license</string>
-    <string name="settings_battery_ok_short">Whitelisted</string>
     <string name="settings_startup">Start on boot</string>
     <string name="settings_startup_summary">Auto-start frpc with the default config after boot</string>
     <string name="settings_default_config">Default config</string>

@@ -2,15 +2,12 @@ package com.frpc.desktop.engine
 
 import com.frpc.desktop.core.AppPaths
 import com.frpc.desktop.data.ProfileStore
-import com.frpc.desktop.core.StartupTrace
+import com.frpc.desktop.data.ServerProfile
 import com.frpc.desktop.data.SettingsStore
 import com.frpc.desktop.runtime.ProcMetrics
 import com.frpc.desktop.runtime.ProcessMetricsReader
-import com.frpc.desktop.runtime.ProcessScanner
 import com.frpc.shared.admin.FrpcAdminClient
 import com.frpc.shared.admin.ProxyStatusSnapshot
-import com.frpc.shared.logs.FrpcErrorHints
-import com.frpc.shared.model.ServerProfile
 import com.frpc.shared.net.PortCheck
 import com.frpc.shared.toml.FrpcToml
 import kotlinx.coroutines.CoroutineScope
@@ -194,47 +191,18 @@ class FrpcSupervisor(
      * 启动时清扫上次强杀留下的孤儿 frpc。
      * 任务管理器结束进程 / kill -9 不会执行 shutdown hook，frpc 会继续占着端口；
      * 判定标准是命令行里包含我们的 run 目录——只杀自己拉起来的，不碰别人的 frpc。
-     *
-     * **调用方负责判断要不要调**：绝大多数启动上次都是正常退出的（没有孤儿），
-     * 而 Windows 上 fork powershell 的冷启动是 1.5~4s，每次开机都付这笔成本不划算。
-     * 由 `AppContainer.cleanupOrphansIfNeeded()` 看 `CleanShutdownFlag` 决定，
-     * 并且延后到首帧之后再发起（不与首屏抢 CPU / IO / 杀软扫描）。
      */
     fun cleanupOrphans() {
         scope.launch(Dispatchers.IO) {
             val killed = runCatching { killOrphans() }.getOrDefault(0)
-            StartupTrace.mark("cleanupOrphans done killed=$killed")
             if (killed > 0) {
                 appendSystemLog(LogLevel.INFO, "已清理上次残留的 $killed 个 frpc 进程")
             }
         }
     }
 
-    /**
-     * 优先用 [ProcessScanner]（纯 Java，零 fork）；
-     * 拿不到命令行（受保护进程 / 老 JDK）时才回退到下面的 shell 实现 ——
-     * **那套实现必须保留**，否则在不支持 `commandLine()` 的环境里就再也清不掉孤儿了。
-     */
     private fun killOrphans(): Int {
         val token = AppPaths.runDir.absolutePath
-        if (ProcessScanner.supportsCommandLine()) {
-            val pids = runCatching { ProcessScanner.pidsByCommandLine(token) }.getOrDefault(emptyList())
-            // 埋点：真机验收时靠这几条 mark 判断走的是零 fork 路径还是回退路径
-            // （有的机器/JDK 读不到进程命令行，会 100% 走下面的 shell 分支）
-            StartupTrace.mark("cleanupOrphans via ProcessHandle pids=${pids.size}")
-            if (pids.isEmpty()) return 0
-            val killed = runCatching { ProcessScanner.kill(pids) }.getOrDefault(0)
-            StartupTrace.mark("cleanupOrphans ProcessHandle killed=$killed/${pids.size}")
-            return killed
-        }
-        StartupTrace.mark("cleanupOrphans via shell (commandLine unreadable)")
-        val killed = killOrphansByShell(token)
-        StartupTrace.mark("cleanupOrphans shell killed=$killed")
-        return killed
-    }
-
-    /** 回退路径：fork `powershell` / `pgrep`。慢（1.5~4s），但覆盖率最好 */
-    private fun killOrphansByShell(token: String): Int {
         return if (AppPaths.isWindows) {
             val script = "\$mine='$token'\n" +
                 "Get-CimInstance Win32_Process -Filter \"Name='frpc.exe'\" | " +
@@ -448,7 +416,7 @@ class FrpcSupervisor(
                 proc.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { line ->
                     appendLog(FrpcLogParser.parse(line))
                     // frp 报错太原始：追加一条人话说明，用户不用查文档
-                    FrpcErrorHints.hintFor(line)?.let { hint ->
+                    com.frpc.shared.logs.FrpcErrorHints.hintFor(line)?.let { hint ->
                         appendSystemLog(LogLevel.WARN, hint)
                     }
                 }
@@ -554,7 +522,7 @@ class FrpcSupervisor(
             return "还没填服务器地址：先在「配置」里补上 frps 地址再启动"
         }
         val webServer = config.webServer
-        if (webServer != null && webServer.port > 0 && PortCheck.isInUse(webServer.port)) {
+        if (webServer != null && webServer.port > 0 && com.frpc.shared.net.PortCheck.isInUse(webServer.port)) {
             return "状态接口端口 ${webServer.port} 已被占用：同机跑多份配置时，每份要用不同的 webServer 端口"
         }
         return null

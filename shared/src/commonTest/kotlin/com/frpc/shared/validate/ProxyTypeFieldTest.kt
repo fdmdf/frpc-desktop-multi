@@ -1,6 +1,5 @@
 package com.frpc.shared.validate
 
-import com.frpc.shared.model.AuthConfig
 import com.frpc.shared.model.FrpcConfig
 import com.frpc.shared.model.ProxyConfig
 import com.frpc.shared.model.ProxyType
@@ -19,7 +18,7 @@ class ProxyTypeFieldTest {
 
     private fun baseConfig(proxy: ProxyConfig) = FrpcConfig(
         serverAddr = "frps.example.com",
-        auth = AuthConfig(token = "tok"),
+        auth = com.frpc.shared.model.AuthConfig(token = "tok"),
         proxies = listOf(proxy),
     )
 
@@ -151,7 +150,7 @@ class ProxyTypeFieldTest {
     fun validConfigsStillPass() {
         val config = FrpcConfig(
             serverAddr = "frps.example.com",
-            auth = AuthConfig(token = "tok"),
+            auth = com.frpc.shared.model.AuthConfig(token = "tok"),
             proxies = listOf(
                 ProxyConfig(name = "ssh", type = "tcp", localIP = "127.0.0.1", localPort = 22, remotePort = 6001),
                 ProxyConfig(name = "web", type = "http", localIP = "127.0.0.1", localPort = 80, subdomain = "web"),

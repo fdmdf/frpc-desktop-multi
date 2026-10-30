@@ -1,23 +1,29 @@
 package com.frpc.android.service
 
+import android.app.Notification
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.frpc.android.FrpcApplication
+import com.frpc.android.MainActivity
 import com.frpc.android.R
-import com.frpc.shared.format.formatDuration
-import com.frpc.shared.format.formatMemoryKb
-import com.frpc.shared.format.formatPercent
+import com.frpc.android.util.formatDuration
+import com.frpc.android.util.formatMemoryKb
+import com.frpc.android.util.formatPercent
+import com.frpc.shared.admin.ProxyStatusItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**

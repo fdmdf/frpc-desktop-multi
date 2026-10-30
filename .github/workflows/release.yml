@@ -5,17 +5,16 @@ name: Release
 #   2) 手动 workflow_dispatch —— 补发/重发，版本号可填，留空用 androidApp 的 versionName
 #
 # 产物命名规范（PRODUCT-版本-系统-架构[-变体].扩展名）：
-#   Frpc-Android-Multi-1.3.4-windows-x64-setup.exe          Windows 用户级安装程序（免 UAC，中文向导，自带 JRE）
-#   Frpc-Android-Multi-1.3.4-windows-x64-setup-machine.exe  Windows 机器级安装程序（需 UAC，装到 Program Files）
-#   Frpc-Android-Multi-1.3.4-windows-x64.zip                Windows 便携版（解压即用）
-#   Frpc-Android-Multi-1.3.4-linux-x64.tar.gz         Linux 通用包（解压运行 bin/Frpc-Android-Multi）
-#   Frpc-Android-Multi-1.3.4-linux-x64.deb            Debian / Ubuntu
-#   Frpc-Android-Multi-1.3.4-linux-x64.AppImage       AppImage（可选，失败不阻塞发版）
-#   Frpc-Android-Multi-1.3.4-macos-arm64.dmg          macOS Apple Silicon
-#   Frpc-Android-Multi-1.3.4-macos-arm64.tar.gz       同上，.app 压缩包
-#   Frpc-Android-Multi-1.3.4-macos-x64.dmg            macOS Intel
-#   Frpc-Android-Multi-1.3.4-macos-x64.tar.gz         同上，.app 压缩包
-#   Frpc-Android-Multi-1.3.4-android-arm64.apk        Android（签名密钥失效时才退化成 -unsigned）
+#   Frpc-Android-Multi-1.3.1-windows-x64-setup.exe    Windows 安装程序（自带 JRE，开始菜单快捷方式）
+#   Frpc-Android-Multi-1.3.1-windows-x64.zip          Windows 便携版（解压即用）
+#   Frpc-Android-Multi-1.3.1-linux-x64.tar.gz         Linux 通用包（解压运行 bin/Frpc-Android-Multi）
+#   Frpc-Android-Multi-1.3.1-linux-x64.deb            Debian / Ubuntu
+#   Frpc-Android-Multi-1.3.1-linux-x64.AppImage       AppImage（可选，失败不阻塞发版）
+#   Frpc-Android-Multi-1.3.1-macos-arm64.dmg          macOS Apple Silicon
+#   Frpc-Android-Multi-1.3.1-macos-arm64.tar.gz       同上，.app 压缩包
+#   Frpc-Android-Multi-1.3.1-macos-x64.dmg            macOS Intel
+#   Frpc-Android-Multi-1.3.1-macos-x64.tar.gz         同上，.app 压缩包
+#   Frpc-Android-Multi-1.3.1-android-arm64.apk        Android（签名密钥失效时才退化成 -unsigned）
 #   frpc-engine-VERSION.txt                           内置 frpc 引擎版本留档
 
 on:
@@ -208,6 +207,20 @@ jobs:
           fi
           echo "engine ok - $BIN ($(wc -c < "$BIN") bytes)"
 
+      - name: Install WiX Toolset
+        if: matrix.name == 'windows-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install wixtoolset --no-progress -y
+          $wix = Get-ChildItem "C:\Program Files (x86)\WiX Toolset*" -Directory -ErrorAction SilentlyContinue |
+                 Select-Object -First 1
+          if ($wix) { "$($wix.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
+          if (-not (Get-Command candle.exe -ErrorAction SilentlyContinue)) {
+            throw "WiX 安装后仍找不到 candle.exe，jpackage 无法生成 .exe 安装程序。请检查本步骤的 choco 输出。"
+          }
+          Write-Host "WiX ok - $((Get-Command candle.exe).Source)"
+
       - name: Unit tests
         shell: bash
         run: ./gradlew --no-daemon :shared:jvmTest --console=plain
@@ -218,10 +231,9 @@ jobs:
           set -euo pipefail
           case "${{ matrix.name }}" in
             windows-x64)
-              # 只出 app-image：便携版 zip 直接压它，安装程序交给下一步的 Inno Setup。
-              # 不再跑 packageExe（jpackage + WiX）：它既不写 installer 图标，
-              # 语言又跟着 runner 的 en-US 走，还多一个 choco 联网依赖。
+              # 便携版（app-image，自带 JRE）+ 安装程序
               ./gradlew --no-daemon :desktopApp:createDistributable --console=plain
+              ./gradlew --no-daemon :desktopApp:packageExe --console=plain
               ;;
             linux-x64)
               ./gradlew --no-daemon :desktopApp:createDistributable --console=plain
@@ -241,54 +253,6 @@ jobs:
         continue-on-error: true
         shell: bash
         run: ./gradlew --no-daemon :desktopApp:packageAppImage --console=plain
-
-      - name: Build Windows installers with Inno Setup
-        if: matrix.name == 'windows-x64'
-        shell: bash
-        run: |
-          set -euo pipefail
-          V="${{ needs.version.outputs.version }}"
-
-          # 必须关掉 Git Bash(MSYS) 的 POSIX 路径转换：它会把 /DMyAppVersion=1.3.4 这类
-          # 以 / 开头的参数当成路径改写成 C:/Program Files/Git/DMyAppVersion=1.3.4，
-          # ISCC 便认不出这是选项，全按「脚本文件名」算 —— 实测报错
-          # "You may not specify more than one script filename."（v1.3.4 首次发版踩到）。
-          export MSYS2_ARG_CONV_EXCL="*"
-
-          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
-          if [ ! -f "$ISCC" ]; then
-            echo "::notice::runner 未预装 Inno Setup 6，尝试用 choco 安装"
-            choco install innosetup --no-progress -y
-          fi
-          if [ ! -f "$ISCC" ]; then
-            echo "::error::找不到 ISCC.exe（$ISCC），无法生成 Windows 安装包。"
-            echo "::error::请确认 windows-latest 预装了 Inno Setup 6，或 choco install innosetup 可用。"
-            exit 1
-          fi
-          echo "ISCC ok - $ISCC"
-
-          ISS="$(cygpath -w "$PWD/packaging/windows/Frpc-Android-Multi.iss")"
-          SRC="$(cygpath -w "$PWD/desktopApp/build/compose/binaries/main/app/$PRODUCT")"
-          ICO="$(cygpath -w "$PWD/desktopApp/icon.ico")"
-          OUT="$(cygpath -w "$PWD/desktopApp/build/inno")"
-
-          if [ ! -d "$SRC" ]; then
-            echo "::error::app-image 目录不存在 - $SRC（createDistributable 是否成功？）"
-            exit 1
-          fi
-          if [ ! -f "$ICO" ]; then
-            echo "::error::缺少安装包图标 - $ICO"
-            exit 1
-          fi
-
-          # 同一份 .iss 出两个包：用户级（默认，免 UAC）与机器级（/DMyMachineInstall=1，需 UAC）。
-          # 两个变体分别落在 build/inno/user 与 build/inno/machine，互不干扰。
-          "$ISCC" "/DMyAppVersion=$V" "/DMySourceDir=$SRC" "/DMyIconFile=$ICO" "/DMyOutputDir=$OUT" "$ISS"
-          "$ISCC" "/DMyAppVersion=$V" "/DMySourceDir=$SRC" "/DMyIconFile=$ICO" "/DMyOutputDir=$OUT" "/DMyMachineInstall=1" "$ISS"
-
-          echo ""
-          echo "== Inno Setup 产出 =="
-          find desktopApp/build/inno -maxdepth 2 -name '*.exe' -printf '  %p  %s bytes\n'
 
       - name: Collect artifacts
         shell: bash
@@ -329,11 +293,7 @@ jobs:
                 echo "::error::缺少产物 - Windows app-image 目录 $BIN/app/$PRODUCT"
                 MISSING=1
               fi
-              # 两个安装包分别取自各自的 Inno Setup 输出子目录：
-              # 用独立目录是为了避免 find -maxdepth 1 -name '*.exe' -print -quit
-              # 抓错文件（app-image 里也有一个同名 launcher exe）
-              take "desktopApp/build/inno/user"    '*-setup.exe'         "$PRODUCT-$V-windows-x64-setup.exe"
-              take "desktopApp/build/inno/machine" '*-setup-machine.exe' "$PRODUCT-$V-windows-x64-setup-machine.exe"
+              take "$BIN/exe" '*.exe' "$PRODUCT-$V-windows-x64-setup.exe"
               ;;
             linux-x64)
               if [ -d "$BIN/app/$PRODUCT" ]; then
@@ -565,9 +525,8 @@ jobs:
           }
 
           echo "== 必需产物 =="
-          check "Frpc-Android-Multi-$V-windows-x64.zip"               required
-          check "Frpc-Android-Multi-$V-windows-x64-setup.exe"         required
-          check "Frpc-Android-Multi-$V-windows-x64-setup-machine.exe" required
+          check "Frpc-Android-Multi-$V-windows-x64.zip"        required
+          check "Frpc-Android-Multi-$V-windows-x64-setup.exe"  required
           check "Frpc-Android-Multi-$V-linux-x64.tar.gz"       required
           check "Frpc-Android-Multi-$V-linux-x64.deb"          required
           check "Frpc-Android-Multi-$V-macos-arm64.dmg"        required
@@ -588,7 +547,7 @@ jobs:
           echo "== 多余文件（正常应为空） =="
           for f in *; do
             case "$f" in
-              Frpc-Android-Multi-$V-windows-x64.zip|Frpc-Android-Multi-$V-windows-x64-setup.exe|Frpc-Android-Multi-$V-windows-x64-setup-machine.exe|\
+              Frpc-Android-Multi-$V-windows-x64.zip|Frpc-Android-Multi-$V-windows-x64-setup.exe|\
               Frpc-Android-Multi-$V-linux-x64.tar.gz|Frpc-Android-Multi-$V-linux-x64.deb|Frpc-Android-Multi-$V-linux-x64.AppImage|\
               Frpc-Android-Multi-$V-macos-arm64.dmg|Frpc-Android-Multi-$V-macos-arm64.tar.gz|\
               Frpc-Android-Multi-$V-macos-x64.dmg|Frpc-Android-Multi-$V-macos-x64.tar.gz|\
@@ -638,8 +597,7 @@ jobs:
             echo ""
             echo "| 平台 | 文件 | 说明 |"
             echo "|---|---|---|"
-            echo "| Windows x64 | \`Frpc-Android-Multi-$V-windows-x64-setup.exe\` | 用户级安装（推荐）：双击安装，免管理员权限，自带 JRE，含开始菜单快捷方式 |"
-            echo "| Windows x64 | \`Frpc-Android-Multi-$V-windows-x64-setup-machine.exe\` | 机器级安装：装到 \`C:\\Program Files\`，需要管理员权限（UAC） |"
+            echo "| Windows x64 | \`Frpc-Android-Multi-$V-windows-x64-setup.exe\` | 双击安装，自带 JRE，含开始菜单快捷方式 |"
             echo "| Windows x64 | \`Frpc-Android-Multi-$V-windows-x64.zip\` | 便携版，解压后运行 \`Frpc-Android-Multi.exe\` |"
             echo "| Linux x64 | \`Frpc-Android-Multi-$V-linux-x64.tar.gz\` / \`.deb\` | 解压运行 \`bin/Frpc-Android-Multi\`，或 \`dpkg -i\` |"
             echo "| macOS arm64 | \`Frpc-Android-Multi-$V-macos-arm64.dmg\` | Apple Silicon；未签名，首次需右键打开 |"
@@ -647,9 +605,6 @@ jobs:
             echo "| Android arm64 | \`Frpc-Android-Multi-$V-android-arm64.apk\` | Android 8.0+，允许未知来源安装 |"
             echo ""
             echo "macOS 的 \`.tar.gz\` 是同一个 \`.app\` 的压缩包（不便挂载 DMG 时用）。"
-            echo ""
-            echo "> **Windows 换安装器了**：安装包现由 Inno Setup 产出（向导全简体中文、安装包自带图标）。"
-            echo "> 旧版是 jpackage/WiX 的 MSI，两者卸载表不兼容 —— **装过旧版请先卸载再装新版**，无法原地升级。"
             echo ""
             echo "已验证协议：tcp / udp / http / https / stcp / xtcp / tcpmux / sudp（CI 真跑 frps+frpc 建隧道校验）。"
             echo ""

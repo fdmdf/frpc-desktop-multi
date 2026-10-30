@@ -1,6 +1,6 @@
 package com.frpc.desktop
 
-import com.frpc.shared.model.ServerProfile
+import com.frpc.desktop.data.ServerProfile
 import com.frpc.shared.toml.FrpcToml
 import com.frpc.shared.validate.ConfigValidator
 import kotlinx.serialization.json.Json

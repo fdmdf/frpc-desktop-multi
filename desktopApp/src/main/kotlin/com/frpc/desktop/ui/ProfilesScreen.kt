@@ -43,8 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.frpc.desktop.AppContainer
 import com.frpc.desktop.core.AppPaths
+import com.frpc.desktop.data.ServerProfile
 import com.frpc.desktop.engine.FrpcSupervisor
-import com.frpc.shared.model.ServerProfile
 import kotlinx.coroutines.launch
 import java.awt.FileDialog
 import java.awt.Frame

@@ -14,10 +14,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -49,16 +51,11 @@ import com.frpc.android.ui.components.SwitchRow
 import com.frpc.android.ui.components.validationMessage
 import com.frpc.android.ui.nav.AppNavigator
 import com.frpc.android.ui.nav.Screen
-import com.frpc.shared.model.AuthConfig
+import com.frpc.android.util.isPortInUse
 import com.frpc.shared.model.FrpcConfig
 import com.frpc.shared.model.LogConfig
-import com.frpc.shared.model.TlsConfig
 import com.frpc.shared.model.TransportConfig
 import com.frpc.shared.model.WebServerConfig
-import com.frpc.shared.net.PortCheck
-import com.frpc.shared.validate.ConfigValidator
-import com.frpc.shared.validate.Severity.ERROR
-import com.frpc.shared.validate.Severity.WARNING
 import com.frpc.shared.validate.ValidationIssue
 import kotlinx.coroutines.launch
 
@@ -112,8 +109,8 @@ fun ConfigEditScreen(
 
     // 警告不阻止保存，但要一直可见（例如 xtcp 未填 STUN：能启动，但打洞大概率超时）
     val warnings = remember(config) {
-        ConfigValidator.validate(config)
-            .filter { it.severity == WARNING }
+        com.frpc.shared.validate.ConfigValidator.validate(config)
+            .filter { it.severity == com.frpc.shared.validate.Severity.WARNING }
     }
 
     /**
@@ -127,8 +124,8 @@ fun ConfigEditScreen(
     fun doSave(reload: Boolean) {
         serverPortText?.let { t -> store.update { it.copy(serverPort = t.toIntOrNull() ?: 0) } }
         nameError = null
-        val issues = store.validate(portInUse = PortCheck::isInUse)
-        if (issues.any { it.severity == ERROR }) {
+        val issues = store.validate(::isPortInUse)
+        if (issues.any { it.severity == com.frpc.shared.validate.Severity.ERROR }) {
             showValidation = issues
             return
         }
@@ -285,7 +282,7 @@ fun ConfigEditScreen(
             item {
                 SectionCard(title = stringResource(R.string.section_auth)) {
                     // 无认证 = auth 为空 / method = "none"；编码时整段省略（frpc 不接受 none）
-                    val auth = config.auth ?: AuthConfig(method = "none", token = "")
+                    val auth = config.auth ?: com.frpc.shared.model.AuthConfig(method = "none", token = "")
                     DropdownField(
                         label = stringResource(R.string.field_auth_method),
                         selected = auth.method,
@@ -300,7 +297,7 @@ fun ConfigEditScreen(
                         onSelect = { v ->
                             store.update {
                                 it.copy(
-                                    auth = (it.auth ?: AuthConfig()).copy(method = v),
+                                    auth = (it.auth ?: com.frpc.shared.model.AuthConfig()).copy(method = v),
                                 )
                             }
                         },
@@ -316,7 +313,7 @@ fun ConfigEditScreen(
                             value = auth.token,
                             onValueChange = { v ->
                                 store.update {
-                                    it.copy(auth = (it.auth ?: AuthConfig()).copy(token = v))
+                                    it.copy(auth = (it.auth ?: com.frpc.shared.model.AuthConfig()).copy(token = v))
                                 }
                             },
                             label = stringResource(R.string.field_auth_token),
@@ -433,7 +430,7 @@ fun ConfigEditScreen(
                         onCheckedChange = { v ->
                             store.update {
                                 val transport = it.transport ?: TransportConfig()
-                                it.copy(transport = transport.copy(tls = (transport.tls ?: TlsConfig()).copy(enable = v)))
+                                it.copy(transport = transport.copy(tls = (transport.tls ?: com.frpc.shared.model.TlsConfig()).copy(enable = v)))
                             }
                         },
                         supportingText = stringResource(R.string.field_tls_hint),
@@ -485,7 +482,7 @@ fun ConfigEditScreen(
                                 val t = it.transport ?: TransportConfig()
                                 it.copy(
                                     transport = t.copy(
-                                        tls = (t.tls ?: TlsConfig()).copy(
+                                        tls = (t.tls ?: com.frpc.shared.model.TlsConfig()).copy(
                                             certFile = v.trim().ifBlank { null },
                                         ),
                                     ),
@@ -502,7 +499,7 @@ fun ConfigEditScreen(
                                 val t = it.transport ?: TransportConfig()
                                 it.copy(
                                     transport = t.copy(
-                                        tls = (t.tls ?: TlsConfig()).copy(
+                                        tls = (t.tls ?: com.frpc.shared.model.TlsConfig()).copy(
                                             keyFile = v.trim().ifBlank { null },
                                         ),
                                     ),
@@ -518,7 +515,7 @@ fun ConfigEditScreen(
                                 val t = it.transport ?: TransportConfig()
                                 it.copy(
                                     transport = t.copy(
-                                        tls = (t.tls ?: TlsConfig()).copy(
+                                        tls = (t.tls ?: com.frpc.shared.model.TlsConfig()).copy(
                                             trustedCaFile = v.trim().ifBlank { null },
                                         ),
                                     ),
@@ -536,7 +533,7 @@ fun ConfigEditScreen(
                                 val t = it.transport ?: TransportConfig()
                                 it.copy(
                                     transport = t.copy(
-                                        tls = (t.tls ?: TlsConfig()).copy(
+                                        tls = (t.tls ?: com.frpc.shared.model.TlsConfig()).copy(
                                             disableCustomTLSFirstByte = !on,
                                         ),
                                     ),

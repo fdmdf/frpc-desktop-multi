@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.frpc.android.R
+import com.frpc.android.data.ServerProfile
 import com.frpc.android.di.AppContainer
 import com.frpc.android.service.FrpcSupervisor
 import com.frpc.android.ui.components.SectionCard
@@ -55,7 +56,6 @@ import com.frpc.android.ui.components.StatusChip
 import com.frpc.android.ui.nav.AppNavigator
 import com.frpc.android.ui.nav.Screen
 import com.frpc.android.ui.theme.StatusRunning
-import com.frpc.shared.model.ServerProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

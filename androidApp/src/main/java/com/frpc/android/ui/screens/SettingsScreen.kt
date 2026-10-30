@@ -3,28 +3,19 @@ package com.frpc.android.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.outlined.Article
-import androidx.compose.material.icons.outlined.BatterySaver
-import androidx.compose.material.icons.outlined.DeleteForever
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,21 +31,17 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.getSystemService
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
-import com.frpc.android.BuildConfig.VERSION_NAME
 import com.frpc.android.R
 import com.frpc.android.data.AppLanguage
 import com.frpc.android.data.ThemeMode
 import com.frpc.android.di.AppContainer
 import com.frpc.android.service.FrpcSupervisor
 import com.frpc.android.ui.components.DropdownField
-import com.frpc.android.ui.components.GroupCard
 import com.frpc.android.ui.components.MonoText
-import com.frpc.android.ui.components.RowDivider
-import com.frpc.android.ui.components.SettingsRow
-import com.frpc.android.ui.components.StatusChip
+import com.frpc.android.ui.components.SectionCard
+import com.frpc.android.ui.components.SwitchRow
 import com.frpc.android.ui.nav.AppNavigator
 import com.frpc.android.ui.nav.Screen
-import com.frpc.android.ui.theme.StatusRunning
 import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(container: AppContainer, navigator: AppNavigator) {
@@ -85,177 +72,143 @@ fun SettingsScreen(container: AppContainer, navigator: AppNavigator) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 外观：主题 + 语言。两项都是「点了就生效」的下拉，放进同一张卡片表示同类
-        GroupCard(title = stringResource(R.string.settings_group_appearance)) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                DropdownField(
-                    label = stringResource(R.string.settings_theme),
-                    selected = themeMode,
-                    options = listOf(ThemeMode.SYSTEM, ThemeMode.LIGHT, ThemeMode.DARK),
-                    optionLabel = { mode ->
-                        when (mode) {
-                            ThemeMode.SYSTEM -> stringResource(R.string.settings_theme_system)
-                            ThemeMode.LIGHT -> stringResource(R.string.settings_theme_light)
-                            ThemeMode.DARK -> stringResource(R.string.settings_theme_dark)
-                            else -> mode
-                        }
-                    },
-                    onSelect = { container.settingsRepository.setThemeMode(it) },
-                )
-                DropdownField(
-                    label = stringResource(R.string.settings_language),
-                    selected = language,
-                    options = AppLanguage.ALL,
-                    optionLabel = { tag ->
-                        when (tag) {
-                            AppLanguage.ZH -> stringResource(R.string.settings_language_zh)
-                            AppLanguage.EN -> stringResource(R.string.settings_language_en)
-                            else -> stringResource(R.string.settings_language_system)
-                        }
-                    },
-                    onSelect = { container.settingsRepository.setLanguage(it) },
-                )
-            }
+        SectionCard(title = stringResource(R.string.settings_theme)) {
+            DropdownField(
+                label = stringResource(R.string.settings_theme),
+                selected = themeMode,
+                options = listOf(ThemeMode.SYSTEM, ThemeMode.LIGHT, ThemeMode.DARK),
+                optionLabel = { mode ->
+                    when (mode) {
+                        ThemeMode.SYSTEM -> stringResource(R.string.settings_theme_system)
+                        ThemeMode.LIGHT -> stringResource(R.string.settings_theme_light)
+                        ThemeMode.DARK -> stringResource(R.string.settings_theme_dark)
+                        else -> mode
+                    }
+                },
+                onSelect = { container.settingsRepository.setThemeMode(it) },
+            )
         }
 
-        // 启动：开关 + 默认配置。开关是主操作，默认配置是它的附属项，
-        // 用行 + 分隔线放在一起，避免看起来是两个毫不相关的设置
-        GroupCard(title = stringResource(R.string.settings_group_startup)) {
-            SettingsRow(
-                title = stringResource(R.string.settings_startup),
-                subtitle = stringResource(R.string.settings_startup_summary),
-                icon = Icons.Outlined.PowerSettingsNew,
-                trailing = {
-                    Switch(
-                        checked = autoStart,
-                        onCheckedChange = { container.settingsRepository.setAutoStartOnBoot(it) },
-                    )
+        SectionCard(title = stringResource(R.string.settings_language)) {
+            DropdownField(
+                label = stringResource(R.string.settings_language),
+                selected = language,
+                options = AppLanguage.ALL,
+                optionLabel = { tag ->
+                    when (tag) {
+                        AppLanguage.ZH -> stringResource(R.string.settings_language_zh)
+                        AppLanguage.EN -> stringResource(R.string.settings_language_en)
+                        else -> stringResource(R.string.settings_language_system)
+                    }
                 },
+                onSelect = { container.settingsRepository.setLanguage(it) },
+            )
+        }
+
+        SectionCard(title = stringResource(R.string.settings_startup)) {
+            SwitchRow(
+                label = stringResource(R.string.settings_startup),
+                checked = autoStart,
+                onCheckedChange = { container.settingsRepository.setAutoStartOnBoot(it) },
+                supportingText = stringResource(R.string.settings_startup_summary),
             )
             if (profiles.isNotEmpty()) {
-                RowDivider()
-                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    DropdownField(
-                        label = stringResource(R.string.settings_default_config),
-                        selected = profiles.firstOrNull { it.id == defaultProfileId } ?: profiles.first(),
-                        options = profiles,
-                        optionLabel = { it.name },
-                        onSelect = { container.settingsRepository.setDefaultProfileId(it.id) },
-                    )
-                }
+                DropdownField(
+                    label = stringResource(R.string.settings_default_config),
+                    selected = profiles.firstOrNull { it.id == defaultProfileId } ?: profiles.first(),
+                    options = profiles,
+                    optionLabel = { it.name },
+                    onSelect = { container.settingsRepository.setDefaultProfileId(it.id) },
+                )
             }
         }
 
-        GroupCard(title = stringResource(R.string.settings_battery)) {
-            SettingsRow(
-                title = stringResource(R.string.settings_battery),
-                subtitle = if (batteryIgnored) {
+        SectionCard(title = stringResource(R.string.settings_battery)) {
+            Text(
+                text = if (batteryIgnored) {
                     stringResource(R.string.settings_battery_ok)
                 } else {
                     stringResource(R.string.settings_battery_summary)
                 },
-                icon = Icons.Outlined.BatterySaver,
-                trailing = {
-                    if (batteryIgnored) {
-                        // 已达标就给一个「已完成」的状态片，而不是留一个点了没反应的按钮
-                        StatusChip(
-                            text = stringResource(R.string.settings_battery_ok_short),
-                            color = StatusRunning,
-                        )
-                    } else {
-                        // 次操作用 tonal 按钮：比文字链接更明确，又不抢主操作的视觉权重
-                        FilledTonalButton(onClick = { requestIgnoreBatteryOptimizations(context) }) {
-                            Text(stringResource(R.string.settings_battery_request))
-                        }
-                    }
-                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!batteryIgnored) {
+                TextButton(onClick = { requestIgnoreBatteryOptimizations(context) }) {
+                    Text(stringResource(R.string.settings_battery_request))
+                }
+            }
+        }
+
+        SectionCard(title = stringResource(R.string.nav_logs)) {
+            SwitchRow(
+                label = stringResource(R.string.settings_show_access_logs),
+                checked = showAccessLogs,
+                onCheckedChange = { container.settingsRepository.setShowAccessLogs(it) },
+                supportingText = stringResource(R.string.settings_show_access_logs_summary),
             )
         }
 
-        GroupCard(title = stringResource(R.string.nav_logs)) {
-            SettingsRow(
-                title = stringResource(R.string.settings_show_access_logs),
-                subtitle = stringResource(R.string.settings_show_access_logs_summary),
-                icon = Icons.Outlined.Article,
-                trailing = {
-                    Switch(
-                        checked = showAccessLogs,
-                        onCheckedChange = { container.settingsRepository.setShowAccessLogs(it) },
-                    )
-                },
-            )
-        }
-
-        GroupCard(title = stringResource(R.string.settings_binary)) {
+        SectionCard(title = stringResource(R.string.settings_binary)) {
             val engineState = if (container.binaryManager.isReady()) {
                 stringResource(R.string.settings_binary_ready)
             } else {
                 stringResource(R.string.settings_binary_missing)
             }
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_binary_version, engineVersion, engineAbi),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                // 运行时引擎实际路径：新版应为 /data/app/.../lib/arm64/libfrpc.so（jniLibs 解压位）
-                MonoText(
-                    text = stringResource(
-                        R.string.settings_binary_path,
-                        container.binaryManager.binaryFile().absolutePath,
-                        engineState,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = stringResource(R.string.settings_binary_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        GroupCard(title = stringResource(R.string.settings_about)) {
-            SettingsRow(
-                title = stringResource(R.string.settings_about_open),
-                subtitle = stringResource(
-                    R.string.settings_about_summary,
-                    VERSION_NAME,
+            Text(
+                text = stringResource(R.string.settings_binary_version, engineVersion, engineAbi),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            // 运行时引擎实际路径：新版应为 /data/app/.../lib/arm64/libfrpc.so（jniLibs 解压位）
+            MonoText(
+                text = stringResource(
+                    R.string.settings_binary_path,
+                    container.binaryManager.binaryFile().absolutePath,
+                    engineState,
                 ),
-                icon = Icons.Outlined.Info,
-                onClick = { navigator.push(Screen.About) },
-                trailing = {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(R.string.settings_binary_note),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
-        // 危险操作：整张卡片用 errorContainer 底色 + 红色标题，和上面的常规设置明确区分
-        GroupCard(
-            title = stringResource(R.string.settings_group_danger),
-            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
-        ) {
-            SettingsRow(
-                title = stringResource(R.string.action_reset_all),
-                subtitle = if (state.isActive) {
+        SectionCard(title = stringResource(R.string.settings_about)) {
+            Text(
+                text = stringResource(R.string.settings_about_version, com.frpc.android.BuildConfig.VERSION_NAME),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = "frpc $engineVersion",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { navigator.push(Screen.About) }) {
+                Text(stringResource(R.string.nav_about))
+            }
+        }
+
+        // 危险操作：清空全部配置档案。运行中禁止，避免删掉 frpc 正在读的配置
+        SectionCard {
+            TextButton(
+                onClick = { confirmResetAll = true },
+                enabled = profiles.isNotEmpty() && !state.isActive,
+                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text(stringResource(R.string.action_reset_all))
+            }
+            Text(
+                text = if (state.isActive) {
                     stringResource(R.string.settings_reset_all_blocked)
                 } else {
                     stringResource(R.string.reset_all_message, profiles.size)
                 },
-                icon = Icons.Outlined.DeleteForever,
-                onClick = { confirmResetAll = true },
-                enabled = profiles.isNotEmpty() && !state.isActive,
-                titleColor = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

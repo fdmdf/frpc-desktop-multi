@@ -336,12 +336,6 @@
     <string name="settings_theme_system">跟随系统</string>
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
-    <string name="settings_group_appearance">外观</string>
-    <string name="settings_group_startup">启动</string>
-    <string name="settings_group_danger">危险操作</string>
-    <string name="settings_about_open">关于与许可</string>
-    <string name="settings_about_summary">当前版本 %1$s · 开源地址与许可信息</string>
-    <string name="settings_battery_ok_short">已加入白名单</string>
     <string name="settings_startup">开机自启</string>
     <string name="settings_startup_summary">开机后自动启动默认配置的 frpc</string>
     <string name="settings_default_config">默认配置</string>

@@ -8,13 +8,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,40 +32,32 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.frpc.android.R
+import com.frpc.android.data.ServerProfile
 import com.frpc.android.di.AppContainer
 import com.frpc.android.service.FrpcService
 import com.frpc.android.service.FrpcSupervisor
 import com.frpc.android.service.LogProxyPhase
-import com.frpc.android.service.LogProxyState
-import com.frpc.android.ui.components.CardRow
-import com.frpc.android.ui.components.GroupCard
-import com.frpc.android.ui.components.RowDivider
+import com.frpc.android.ui.components.GroupHeader
 import com.frpc.android.ui.components.SectionCard
 import com.frpc.android.ui.components.StatusChip
-import com.frpc.android.ui.components.StatDivider
-import com.frpc.shared.admin.ProxyStatusItem
 import com.frpc.android.ui.nav.AppNavigator
 import com.frpc.android.ui.nav.Screen
 import com.frpc.android.ui.theme.StatusError
 import com.frpc.android.ui.theme.StatusIdle
 import com.frpc.android.ui.theme.StatusRunning
 import com.frpc.android.ui.theme.StatusStarting
-import com.frpc.shared.format.formatClock
-import com.frpc.shared.format.formatDuration
-import com.frpc.shared.format.formatMemoryKb
-import com.frpc.shared.format.formatPercent
-import com.frpc.shared.model.FrpcNaming
+import com.frpc.android.util.formatClock
+import com.frpc.android.util.formatDuration
+import com.frpc.android.util.formatMemoryKb
+import com.frpc.android.util.formatPercent
 import com.frpc.shared.model.ProxyConfig
-import com.frpc.shared.model.ServerProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -353,127 +343,208 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
         }
 
         item {
-            GroupCard(title = stringResource(R.string.home_quick_stats)) {
+            SectionCard(title = stringResource(R.string.home_quick_stats)) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     StatCell(stringResource(R.string.home_cpu), formatPercent(cpu))
-                    StatDivider()
                     StatCell(
                         stringResource(R.string.home_memory),
                         stats?.let { formatMemoryKb(it.rssKb) } ?: "--",
                     )
-                    StatDivider()
                     StatCell(stringResource(R.string.home_uptime), uptime)
-                    StatDivider()
                     StatCell(
                         stringResource(R.string.home_online_proxies),
                         if (totalCount > 0) "$onlineCount/$totalCount" else "--",
                     )
                 }
-                // 提示文字缩进到与格子内容对齐，并和上面一行用分隔线分开
                 if (state.phase == FrpcSupervisor.Phase.RUNNING && state.adminEnabled && !adminReachable) {
-                    RowDivider()
                     Text(
                         text = stringResource(R.string.home_admin_unreachable),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }
                 if (!state.adminEnabled && state.phase == FrpcSupervisor.Phase.RUNNING) {
-                    RowDivider()
                     Text(
                         text = stringResource(R.string.home_admin_off),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }
             }
         }
 
-        // 同一组的条目装进**一张**卡片、用行分隔线连起来：
-        // 之前每条一张卡片，层级全平，看不出哪些规则属于同一组
+        // 分组标题用普通文字，不再用「空标题卡片」——空卡片会渲染成一个只有标题的方框
         // 计数只算已启用的：禁用的规则不注册到 frps，混进总数会让「0/1 在线」看起来像故障
         item {
-            GroupCard(
-                title = stringResource(R.string.home_proxies),
-                count = enabledProxies.size,
-            ) {
-                if (proxies.isEmpty()) {
-                    CardRow {
+            GroupHeader(
+                text = if (proxies.isEmpty()) {
+                    stringResource(R.string.home_proxies)
+                } else {
+                    stringResource(
+                        R.string.home_group_count,
+                        stringResource(R.string.home_proxies),
+                        // 标题跟「列表里有多少条」走；概览里的分母才跟 frpc 生效配置走
+                        enabledProxies.size,
+                    )
+                },
+            )
+        }
+        if (proxies.isEmpty()) {
+            item {
+                SectionCard {
+                    Text(
+                        text = stringResource(R.string.proxies_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        items(proxies) { proxy ->
+            val adminItem = status?.item(proxy.name)
+            val logState = logProxyStates[proxy.name]
+            // 状态优先级：enabled=false（frpc 不注册）> Admin API 实际状态 > 日志推断 > 未知
+            val (label, color) = when {
+                proxy.enabled == false ->
+                    stringResource(R.string.proxy_status_disabled) to StatusIdle
+                adminItem?.status == "running" ->
+                    stringResource(R.string.proxy_status_online) to StatusRunning
+                adminItem?.status == "error" ->
+                    stringResource(R.string.proxy_status_error) to StatusError
+                adminItem != null -> adminItem.status to StatusIdle
+                logState?.phase == LogProxyPhase.RUNNING ->
+                    stringResource(R.string.proxy_status_online) to StatusRunning
+                logState?.phase == LogProxyPhase.ERROR ->
+                    stringResource(R.string.proxy_status_error) to StatusError
+                logState?.phase == LogProxyPhase.PENDING ->
+                    stringResource(R.string.proxy_status_pending) to StatusStarting
+                state.phase == FrpcSupervisor.Phase.RUNNING ->
+                    stringResource(R.string.proxy_status_unknown) to StatusIdle
+                else -> stringResource(R.string.proxy_status_off) to StatusIdle
+            }
+            // 只有 tcp/udp 有远程端口；remotePort 留空或 0 都表示 frps 随机分配
+            val proxyType = proxy.proxyType
+            val remoteText = when {
+                !adminItem?.remoteAddr.isNullOrBlank() ->
+                    stringResource(R.string.proxy_remote_label) + " " + adminItem.remoteAddr
+                proxyType?.needsRemotePort == true ->
+                    if (proxy.remotePort == null || proxy.remotePort == 0) {
+                        stringResource(R.string.proxy_remote_random)
+                    } else {
+                        stringResource(R.string.proxy_remote_label) + " :${proxy.remotePort}"
+                    }
+                proxyType?.domainBased == true ->
+                    proxy.customDomains?.firstOrNull() ?: proxy.subdomain
+                        ?: stringResource(R.string.proxy_remote_domain_missing)
+                else -> stringResource(R.string.proxy_remote_private)
+            }
+            val errorText = adminItem?.err?.takeIf { it.isNotBlank() }
+                ?: logState?.error?.takeIf { it.isNotBlank() }
+
+            SectionCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = proxy.name, style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = stringResource(R.string.proxies_empty),
+                            text = buildString {
+                                append(proxy.type.uppercase())
+                                append(" · ")
+                                append(stringResource(R.string.proxy_local_label))
+                                append(" ")
+                                append(proxy.localIP ?: "127.0.0.1")
+                                append(":")
+                                append(proxy.localPort?.toString() ?: "?")
+                                append(" → ")
+                                append(remoteText)
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (errorText != null) {
+                            Text(
+                                text = errorText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
-                } else {
-                    proxies.forEachIndexed { index, proxy ->
-                        if (index > 0) RowDivider()
-                        ProxyCardRow(
-                            proxy = proxy,
-                            adminItem = status?.item(proxy.name),
-                            logState = logProxyStates[proxy.name],
-                            running = state.phase == FrpcSupervisor.Phase.RUNNING,
-                            onEnabledChange = { on -> setRuleEnabled(proxy.name, on, isVisitor = false) },
-                        )
-                    }
+                    StatusChip(text = label, color = color)
+                    Switch(
+                        checked = proxy.enabled != false,
+                        onCheckedChange = { on -> setRuleEnabled(proxy.name, on, isVisitor = false) },
+                    )
                 }
             }
         }
 
         if (visitors.isNotEmpty()) {
             item {
-                GroupCard(
-                    title = stringResource(R.string.home_visitors),
-                    count = enabledVisitors.size,
-                ) {
-                    visitors.forEachIndexed { index, visitor ->
-                        if (index > 0) RowDivider()
-                        // admin API 不返回 visitor，是否注册成功只能从 "visitor added: [...]" 日志判断
-                        val online = state.phase == FrpcSupervisor.Phase.RUNNING &&
-                            visitor.name in visitorsOnline
-                        // 状态优先级：enabled=false（frpc 不注册）> 日志推断 > 未启动
-                        val (label, color) = when {
-                            visitor.enabled == false ->
-                                stringResource(R.string.proxy_status_disabled) to StatusIdle
-                            online -> stringResource(R.string.proxy_status_online) to StatusRunning
-                            state.phase == FrpcSupervisor.Phase.RUNNING ->
-                                stringResource(R.string.proxy_status_pending) to StatusStarting
-                            else -> stringResource(R.string.proxy_status_off) to StatusIdle
+                GroupHeader(
+                    text = stringResource(
+                        R.string.home_group_count,
+                        stringResource(R.string.home_visitors),
+                        enabledVisitors.size,
+                    ),
+                )
+            }
+            items(visitors) { visitor ->
+                // admin API 不返回 visitor，是否注册成功只能从 "visitor added: [...]" 日志判断
+                val online = state.phase == FrpcSupervisor.Phase.RUNNING &&
+                    visitor.name in visitorsOnline
+                // 状态优先级：enabled=false（frpc 不注册）> 日志推断 > 未启动
+                val (label, color) = when {
+                    visitor.enabled == false ->
+                        stringResource(R.string.proxy_status_disabled) to StatusIdle
+                    online -> stringResource(R.string.proxy_status_online) to StatusRunning
+                    state.phase == FrpcSupervisor.Phase.RUNNING ->
+                        stringResource(R.string.proxy_status_pending) to StatusStarting
+                    else -> stringResource(R.string.proxy_status_off) to StatusIdle
+                }
+                val listen = if (visitor.bindPort < 0) {
+                    stringResource(R.string.visitor_no_listen)
+                } else {
+                    "${visitor.bindAddr}:${visitor.bindPort}"
+                }
+                // 显示 frps 上实际查找的名字（含对方设备前缀 / 本机前缀），跨设备时才好排查
+                val target = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
+                    currentProfile?.config?.user, visitor.serverUser, visitor.serverName,
+                )
+
+                SectionCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = visitor.name, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = buildString {
+                                    append(visitor.type.uppercase())
+                                    append(" · ")
+                                    append(stringResource(R.string.proxy_local_label))
+                                    append(" ")
+                                    append(listen)
+                                    append(" · ")
+                                    append(stringResource(R.string.visitor_target_label))
+                                    append(" ")
+                                    append(target)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                        val listen = if (visitor.bindPort < 0) {
-                            stringResource(R.string.visitor_no_listen)
-                        } else {
-                            "${visitor.bindAddr}:${visitor.bindPort}"
-                        }
-                        // 显示 frps 上实际查找的名字（含对方设备前缀 / 本机前缀），跨设备才好排查
-                        val target = FrpcNaming.targetServerProxyName(
-                            currentProfile?.config?.user, visitor.serverUser, visitor.serverName,
-                        )
-                        RuleCardRow(
-                            name = visitor.name,
-                            meta = buildString {
-                                append(visitor.type.uppercase())
-                                append(" · ")
-                                append(stringResource(R.string.proxy_local_label))
-                                append(" ")
-                                append(listen)
-                                append(" · ")
-                                append(stringResource(R.string.visitor_target_label))
-                                append(" ")
-                                append(target)
-                            },
-                            statusLabel = label,
-                            statusColor = color,
-                            enabled = visitor.enabled != false,
-                            errorText = null,
-                            onEnabledChange = { on -> setRuleEnabled(visitor.name, on, isVisitor = true) },
+                        StatusChip(text = label, color = color)
+                        Switch(
+                            checked = visitor.enabled != false,
+                            onCheckedChange = { on -> setRuleEnabled(visitor.name, on, isVisitor = true) },
                         )
                     }
                 }
@@ -578,110 +649,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
 private fun proxiesOf(profile: ServerProfile?): List<ProxyConfig> =
     profile?.config?.proxies ?: emptyList()
 
-/**
- * 代理规则行：卡片内的一行（由调用方在行间插 [RowDivider]）。
- * 状态优先级：enabled=false（frpc 不注册）> Admin API 实际状态 > 日志推断 > 未知
- */
-@Composable
-private fun ProxyCardRow(
-    proxy: ProxyConfig,
-    adminItem: ProxyStatusItem?,
-    logState: LogProxyState?,
-    running: Boolean,
-    onEnabledChange: (Boolean) -> Unit,
-) {
-    val (label, color) = when {
-        proxy.enabled == false ->
-            stringResource(R.string.proxy_status_disabled) to StatusIdle
-        adminItem?.status == "running" ->
-            stringResource(R.string.proxy_status_online) to StatusRunning
-        adminItem?.status == "error" ->
-            stringResource(R.string.proxy_status_error) to StatusError
-        adminItem != null -> adminItem.status to StatusIdle
-        logState?.phase == LogProxyPhase.RUNNING ->
-            stringResource(R.string.proxy_status_online) to StatusRunning
-        logState?.phase == LogProxyPhase.ERROR ->
-            stringResource(R.string.proxy_status_error) to StatusError
-        logState?.phase == LogProxyPhase.PENDING ->
-            stringResource(R.string.proxy_status_pending) to StatusStarting
-        running -> stringResource(R.string.proxy_status_unknown) to StatusIdle
-        else -> stringResource(R.string.proxy_status_off) to StatusIdle
-    }
-    // 只有 tcp/udp 有远程端口；remotePort 留空或 0 都表示 frps 随机分配
-    val proxyType = proxy.proxyType
-    val remoteText = when {
-        !adminItem?.remoteAddr.isNullOrBlank() ->
-            stringResource(R.string.proxy_remote_label) + " " + adminItem.remoteAddr
-        proxyType?.needsRemotePort == true ->
-            if (proxy.remotePort == null || proxy.remotePort == 0) {
-                stringResource(R.string.proxy_remote_random)
-            } else {
-                stringResource(R.string.proxy_remote_label) + " :${proxy.remotePort}"
-            }
-        proxyType?.domainBased == true ->
-            proxy.customDomains?.firstOrNull() ?: proxy.subdomain
-                ?: stringResource(R.string.proxy_remote_domain_missing)
-        else -> stringResource(R.string.proxy_remote_private)
-    }
-    val errorText = adminItem?.err?.takeIf { it.isNotBlank() }
-        ?: logState?.error?.takeIf { it.isNotBlank() }
-    RuleCardRow(
-        name = proxy.name,
-        meta = buildString {
-            append(proxy.type.uppercase())
-            append(" · ")
-            append(stringResource(R.string.proxy_local_label))
-            append(" ")
-            append(proxy.localIP ?: "127.0.0.1")
-            append(":")
-            append(proxy.localPort?.toString() ?: "?")
-            append(" → ")
-            append(remoteText)
-        },
-        statusLabel = label,
-        statusColor = color,
-        enabled = proxy.enabled != false,
-        errorText = errorText,
-        onEnabledChange = onEnabledChange,
-    )
-}
-
-/** 规则行的统一版式：名称（主）→ 元信息（次）→ 状态片 → 启停开关 */
-@Composable
-private fun RuleCardRow(
-    name: String,
-    meta: String,
-    statusLabel: String,
-    statusColor: Color,
-    enabled: Boolean,
-    errorText: String?,
-    onEnabledChange: (Boolean) -> Unit,
-) {
-    CardRow {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = name, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = meta,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (errorText != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = errorText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        StatusChip(text = statusLabel, color = statusColor)
-        Spacer(Modifier.width(6.dp))
-        Switch(checked = enabled, onCheckedChange = onEnabledChange)
-    }
-}
-
 @Composable
 private fun RowScope.StatCell(label: String, value: String) {
     // weight(1f)：四个格子等分宽度，长数值（如内存/时长）只会自身省略，不会把邻居挤出屏幕
@@ -689,18 +656,15 @@ private fun RowScope.StatCell(label: String, value: String) {
         modifier = Modifier.weight(1f),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // 数值是这一格的主角：加粗放大；标签降一级变成灰色小字
         Text(
             text = value,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.titleMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(2.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
