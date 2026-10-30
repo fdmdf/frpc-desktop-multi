@@ -46,6 +46,7 @@ dist/
 # ---- WorkBuddy 本地状态 ----
 .workbuddy/tmp/
 .workbuddy/memory/
+.workbuddy/tmp*
 
 # 构建/测试缓存
 .build/

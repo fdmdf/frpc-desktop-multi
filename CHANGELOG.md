@@ -2,7 +2,7 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-## [未发布]
+## [1.3.2] - 2026-10-30
 
 ### 变更
 
@@ -24,10 +24,9 @@
   - 1.3.3：托盘菜单精简为四项、全自绘、三态、四种关闭路径、DPI 适配
   - 1.3.4：冷启动修复、托盘生命周期幂等、Windows 安装包改用 Inno Setup（图标 + 中文向导）、
     以及重构（`ServerProfile` 去重 / 格式化统一 / Android 端口 TIME_WAIT 误报修复）
-- **发版前必须改版本号**：当前 `versionCode = 5` / `versionName = 1.3.1`，
-  但已发布过 1.3.4（versionCode 8）。versionCode 单调不减，
-  直接发 1.3.1 会让已装 1.3.2~1.3.4 的用户 `INSTALL_FAILED_VERSION_DOWNGRADE`。
-  实际发版时须改成新版本号（如 1.3.5 / versionCode 9），名字不能再叫 1.3.1。
+- **版本号定为 1.3.2 / `versionCode = 6`**（与历史 1.3.2 对齐）。远端 v1.3.2 / v1.3.3 /
+  v1.3.4 三个 Release 与 tag 已删除并重建，因此**已装 1.3.3 或 1.3.4 的用户必须先卸载**
+  才能安装本版（`versionCode` 6 < 7/8，直接覆盖会 `INSTALL_FAILED_VERSION_DOWNGRADE`）。
 - Windows 安装包已回到 jpackage / WiX 产出的 MSI：装过 1.3.4（Inno Setup 安装）的用户
   无法原地升级，**需先卸载**；且向导会回到英文、安装包无图标（即 1.3.4 修掉的两个问题重现）。
 - `docs/design/` 与 `docs/qa/` 未随代码删除，作为历史记录保留。
