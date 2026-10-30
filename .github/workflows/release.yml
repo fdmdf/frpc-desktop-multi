@@ -611,6 +611,28 @@ jobs:
             echo "桌面端数据目录 \`~/.frpcdash/\`（首次启动自动迁移旧 \`~/.frpc-desktop/\` 配置）。"
           } > notes.md
 
+          if [ -f CHANGELOG.md ]; then
+            SECTION="$(awk -v ver="$V" '
+              index($0, "## [" ver "]") == 1 { flag = 1; next }
+              flag && index($0, "## [") == 1 { exit }
+              flag { print }
+            ' CHANGELOG.md)"
+            if [ -n "$(printf '%s' "$SECTION" | tr -d '[:space:]')" ]; then
+              {
+                echo ""
+                echo "---"
+                echo ""
+                echo "## 本版更新"
+                echo "$SECTION"
+              } >> notes.md
+              echo "已从 CHANGELOG.md 附上 $V 的更新内容"
+            else
+              echo "::warning::CHANGELOG.md 中没有 [$V] 段落，Release 说明将不含变更列表"
+            fi
+          else
+            echo "::warning::找不到 CHANGELOG.md，Release 说明将不含变更列表"
+          fi
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
             gh release edit "$TAG" --notes-file notes.md

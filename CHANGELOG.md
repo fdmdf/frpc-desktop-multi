@@ -2,6 +2,32 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.3.3] - 2026-10-30
+
+### 修复
+
+- **图标四角出现白色底板**（桌面快捷方式、开始菜单、Win+S 搜索结果里最明显）：
+  `icon.ico` 原先 9 档全部使用 PNG 压缩帧，非 256 档在部分 shell / 图标缓存路径下
+  会丢掉透明通道，圆角处被填成纯白。现改为 **16–128 档用 32bpp 位图帧（含 AND 掩码）、
+  256 档保留 PNG**；生成器 `GenTrayIcons` 补上 `dibBytes()`，`--check` 新增
+  `checkIco()` 逐帧校验帧格式与角落 alpha，这类回归以后能在生成阶段拦住。
+
+### 变更
+
+- **清理源码注释**：移除全部源码注释（Kotlin / Java / Go / Shell / Python / 资源 XML），
+  仅保留 3 个 shebang、`e2e-protocols.sh` 中 heredoc 内的生成内容，以及 Python 的 docstring；
+  已交付的 `scripts/frpc-web-dist` 前端产物未改动。
+- **清理过时文档**：删除 `docs/plan/`、`docs/design/`、`docs/qa/`、`docs/icon-options/`
+  四个全仓库零引用的目录；`docs/wiki`、`docs/screenshots`、`docs/assets` 保留。
+
+### 说明
+
+- 已装 1.3.2 的用户可直接覆盖升级（`versionCode` 7 > 6，`packageVersion` 1.3.3 > 1.3.2）。
+- 若升级后桌面或开始菜单仍显示旧图标，是本机图标缓存未失效：执行 `ie4uinit.exe -show`。
+  Win+S 搜索结果用的是独立缓存，需删除
+  `%LocalAppData%\Packages\Microsoft.Windows.Search_cw5n1h2txyewy\LocalState\AppIconCache\`
+  下的对应条目（文件名含 exe 路径）后重启搜索。
+
 ## [1.3.2] - 2026-10-30
 
 ### 变更
@@ -29,7 +55,6 @@
   才能安装本版（`versionCode` 6 < 7/8，直接覆盖会 `INSTALL_FAILED_VERSION_DOWNGRADE`）。
 - Windows 安装包已回到 jpackage / WiX 产出的 MSI：装过 1.3.4（Inno Setup 安装）的用户
   无法原地升级，**需先卸载**；且向导会回到英文、安装包无图标（即 1.3.4 修掉的两个问题重现）。
-- `docs/design/` 与 `docs/qa/` 未随代码删除，作为历史记录保留。
 
 ## [1.3.1] - 2026-10-28
 
