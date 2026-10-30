@@ -12,10 +12,6 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
 
-/**
- * 配置档案仓库：单 JSON 文件持久化（原子写：tmp + rename）。
- * 配置文件规模小（数十条），JSON 文件足够且无需引入数据库依赖，保持包体最小。
- */
 class ConfigRepository(private val file: File) {
 
     private val json = Json {
@@ -27,7 +23,6 @@ class ConfigRepository(private val file: File) {
     private val _profiles = MutableStateFlow<List<ServerProfile>>(emptyList())
     val profiles: StateFlow<List<ServerProfile>> = _profiles.asStateFlow()
 
-    /** 最近一次加载时被跳过的损坏档案（名称 + 原因），用于 UI 提示 */
     private val _loadErrors = MutableStateFlow<List<String>>(emptyList())
     val loadErrors: StateFlow<List<String>> = _loadErrors.asStateFlow()
 
@@ -36,7 +31,6 @@ class ConfigRepository(private val file: File) {
             _loadErrors.value = emptyList()
             if (!file.exists()) return@withContext
             runCatching {
-                // 先按 JsonElement 解析，再逐条解码：跳过损坏条目而不是让整份配置失效
                 val rawList = json.decodeFromString<List<kotlinx.serialization.json.JsonElement>>(file.readText())
                 val ok = mutableListOf<ServerProfile>()
                 val bad = mutableListOf<String>()
@@ -52,7 +46,6 @@ class ConfigRepository(private val file: File) {
                 _profiles.value = ok
                 if (bad.isNotEmpty()) _loadErrors.value = bad
             }.onFailure { e ->
-                // 整份文件都读不出来（非法 JSON 等）：保留为一条整体错误提示
                 _loadErrors.value = listOf("配置文件解析失败：${e.message ?: "未知错误"}")
             }
         }
@@ -86,21 +79,14 @@ class ConfigRepository(private val file: File) {
     }
 
     suspend fun markUsed(id: String) {
-        // 只更新内存态，不写盘：避免把内存旧列表写回覆盖外部修改
         _profiles.value = _profiles.value.map { if (it.id == id) it.copy(lastUsedAt = System.currentTimeMillis()) else it }
     }
 
-    /** 生成可直接交付 frpc 使用的 TOML 文本 */
     fun tomlOf(profile: ServerProfile): String = FrpcToml.encode(profile.config)
 
-    /** 从 frpc.toml 文本导入（未建模字段按设计丢弃，见 README） */
     fun importToml(name: String, toml: String): ServerProfile =
         ServerProfile(name = name, config = FrpcToml.decode(toml))
 
-    /**
-     * 清空全部配置档案（对应参考项目的 resetAllConfig）。
-     * 不可撤销，UI 侧必须二次确认；默认档案 id 由调用方一并清掉。
-     */
     suspend fun clearAll() = persist(emptyList())
 
     private suspend fun persist(list: List<ServerProfile>) = withContext(Dispatchers.IO) {

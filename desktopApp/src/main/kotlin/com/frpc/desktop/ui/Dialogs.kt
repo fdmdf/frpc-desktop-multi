@@ -43,18 +43,10 @@ import kotlinx.coroutines.withContext
 import java.awt.FileDialog
 import kotlin.random.Random
 
-/**
- * 代理编辑弹窗。
- *
- * 对齐 frpc-desktop 的三处交互：批量端口（`8080-8085`）、一键选择本机端口、HTTPS 插件
- * （https2http / tls2raw）。批量只在 tcp/udp 且端口表达式含 `,`/`-` 时生效，
- * 保存时展开成多条 [ProxyConfig]，因此回调是 List 而不是单个对象。
- */
 @Composable
 fun ProxyEditDialog(
     initial: ProxyConfig?,
     localUser: String? = null,
-    /** 同一档案里已占用的代理名：批量生成时先查重，避免保存后才报重复 */
     takenNames: Set<String> = emptySet(),
     onDismiss: () -> Unit,
     onSave: (List<ProxyConfig>) -> Unit,
@@ -76,13 +68,10 @@ fun ProxyEditDialog(
     var compression by remember { mutableStateOf(initial?.transport?.useCompression ?: false) }
     var bandwidth by remember { mutableStateOf(initial?.transport?.bandwidthLimit ?: "") }
     var bandwidthMode by remember { mutableStateOf(initial?.transport?.bandwidthLimitMode ?: "client") }
-    // http 专属：路由路径；http/tcpmux 专属：按 HTTP 用户路由
     var locations by remember { mutableStateOf(initial?.locations?.joinToString(",") ?: "") }
     var routeByHTTPUser by remember { mutableStateOf(initial?.routeByHTTPUser ?: "") }
-    // 仅 https：把连接信息（真实来源 IP）透传给本地服务
     var proxyProtocolVersion by remember { mutableStateOf(initial?.transport?.proxyProtocolVersion ?: "") }
 
-    // ---- 插件（仅 https 可编辑；其它类型的插件原样保留）----
     val originalPlugin = initial?.plugin
     val originalIsHttpsPlugin = originalPlugin?.isHttpsPlugin == true
     var pluginType by remember {
@@ -115,9 +104,7 @@ fun ProxyEditDialog(
         routeByHTTPUser = routeByHTTPUser.trim().ifBlank { null },
         secretKey = secretKey.trim().ifBlank { null },
         allowUsers = splitList(allowUsers).ifEmpty { null },
-        // tcpmux 只支持 httpconnect，由 UI 固定下来，不写成自由文本
         multiplexer = if (proxyType == ProxyType.TCPMUX) "httpconnect" else null,
-        // 全默认就不写 transport 子表，交给 frpc 用自己的默认值（frp 里只有填了才生效）
         transport = ProxyTransportConfig(
             bandwidthLimit = bandwidth.trim().ifBlank { null },
             bandwidthLimitMode = bandwidthMode.takeIf { bandwidth.isNotBlank() },
@@ -135,13 +122,11 @@ fun ProxyEditDialog(
                 crtPath = pluginCrt.trim().ifBlank { null },
                 keyPath = pluginKey.trim().ifBlank { null },
             )
-            // 导入的 socks5 / static_file 等插件：UI 不认识，但不能在保存时丢掉
             originalPlugin != null && !originalIsHttpsPlugin -> originalPlugin
             else -> null
         },
     ).sanitizedForType()
 
-    /** 批量展开；单条模式返回一条。返回 null 表示校验没过（错误已写入 formError） */
     fun buildAll(): List<ProxyConfig>? {
         formError = null
         if (name.isBlank()) {
@@ -196,7 +181,6 @@ fun ProxyEditDialog(
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Text(
-                    // frp 会用 {user}.{name} 作为最终代理名（user 为空则不加前缀）
                     text = "在 frps 上的名字：" +
                         com.frpc.shared.model.FrpcNaming.targetServerProxyName(localUser, null, name.ifBlank { "…" }),
                     style = MaterialTheme.typography.bodySmall,
@@ -225,7 +209,6 @@ fun ProxyEditDialog(
                                 modifier = Modifier.weight(1f),
                             )
                             OutlinedButton(onClick = {
-                                // 生成一个本档案内不冲突的短名：类型 + 4 位随机
                                 repeat(20) {
                                     val candidate = "${type.lowercase()}-${Random.nextInt(1000, 9999)}"
                                     if (candidate !in takenNames && candidate != name) {
@@ -242,7 +225,6 @@ fun ProxyEditDialog(
                             optionLabel = { proxyTypeLabel(it) },
                             onSelect = {
                                 type = it.id
-                                // 换类型时把新类型不支持的输入一起清掉，避免「保存后才报错」
                                 if (!it.needsRemotePort) remotePort = ""
                                 if (!it.domainBased) {
                                     subdomain = ""
@@ -430,7 +412,6 @@ fun ProxyEditDialog(
                         )
                     }
 
-                    // ---- 插件：只对 https 开放编辑，把 TLS 终结在 frpc 侧 ----
                     if (proxyType.supportsHttpsPlugin) {
                         DialogSection("插件（TLS 由 frpc 终结）")
                         DropdownField(
@@ -579,7 +560,6 @@ private fun portErrorText(label: String, failed: PortRange.ParseResult.Failed): 
     PortRange.Reason.TOO_MANY -> "$label 一次最多展开 ${PortRange.MAX_EXPAND} 条"
 }
 
-/** 本机端口选择器：列出系统正在监听的端口，点一行填入 */
 @Composable
 private fun LocalPortPickerDialog(onDismiss: () -> Unit, onSelect: (Int) -> Unit) {
     var ports by remember { mutableStateOf<List<ListeningPort>?>(null) }
@@ -660,17 +640,13 @@ fun VisitorEditDialog(
 ) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var type by remember { mutableStateOf(initial?.type ?: "stcp") }
-    // 与代理一致：false 写入 enabled = false，frpc 不会注册这条访问者
     var enabled by remember { mutableStateOf(initial?.enabled ?: true) }
-    // 类型切换时清理 xtcp 专属字段，避免生成 frp 拒绝的配置
     var serverName by remember { mutableStateOf(initial?.serverName ?: "") }
     var secretKey by remember { mutableStateOf(initial?.secretKey ?: "") }
     var bindAddr by remember { mutableStateOf(initial?.bindAddr ?: "127.0.0.1") }
-    // 新建时给 frp 认可的默认端口：0 会被 frpc 判为「没填」并拒绝启动
     var bindPort by remember { mutableStateOf((initial?.bindPort ?: 6000).toString()) }
     var serverUser by remember { mutableStateOf(initial?.serverUser ?: "") }
     var keepTunnelOpen by remember { mutableStateOf(initial?.keepTunnelOpen ?: false) }
-    // 打洞失败兜底：转交给另一个访问者（通常是指向同一代理的 stcp 访问者），改走 frps 中转
     var fallbackTo by remember { mutableStateOf(initial?.fallbackTo ?: "") }
     var fallbackTimeoutMs by remember { mutableStateOf(initial?.fallbackTimeoutMs?.toString() ?: "") }
 
@@ -733,7 +709,6 @@ fun VisitorEditDialog(
                         },
                     )
                     Text(
-                        // frp：serverUser 非空用它，留空用本机 user，最终名 = 前缀 + "." + 代理名
                         "frps 上实际查找：${
                             com.frpc.shared.model.FrpcNaming.targetServerProxyName(
                                 localUser, serverUser.trim().ifBlank { null }, serverName.ifBlank { "…" },
@@ -751,7 +726,6 @@ fun VisitorEditDialog(
                                 modifier = Modifier.weight(1f),
                             )
                             TextButton(onClick = {
-                                // 一键拆开：本机前缀就不会被拼进去
                                 serverUser = prefix
                                 serverName = rest
                             }) { Text("按此改") }
@@ -829,7 +803,6 @@ fun VisitorEditDialog(
                                     serverName = serverName.trim(),
                                     secretKey = secretKey.trim().ifBlank { null },
                                     bindAddr = bindAddr.trim().ifBlank { "127.0.0.1" },
-                                    // 解析失败给 0：交给校验器明确报「不能为 0」，不静默塞一个默认值
                                     bindPort = bindPort.trim().toIntOrNull() ?: 0,
                                     serverUser = serverUser.trim().ifBlank { null },
                                     enabled = if (enabled) null else false,
@@ -848,7 +821,6 @@ fun VisitorEditDialog(
     }
 }
 
-/** 对话框内的分组小标题：比 SectionCard 轻，避免层层嵌套卡片 */
 @Composable
 private fun DialogSection(title: String) {
     Text(
@@ -859,11 +831,9 @@ private fun DialogSection(title: String) {
     )
 }
 
-/** 逗号 / 空格 / 中文逗号分隔的列表输入 → List */
 private fun splitList(text: String): List<String> =
     text.split(',', '，', ' ', '\n').map { it.trim() }.filter { it.isNotEmpty() }
 
-/** 代理类型的中文说明（frp 的 8 种类型） */
 private fun proxyTypeLabel(type: ProxyType): String = when (type) {
     ProxyType.TCP -> "TCP · 端口转发"
     ProxyType.UDP -> "UDP · 端口转发"
@@ -875,7 +845,6 @@ private fun proxyTypeLabel(type: ProxyType): String = when (type) {
     ProxyType.XTCP -> "XTCP · P2P 打洞"
 }
 
-/** 访问者类型的中文说明 */
 private fun visitorTypeLabel(type: String): String = when (type) {
     "stcp" -> "STCP · 私密 TCP"
     "sudp" -> "SUDP · 私密 UDP"

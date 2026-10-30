@@ -85,12 +85,10 @@ class FrpcAdminClientTest {
     fun healthz_authFailed() = runBlocking {
         healthzCode = 401
         val client = FrpcAdminClient(port = port, user = "admin", password = "admin")
-        // 无 Authorization 头 -> 401 -> AuthFailed
         val anonymous = FrpcAdminClient(port = port)
         val result = anonymous.healthz()
         assertTrue(result is AdminHealth.AuthFailed, "expected AuthFailed but was $result")
         assertTrue((result as AdminHealth.AuthFailed).message.contains("401"))
-        // 带凭据 -> 通过
         assertEquals(AdminHealth.Ok, client.healthz())
     }
 
@@ -128,7 +126,6 @@ class FrpcAdminClientTest {
 
     @Test
     fun unexpectedStatus_throwsWithHttpCode() = runBlocking {
-        // 另起一个对 /api/reload 固定返回 404 的服务器
         val errorServer = HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
         errorServer.createContext("/api/reload") { ex ->
             ex.sendResponseHeaders(404, -1)

@@ -82,7 +82,6 @@ enum class Tab(val label: String, val icon: ImageVector) {
     SETTINGS("设置", Icons.Filled.Settings),
 }
 
-/** 从 classpath 读取与 Android 端同一份矢量渲染出的图标 */
 private fun appIconPainter(): BitmapPainter? = runCatching {
     val bytes = AppContainer::class.java.getResourceAsStream("/icon.png")?.readBytes()
         ?: return@runCatching null
@@ -107,17 +106,14 @@ fun main(args: Array<String>) {
         return
     }
     if ("--silent" in args) {
-        // 开机自启时用：不弹窗，直接进托盘并（按设置）自动连接
         System.setProperty("frpc.silent", "true")
     }
-    // 单实例：第二个进程只负责把已有窗口唤到前台，然后自己退出
     if (!SingleInstance.acquire(File(AppPaths.home, "app.lock")) { AppActivation.request() }) {
         return
     }
     app()
 }
 
-/** 第二个实例通过本地端口发来的「显示窗口」请求 */
 object AppActivation {
     val requests = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     fun request() {
@@ -125,10 +121,6 @@ object AppActivation {
     }
 }
 
-/**
- * 托盘自检：把托盘菜单弹到屏幕上截图，用来核对中文有没有渲染成方框。
- * 用法：Frpc-Android-Multi.exe --tray-test <输出png>
- */
 private fun runTrayTest(args: Array<String>) {
     val target = File(args.getOrNull(args.indexOf("--tray-test") + 1) ?: "tray-test.png")
     if (!AppTray.install(onShow = {}, onStop = {}, onQuit = {})) {
@@ -138,10 +130,8 @@ private fun runTrayTest(args: Array<String>) {
     AppTray.updateTooltip("Frpc-Android-Multi · 运行中 · 代理 3/3 · 访问者 1/1")
     AppTray.updateRunning(true)
     val popup = AppTray.popupForTest() ?: run { println("no popup"); exitProcess(5) }
-    // 菜单由 AppTray 自己弹（内部带一个 1x1 透明锚点窗口），这里只需给出屏幕坐标
     AppTray.showMenuAt(60, 60)
     Thread.sleep(1_200)
-    // 菜单左上角就是锚点 (60,60)，往右下铺开，多留一点边距
     val shot = Robot().createScreenCapture(Rectangle(55, 55, 240, 170))
     ImageIO.write(shot, "png", target)
     println("saved: ${target.absolutePath}")
@@ -160,17 +150,14 @@ private fun app() = application {
         )
     }
     var pendingEditProfileId by remember { mutableStateOf<String?>(null) }
-    // --silent：开机自启时不弹窗，直接驻留托盘
     var windowVisible by remember { mutableStateOf(System.getProperty("frpc.silent") != "true") }
 
-    // 第二个实例启动时会把请求发过来：把窗口显示出来即可
     LaunchedEffect(Unit) {
         AppActivation.requests.collect {
             windowVisible = true
         }
     }
 
-    // 启动时按设置（或截图自检参数）自动运行默认配置
     LaunchedEffect(Unit) {
         delay(500)
         if (System.getProperty("frpc.autostart") == "true") {
@@ -188,7 +175,6 @@ private fun app() = application {
         }
     }
 
-    // 托盘提示：鼠标悬停即可看到运行状态与在线数，不用切窗口
     val runState by container.supervisor.state.collectAsState()
     val proxyStatus by container.supervisor.status.collectAsState()
     val visitorsOnline by container.supervisor.visitors.collectAsState()
@@ -200,8 +186,6 @@ private fun app() = application {
         when (runState.phase) {
             FrpcSupervisor.Phase.RUNNING -> {
                 append(" · 运行中")
-                // 分母与「在线数」同口径：用 frpc 真正加载的那份配置，
-                // 否则禁用一条但没重载时，托盘会出现「在线 3 / 总 2」这种分子大于分母的数字
                 val proxyTotal = activeCounts.proxies
                 if (proxyTotal > 0) {
                     val online = proxyStatus?.all?.count { it.status == "running" } ?: 0
@@ -209,7 +193,6 @@ private fun app() = application {
                 }
                 val visitorTotal = activeCounts.visitors
                 if (visitorTotal > 0) {
-                    // 运行中删掉当前档案时 activeProfile 会是 null，这里不能强解引用
                     val vOnline = activeProfile?.config?.visitors
                         ?.count { it.enabled != false && it.name in visitorsOnline } ?: 0
                     append(" · 访问者 ").append(vOnline).append('/').append(visitorTotal)
@@ -222,7 +205,6 @@ private fun app() = application {
         }
     }
 
-    // 系统托盘：AWT 实现（Compose 的 Tray 无法设菜单字体，中文会渲染成方框）
     LaunchedEffect(Unit) {
         AppTray.install(
             onShow = { windowVisible = true },
@@ -263,7 +245,6 @@ private fun app() = application {
             LaunchedEffect(Unit) {
                 window.minimumSize = Dimension(1120, 720)
             }
-            // 自检截图：置顶窗口 → 等渲染 → 抓窗口区域 → 退出
             LaunchedEffect(Unit) {
                 val target = shotPath ?: return@LaunchedEffect
                 window.isAlwaysOnTop = true

@@ -28,7 +28,6 @@ class ConfigValidatorTest {
 
     @Test
     fun xtcpWithoutStunServer_warning() {
-        // xtcp 打洞要先做 STUN 探测；没填服务器就会用 frp 默认地址，超时会导致打洞失败
         val withProxy = baseConfig().copy(
             proxies = listOf(
                 ProxyConfig(name = "x", type = "xtcp", localIP = "127.0.0.1", localPort = 22, secretKey = "k"),
@@ -79,8 +78,6 @@ class ConfigValidatorTest {
 
     @Test
     fun serverNameWithPrefix_warnsDoublePrefix() {
-        // 真实踩坑案例：全局 user=小米14，访问者目标名却写成 ThinkBook16+.testx
-        // → frpc 实际查 小米14.ThinkBook16+.testx，frps 上不存在
         val config = baseConfig().copy(
             user = "小米14",
             visitors = listOf(VisitorConfig(name = "testx", type = "xtcp", serverName = "ThinkBook16+.testx", secretKey = "k")),
@@ -91,7 +88,6 @@ class ConfigValidatorTest {
             "警告要写出实际查找的名字：${hit.detail}",
         )
 
-        // 正确写法：目标名只有代理名，前缀走 serverUser
         val ok = config.copy(visitors = listOf(config.visitors[0].copy(serverName = "testx", serverUser = "ThinkBook16+")))
         assertTrue(
             ConfigValidator.validate(ok).none { it.reason == Reason.SERVER_NAME_PREFIX_DOUBLED },
@@ -157,7 +153,6 @@ class ConfigValidatorTest {
 
     @Test
     fun remotePortEmpty_isAllowed_forRandomAssignment() {
-        // 表单里留空 → remotePort = null，此时不写进 toml，由 frps 随机分配
         val tcp = ConfigValidator.validate(
             baseConfig().copy(
                 proxies = listOf(
@@ -223,8 +218,6 @@ class ConfigValidatorTest {
         assertEquals(1, issues.count { it.reason == Reason.PORT_OUT_OF_RANGE })
     }
 
-    // ---------------------------------------------------------------- 后补字段
-
     @Test
     fun authNone_isValid_withoutToken() {
         val issues = ConfigValidator.validate(
@@ -233,7 +226,6 @@ class ConfigValidatorTest {
         assertTrue(issues.none { it.scope == Scope.AUTH }, "auth=none 不应报错：$issues")
     }
 
-    /** frp 用负数表示「禁用保活探测」，判成错误会把合法配置拦下来 */
     @Test
     fun negativeKeepalive_isAllowed() {
         val issues = ConfigValidator.validate(

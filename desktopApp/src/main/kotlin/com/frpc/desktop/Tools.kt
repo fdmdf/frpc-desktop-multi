@@ -7,13 +7,6 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import kotlin.system.exitProcess
 
-/**
- * 无界面工具：`Frpc-Android-Multi --export-toml <profiles.json> <outDir>`
- *
- * 把 App 里保存的档案（profiles.json，与运行时同一份结构）逐条用**应用自己的编码器**
- * 转成 frpc.toml（profile-<index>.toml），并用**应用自己的校验器**检查一遍。
- * 端到端协议测试用它生成配置，保证被测配置就是 App 真实产出的配置。
- */
 fun runExportToml(args: Array<String>) {
     val index = args.indexOf("--export-toml")
     val jsonPath = args.getOrNull(index + 1)
@@ -23,7 +16,6 @@ fun runExportToml(args: Array<String>) {
 
     val json = Json { ignoreUnknownKeys = true; isLenient = true }
     val profiles = runCatching {
-        // 兼容两种输入：全量导出的 ProfileBundle 包装、以及旧版裸数组
         val root = json.parseToJsonElement(File(jsonPath).readText())
         val array = when (root) {
             is kotlinx.serialization.json.JsonArray -> root
@@ -42,7 +34,6 @@ fun runExportToml(args: Array<String>) {
     val dir = File(outDir).apply { mkdirs() }
     profiles.forEachIndexed { i, profile ->
         val toml = FrpcToml.encode(profile.config)
-        // 文件名写进档案名，便于测试脚本对照
         val out = File(dir, "profile-$i.toml").apply { writeText(toml) }
         println("[export-toml] #$i ${profile.name} proxies=${profile.config.proxies.size} visitors=${profile.config.visitors.size} -> ${out.name}")
         val issues = ConfigValidator.validate(profile.config)

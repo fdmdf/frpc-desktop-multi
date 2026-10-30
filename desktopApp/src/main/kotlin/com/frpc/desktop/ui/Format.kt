@@ -24,7 +24,6 @@ fun formatClock(epochMs: Long): String = Instant.ofEpochMilli(epochMs).atZone(ZO
 
 fun formatDateTime(epochMs: Long): String = Instant.ofEpochMilli(epochMs).atZone(ZONE).format(DATE_TIME)
 
-/** 毫秒时长 → 00:12:34 / 2d 03:04:05 */
 fun formatDuration(ms: Long): String {
     if (ms <= 0) return "--"
     val totalSeconds = ms / 1000

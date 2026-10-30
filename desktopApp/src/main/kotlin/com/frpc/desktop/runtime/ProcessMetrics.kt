@@ -7,20 +7,12 @@ import java.util.concurrent.TimeUnit
 
 data class ProcMetrics(
     val pid: Long,
-    /** 相对整机 CPU（与任务管理器一致，0-100） */
     val cpuPercent: Float?,
     val rssKb: Long?,
     val threads: Int?,
-    /** 进程状态字符（Windows 用 Run/Unknown 等文字） */
     val state: String?,
 )
 
-/**
- * 读取 frpc 子进程的资源占用。
- * - Linux/macOS 有 /proc 时直接读（快、无外部进程）
- * - Windows 走 `Get-CimInstance Win32_Process`（一次 PowerShell 调用，结果缓存 1.5s）
- * 读不到时返回 cpuPercent/rssKb 为 null，界面显示 `--`，不影响其他功能。
- */
 class ProcessMetricsReader {
 
     private val cores: Int = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
@@ -68,8 +60,6 @@ class ProcessMetricsReader {
         val state: String?,
     )
 
-    // ---------------------------------------------------------------- Linux
-
     private fun readProc(pid: Long): Raw? {
         val statFile = File("/proc/$pid/stat")
         val statmFile = File("/proc/$pid/statm")
@@ -84,7 +74,6 @@ class ProcessMetricsReader {
             val threads = tail[17].toInt()
             val pages = runCatching { statmFile.readText().split(' ')[1].toLong() }.getOrDefault(0L)
             Raw(
-                // jiffies(1/100s) → 100ns：1 jiffy = 10ms = 10ms × 10000
                 cpu100ns = (utime + stime) * 100_000,
                 rssKb = pages * 4,
                 threads = threads,
@@ -92,8 +81,6 @@ class ProcessMetricsReader {
             )
         }.getOrNull()
     }
-
-    // ---------------------------------------------------------------- Windows
 
     private fun readWindows(pid: Long): Raw? {
         val script = "(Get-CimInstance Win32_Process -Filter \"ProcessId=$pid\" | " +
@@ -104,13 +91,11 @@ class ProcessMetricsReader {
             ).redirectErrorStream(true).start()
             try {
                 if (!process.waitFor(4, TimeUnit.SECONDS)) {
-                    // powershell 卡住时必须杀掉，否则每轮采样泄漏一个进程
                     process.destroyForcibly()
                     return@runCatching null
                 }
                 process.inputStream.bufferedReader().use { it.readText() }.trim()
             } finally {
-                // 正常路径 powershell 已自行退出，这里只是幂等兜底
                 process.destroy()
             }
         }.getOrNull()

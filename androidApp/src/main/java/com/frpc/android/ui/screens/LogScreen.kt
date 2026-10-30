@@ -57,7 +57,6 @@ fun LogScreen(container: AppContainer) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // 过滤器较多，窄屏/大字号下必须可横向滚动，否则末尾的「调试」会被挤掉
         Row(
             modifier = Modifier
                 .fillMaxWidth()

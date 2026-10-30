@@ -47,7 +47,6 @@ fun LogScreen(container: AppContainer) {
     var query by remember { mutableStateOf("") }
     var autoScroll by remember { mutableStateOf(true) }
     var saved by remember { mutableStateOf<String?>(null) }
-    // 0 = frpc 连接日志，1 = 应用日志（启动/停止/重载/自动重启等，由 App 自己写）
     var tab by remember { mutableStateOf(0) }
     val listState = rememberLazyListState()
 
@@ -172,7 +171,6 @@ fun LogScreen(container: AppContainer) {
     }
 }
 
-/** App 自己写入的日志行（启动/停止/重载/自动重启…）的 tag 标记 */
 private const val APP_TAG = "app"
 
 @Composable

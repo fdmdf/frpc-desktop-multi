@@ -9,11 +9,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * 代理类型字段兼容性测试。
- * 背景：frp 按代理类型严格解码配置（未知字段直接报错退出），
- * 例如 sudp/tcpmux 带 remotePort 会让 frpc 启动失败（OpenWRT frps 实测）。
- */
 class ProxyTypeFieldTest {
 
     private fun baseConfig(proxy: ProxyConfig) = FrpcConfig(
@@ -24,14 +19,12 @@ class ProxyTypeFieldTest {
 
     @Test
     fun remotePort_onlyAllowedForTcpAndUdp() {
-        // tcp/udp 合法
         listOf(ProxyType.TCP, ProxyType.UDP).forEach { type ->
             val issues = ConfigValidator.validate(
                 baseConfig(ProxyConfig(name = "p", type = type.id, localIP = "127.0.0.1", localPort = 22, remotePort = 6001)),
             )
             assertTrue(issues.none { it.reason == Reason.FIELD_NOT_SUPPORTED_FOR_TYPE }, "$type 应允许 remotePort")
         }
-        // tcpmux/stcp/sudp/xtcp/http/https 带 remotePort 应报错
         listOf(ProxyType.TCPMUX, ProxyType.STCP, ProxyType.SUDP, ProxyType.XTCP, ProxyType.HTTP, ProxyType.HTTPS).forEach { type ->
             val issues = ConfigValidator.validate(
                 baseConfig(
@@ -71,7 +64,6 @@ class ProxyTypeFieldTest {
         assertEquals(null, clean.locations)
         assertEquals(null, clean.httpUser)
         assertEquals(null, clean.multiplexer)
-        // sudp 基础字段保留
         assertEquals("sudp", clean.type)
         assertEquals(53, clean.localPort)
     }
@@ -82,7 +74,6 @@ class ProxyTypeFieldTest {
             name = "x", type = "xtcp", serverName = "p", secretKey = "k",
             fallbackTo = "x-stcp", fallbackTimeoutMs = 2000,
         )
-        // xtcp 保留 fallbackTo / fallbackTimeoutMs；stcp visitor 带这些字段 frpc 会 unknown field 直接退出
         assertEquals("x-stcp", xtcp.sanitizedForType().fallbackTo)
         assertEquals(2000, xtcp.sanitizedForType().fallbackTimeoutMs)
 
@@ -98,7 +89,6 @@ class ProxyTypeFieldTest {
 
     @Test
     fun decode_stripsInvalidFieldsFromImportedToml() {
-        // 模拟导入一份 sudp 带 remotePort 的配置（真实场景：frpc 会因此启动失败）
         val toml = """
             serverAddr = "1.2.3.4"
             serverPort = 7000
@@ -118,7 +108,6 @@ class ProxyTypeFieldTest {
         val proxy = config.proxies.single()
         assertEquals("sudp", proxy.type)
         assertEquals(null, proxy.remotePort, "导入时应清理 sudp 不支持的 remotePort")
-        // 清理后校验不再报错
         val issues = ConfigValidator.validate(config)
         assertTrue(issues.none { it.reason == Reason.FIELD_NOT_SUPPORTED_FOR_TYPE })
     }

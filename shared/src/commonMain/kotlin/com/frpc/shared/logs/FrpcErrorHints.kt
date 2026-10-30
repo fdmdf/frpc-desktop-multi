@@ -1,11 +1,5 @@
 package com.frpc.shared.logs
 
-/**
- * frp 原始英文错误 → 人话提示。
- *
- * frpc 的报错对普通用户几乎不可读（尤其 xtcp 打洞链路），这里把最常见的几类翻译成
- * 「哪里错了 + 去看什么」，由两端在写入原始日志后追加一条 WARN 级别的说明。
- */
 object FrpcErrorHints {
 
     private val XTCP_MISSING = Regex("""xtcp server for \[([^]]+)] doesn't exist""")

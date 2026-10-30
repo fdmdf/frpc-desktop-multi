@@ -19,23 +19,12 @@ import javax.swing.UIManager
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/**
- * 系统托盘。
- *
- * 菜单用 **Swing（JPopupMenu）而不是 AWT（PopupMenu）**：AWT 的菜单项虽然是 Java 侧设的字体，
- * 但 Windows 上实际由系统按菜单字体绘制，`setFont` 不生效 —— 中文会渲染成方框（□□）。
- * Swing 的菜单项是 Java 自己绘制的，组件字体一定生效，中文由 Java 的字体回退兜底（主界面同理）。
- *
- * 托盘图标本身仍必须是 AWT 的 `TrayIcon`（Swing 没有替代实现），只是弹出菜单换成 Swing 的。
- */
 object AppTray {
-    /** 与 scripts/gen-tray-icons/GenTrayIcons.java 的 COLOR_SIZES 保持一致 */
     private val TRAY_SIZES = intArrayOf(16, 20, 22, 24, 32, 40, 48, 64, 128, 256)
 
     private var icon: TrayIcon? = null
     private var stopItem: JMenuItem? = null
     private var menu: JPopupMenu? = null
-    /** 菜单的锚点窗口：Swing 弹出菜单需要一个可见的 invoker，用 1x1 全透明窗口充当 */
     private var anchor: JWindow? = null
 
     fun install(onShow: () -> Unit, onStop: () -> Unit, onQuit: () -> Unit): Boolean = runCatching {
@@ -44,9 +33,7 @@ object AppTray {
         val font = menuFont(12)
 
         onEdt {
-            // 尽量贴近原生观感；失败就退回当前 L&F，不影响中文（字体是显式设的）
             runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
-            // 三重保险：组件字体 + L&F 默认值，任一条路径被用到都能拿到中文字体
             UIManager.put("PopupMenu.font", font)
             UIManager.put("MenuItem.font", font)
 
@@ -66,8 +53,8 @@ object AppTray {
 
             anchor = JWindow().apply {
                 setSize(1, 1)
-                background = Color(0, 0, 0, 0) // 全透明，屏幕上只看得见菜单
-                type = Window.Type.POPUP // 不进任务栏 / 不抢焦点
+                background = Color(0, 0, 0, 0)
+                type = Window.Type.POPUP
                 isVisible = true
             }
         }
@@ -107,13 +94,11 @@ object AppTray {
         anchor = null
     }
 
-    /** 在鼠标当前位置弹出菜单（右键点击托盘图标 / --tray-test 自检） */
     fun showAtMouse() {
         val p = runCatching { MouseInfo.getPointerInfo().location }.getOrNull() ?: return
         showMenuAt(p.x, p.y)
     }
 
-    /** 在屏幕坐标 (x, y) 弹出菜单；贴边时 JPopupMenu 会自动向上/向左翻转 */
     fun showMenuAt(x: Int, y: Int) {
         onEdt {
             val m = menu ?: return@onEdt
@@ -123,10 +108,8 @@ object AppTray {
         }
     }
 
-    /** 仅供 --tray-test 自检：拿到菜单本体核对中文有没有渲染成方框 */
     internal fun popupForTest(): JPopupMenu? = menu
 
-    /** 优先选已安装的中文字族；一个都没有时交给 Java 的字体回退（Swing 自己绘字，能兜住） */
     private fun menuFont(size: Int): Font {
         val candidates = listOf(
             "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "SimSun",
@@ -139,10 +122,6 @@ object AppTray {
         return Font(hit ?: Font.SANS_SERIF, Font.PLAIN, size)
     }
 
-    /**
-     * 按平台 + 缩放挑一张尺寸最接近的托盘图标，避免 AWT 把 512 缩到 16 导致的发虚与边缘杂色。
-     * 资源由 scripts/gen-tray-icons/GenTrayIcons.java 生成；取不到任何一档时退回 /icon.png。
-     */
     private fun loadIcon(): Image? = runCatching {
         val stream = AppTray::class.java.getResourceAsStream(trayIconResource())
             ?: AppTray::class.java.getResourceAsStream("/icon.png")
@@ -153,11 +132,8 @@ object AppTray {
         val os = System.getProperty("os.name").orEmpty().lowercase()
         val scale = screenScale()
         if (os.contains("mac")) {
-            // macOS 菜单栏按模板图处理（AWT 会 setTemplate），只需给出 @1x / @2x 的镂空剪影，
-            // 深浅色菜单栏由系统自动反色
             return if (scale >= 1.5) "/tray/tray-mac@2x.png" else "/tray/tray-mac.png"
         }
-        // Windows 托盘 16px@100%（120/144/192/240 DPI 对应 20/24/32/40），Linux 常见 22/24
         val base = if (os.contains("win")) 16 else 22
         val target = (base * scale).roundToInt().coerceIn(16, 256)
         val best = TRAY_SIZES.minByOrNull { abs(it - target) } ?: 32
@@ -169,7 +145,6 @@ object AppTray {
             .defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX
     }.getOrDefault(1.0)
 
-    /** 在 EDT 上执行；install 常从 Compose 主线程调用，直接 invokeAndWait 会死锁 */
     private fun onEdt(block: () -> Unit) {
         if (SwingUtilities.isEventDispatchThread()) {
             block()

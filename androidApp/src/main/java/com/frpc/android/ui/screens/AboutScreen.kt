@@ -44,10 +44,6 @@ import com.frpc.android.ui.nav.AppNavigator
 private const val REPO_URL = "https://github.com/fdmdf/frpc-desktop-multi"
 private const val ISSUES_URL = "https://github.com/fdmdf/frpc-desktop-multi/issues"
 
-/**
- * 关于页：版本、内置引擎、来源与许可。
- * 与参考项目一致把「关于」独立成页，而不是塞在设置里的一行小字。
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(container: AppContainer, navigator: AppNavigator) {
@@ -84,10 +80,6 @@ fun AboutScreen(container: AppContainer, navigator: AppNavigator) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // 注意：这里不能用 R.mipmap.ic_launcher。
-                // 它是 <adaptive-icon> XML（mipmap-anydpi-v26），而 painterResource 只认 <vector>，
-                // 解析到 adaptive-icon 会直接抛异常 —— 表现就是「点关于页就闪退」。
-                // 因此用图标的前景矢量 + 自适应图标同款底色自己拼出来。
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = colorResource(R.color.ic_launcher_background),

@@ -33,7 +33,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** 状态小圆片（在线/离线/异常等） */
 @Composable
 fun StatusChip(
     text: String,
@@ -55,7 +54,6 @@ fun StatusChip(
     }
 }
 
-/** 分组卡片 */
 @Composable
 fun SectionCard(
     title: String? = null,
@@ -124,7 +122,6 @@ fun NumberField(
     modifier: Modifier = Modifier,
     supportingText: String? = null,
     isError: Boolean = false,
-    /** 允许负数：访问者的 bindPort 用 -1 表示「不监听」，其余端口字段保持纯数字 */
     allowNegative: Boolean = false,
 ) {
     LabeledTextField(
@@ -155,7 +152,6 @@ fun SwitchRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // weight(1f) 必不可少：不加权重时 Column 会先量到整行宽度，把 Switch 挤出卡片外
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
             Text(text = label, style = MaterialTheme.typography.bodyLarge)
             if (supportingText != null) {
@@ -225,7 +221,6 @@ fun MonoText(
     )
 }
 
-/** 列表分组标题：不要用空 Card，否则会渲染成一个只剩标题的空盒子 */
 @Composable
 fun GroupHeader(text: String, modifier: Modifier = Modifier) {
     Text(

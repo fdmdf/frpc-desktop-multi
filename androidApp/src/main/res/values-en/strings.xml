@@ -93,7 +93,6 @@
     <string name="config_imported_as_default">Imported config \"%1$s\" and set as default</string>
     <string name="config_running">Running</string>
     <string name="config_back_to_list">Back to configs</string>
-    <!-- 运行中的配置允许编辑，但要说清「保存 ≠ 生效」 -->
     <string name="config_running_edit_hint">Running — reload after saving to apply</string>
     <string name="config_running_editing_title">This config is running</string>
     <string name="config_running_editing_body">You can edit and save it, but frpc keeps using the old config until you reload (or stop and start again).</string>
@@ -225,7 +224,6 @@
     <string name="visitors_empty">No visitors yet</string>
     <string name="home_visitors">Visitors</string>
     <string name="visitor_no_listen">Not listening</string>
-    <!-- A visitor has no remote port, so the summary must not use an arrow -->
     <string name="visitor_target_label">Target</string>
     <string name="visitor_new">New visitor</string>
     <string name="visitor_edit">Edit visitor</string>
@@ -336,14 +334,12 @@
     <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="unknown">Unknown</string>
 
-    <!-- Start blocked -->
     <string name="start_block_title">Cannot start</string>
     <string name="start_block_no_server_addr">Server address is empty. Set the frps address and port in Config first.</string>
     <string name="start_block_engine_missing">The bundled frpc engine is missing. Please reinstall the app.</string>
     <string name="start_block_admin_port_in_use">Admin port %1$d is already in use. Pick another port and start again.</string>
     <string name="start_block_go_config">Go to Config</string>
 
-    <!-- About -->
     <string name="nav_about">About</string>
     <string name="about_tagline">Visual client for frp intranet penetration</string>
     <string name="about_version">Version %1$s</string>
@@ -353,20 +349,17 @@
     <string name="about_license">License: MIT</string>
     <string name="about_frp_note">Bundled engine from fatedier/frp (Apache-2.0)</string>
 
-    <!-- Language -->
     <string name="settings_language">Language</string>
     <string name="settings_language_system">Follow system</string>
     <string name="settings_language_zh">简体中文</string>
     <string name="settings_language_en">English</string>
 
-    <!-- Clear all configs -->
     <string name="action_reset_all">Clear all configs</string>
     <string name="reset_all_title">Clear all configs?</string>
     <string name="reset_all_message">This deletes all %1$d config profiles and cannot be undone. Export a backup first.</string>
     <string name="reset_all_done">All configs cleared</string>
     <string name="settings_reset_all_blocked">frpc is running. Stop it before clearing configs.</string>
 
-    <!-- Local port picker -->
     <string name="proxy_pick_local_port">Pick a local port</string>
     <string name="proxy_scanning_ports">Scanning listening ports…</string>
     <string name="proxy_no_listening_ports">No listening ports found. Enter one manually.</string>

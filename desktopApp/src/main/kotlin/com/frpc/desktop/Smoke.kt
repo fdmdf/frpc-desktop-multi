@@ -4,12 +4,6 @@ import com.frpc.desktop.engine.FrpcSupervisor
 import kotlin.system.exitProcess
 import java.io.File
 
-/**
- * 有上限地等待条件成立。
- *
- * 状态、代理列表、admin 可达性都由轮询协程异步更新（STATUS_INTERVAL_MS = 4s），
- * 用「固定 sleep 后取一次快照」的写法会和轮询周期赛跑。
- */
 private fun waitUntil(timeoutMs: Long, condition: () -> Boolean): Boolean {
     val deadline = System.currentTimeMillis() + timeoutMs
     while (System.currentTimeMillis() < deadline) {
@@ -19,11 +13,6 @@ private fun waitUntil(timeoutMs: Long, condition: () -> Boolean): Boolean {
     return condition()
 }
 
-/**
- * 无界面自检：`frpc-desktop --smoke <frpc.toml>`
- * 用真实引擎跑一次「启动 → 等状态 → 打印 admin 状态/资源 → 停止」，
- * 用于本地验证与 CI（不需要图形环境）。
- */
 fun runSmoke(args: Array<String>) {
     val index = args.indexOf("--smoke")
     val tomlPath = args.getOrNull(index + 1)
@@ -43,10 +32,6 @@ fun runSmoke(args: Array<String>) {
 
     container.supervisor.start(profile)
 
-    // 原先是「sleep 8s 后取一次快照」，而状态轮询间隔是 4s，取样点正好卡在第二次轮询的
-    // 边界上 —— CI 上复现过一次：frpc 已 login success、代理也已 start success，
-    // 但 admin reachable 仍是 false，被 CI 断言误判为失败。
-    // 改成有上限地等待条件就绪，超时依旧判 false，判定语义不变，只是不再和轮询周期赛跑。
     waitUntil(20_000) { container.supervisor.state.value.phase == FrpcSupervisor.Phase.RUNNING }
     waitUntil(15_000) { container.supervisor.status.value?.all?.isNotEmpty() == true }
     val adminReady =
@@ -65,7 +50,6 @@ fun runSmoke(args: Array<String>) {
     println("[smoke] metrics cpu=${container.supervisor.metrics.value?.cpuPercent} rss=${container.supervisor.metrics.value?.rssKb}KB threads=${container.supervisor.metrics.value?.threads}")
     println("[smoke] visitors=${container.supervisor.visitors.value.sorted()}")
 
-    // 端到端验证：从 frps 的远程端口回连，确认真能穿到本地服务
     val tcpProxy = profile.config.proxies.firstOrNull { it.type == "tcp" && it.remotePort != null }
     if (tcpProxy?.remotePort != null) {
         runCatching {

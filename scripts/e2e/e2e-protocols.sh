@@ -1,18 +1,4 @@
 #!/usr/bin/env bash
-# Frpc-Android-Multi 端到端协议测试：真跑 frps + frpc，逐协议验证「能连上、能访问」。
-#
-#   bash scripts/e2e/e2e-protocols.sh
-#
-# 覆盖 8 种代理类型：tcp / udp / http / https / stcp / xtcp / tcpmux / sudp
-#
-# 流程：
-#   1. 编译 frps（与 App 内置引擎同一个 frp 版本）
-#   2. 用 **App 自己的编码器** 把档案 JSON 导出成 frpc.toml（:desktopApp:run --export-toml）
-#   3. frpc verify 校验配置（frp 官方校验器）
-#   4. 起后端（scripts/e2e/harness.go serve）→ 起 frps → 起 frpc(A: 8 个 proxy) + frpc(B: 3 个 visitor)
-#   5. 等 admin API 显示全部代理 running，再用 harness check 逐个协议真实访问
-#
-# 依赖：go、python3、JDK（跑 gradle）。Windows(Git Bash)/Linux/macOS 通用。
 
 set -uo pipefail
 
@@ -24,7 +10,6 @@ FRP_VERSION="${FRP_VERSION:-v0.71.1}"
 GO="${GO:-go}"
 export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 
-# python3 在 Windows 上通常只有 python
 if command -v python3 >/dev/null 2>&1; then PY=python3
 elif command -v python >/dev/null 2>&1; then PY=python
 else echo "需要 python3/python"; exit 1; fi
@@ -63,13 +48,11 @@ trap cleanup EXIT INT TERM
 
 mkdir -p "$WORK"
 
-# ---------------------------------------------------------------- 1. 前置检查
 log "检查前置条件"
 [ -x "$FRPC" ] || [ -f "$FRPC" ] || { echo "缺少引擎 ${FRPC}，请先运行 bash scripts/build-frpc.sh desktop"; exit 1; }
 [ -d "$SRC_DIR" ] || { echo "缺少 frp 源码缓存，请先运行 bash scripts/build-frpc.sh desktop"; exit 1; }
 ok "引擎 $("$FRPC" -v | head -1)"
 
-# ---------------------------------------------------------------- 2. 编译 frps
 log "编译 frps（${FRP_VERSION}）"
 mkdir -p "$SRC_DIR/web/frps/dist"
 [ -f "$SRC_DIR/web/frps/dist/index.html" ] || \
@@ -82,7 +65,6 @@ log "编译测试台 harness"
 ( cd "$REPO_ROOT/scripts/e2e" && "$GO" build -o "$HARNESS" harness.go ) || { echo "编译 harness 失败"; exit 1; }
 ok "harness 就绪"
 
-# ---------------------------------------------------------------- 3. frps 配置
 cat > "$WORK/frps.toml" <<'EOF'
 bindPort = 17000
 auth.method = "token"
@@ -96,8 +78,6 @@ transport.maxPoolCount = 5
 allowPorts = [{ start = 17000, end = 17600 }]
 EOF
 
-# ---------------------------------------------------------------- 4. 档案 JSON
-# 直接写成 App 的持久化格式（List<ServerProfile>），由 App 的编码器转 TOML
 cat > "$WORK/profiles.json" <<'EOF'
 [
   {
@@ -152,7 +132,6 @@ cat > "$WORK/profiles.json" <<'EOF'
 ]
 EOF
 
-# ---------------------------------------------------------------- 5. App 编码器导出 TOML
 log "用 App 自己的编码器导出 frpc.toml"
 GRADLE_ARGS="--export-toml $WORK/profiles.json $WORK"
 if ./gradlew -q --console=plain :desktopApp:run --args="$GRADLE_ARGS" > "$WORK/export.log" 2>&1; then
@@ -170,14 +149,13 @@ log "frpc verify 校验生成的配置"
 "$FRPC" verify -c "$B_TOML" && ok "配置 B 通过官方校验" || bad "配置 B 校验失败"
 [ "$FAILED" = "0" ] || { echo "配置校验未通过，终止"; exit 1; }
 
-# ---------------------------------------------------------------- 6. 起服务
 log "启动后端 / frps / frpc"
 "$HARNESS" serve > "$WORK/harness.log" 2>&1 &
 PIDS+=($!)
 "$FRPS" -c "$WORK/frps.toml" > "$WORK/frps.log" 2>&1 &
 PIDS+=($!)
 
-wait_port() { # <port> <name> <timeout_s>
+wait_port() {
   $PY - "$1" "$2" "$3" <<'PY'
 import socket, sys, time
 port, name, timeout = int(sys.argv[1]), sys.argv[2], float(sys.argv[3])
@@ -202,7 +180,6 @@ PIDS+=($!)
 "$FRPC" -c "$B_TOML" > "$WORK/frpc-b.log" 2>&1 &
 PIDS+=($!)
 
-# ---------------------------------------------------------------- 7. 等代理全部 running
 log "等待 admin API 报告全部代理 running"
 $PY - "$WORK" <<'PY'
 import base64, json, sys, time, urllib.request
@@ -232,7 +209,6 @@ print("  超时，最后状态:", last)
 sys.exit(1)
 PY
 [ $? -eq 0 ] && ok "代理已全部注册" || bad "代理未全部 running"
-# visitor 侧也确认一下
 $PY - 17401 <<'PY'
 import base64, json, sys, urllib.request
 port = sys.argv[1]
@@ -246,7 +222,6 @@ PY
 
 sleep 2
 
-# ---------------------------------------------------------------- 8. 逐协议真实访问
 log "逐协议真实访问校验"
 "$HARNESS" check
 CHECK_RC=$?

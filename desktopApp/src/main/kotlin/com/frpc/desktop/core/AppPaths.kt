@@ -2,18 +2,8 @@ package com.frpc.desktop.core
 
 import java.io.File
 
-/**
- * 应用目录约定（全部在用户目录下，不写系统盘其他位置）：
- *   ~/.frpcdash/
- *     profiles.json   配置档案
- *     settings.json   应用设置
- *     bin/frpc.exe    运行时引擎（从安装包 resources/engine 解压）
- *     run/frpc.toml   当前进程实际使用的配置
- *     logs/           可选：导出日志
- */
 object AppPaths {
     private const val HOME_DIR = ".frpcdash"
-    /** 合并前的旧目录名，首次启动时自动迁移配置，避免升级后配置丢失 */
     private const val LEGACY_HOME_DIR = ".frpc-desktop"
 
     val home: File = resolveHome()

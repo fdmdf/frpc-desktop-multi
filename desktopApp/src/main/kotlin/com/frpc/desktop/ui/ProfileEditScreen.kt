@@ -67,25 +67,19 @@ fun ProfileEditScreen(
     var proxyCreating by remember { mutableStateOf(false) }
     var visitorEditing by remember { mutableStateOf<Int?>(null) }
     var showErrors by remember { mutableStateOf(false) }
-    // 端口输入的中间态：清空/逐字输入时不能立刻跳回默认值，保存时再解析
     var serverPortText by remember(initial?.id) { mutableStateOf((initial?.config?.serverPort ?: 7000).toString()) }
     var adminPortText by remember(initial?.id) {
         mutableStateOf((initial?.config?.webServer?.port ?: 7400).toString())
     }
-    // 与其他配置重名时的提示（P5）
     var saveError by remember { mutableStateOf<String?>(null) }
-    // 传输/TLS 的高级项默认收起：字段多且大部分用户不需要改
     var showTransportAdvanced by remember { mutableStateOf(false) }
     var showTlsAdvanced by remember { mutableStateOf(false) }
-    // 代理规则超过 5 条时出现的本地筛选词
     var proxyQuery by remember { mutableStateOf("") }
 
     val issues = remember(draft.config) { ConfigValidator.validate(draft.config) }
     val errors = issues.filter { it.severity == Severity.ERROR }
     val warnings = issues.filter { it.severity == Severity.WARNING }
 
-    // 运行中的配置允许编辑保存（旧做法是整页禁用，改一个端口都要先停服务），
-    // 但必须让人看见「保存 ≠ 生效」，并在保存时给出是否立即重载的选择
     val runState by container.supervisor.state.collectAsState()
     val runningThis = initial != null &&
         runState.phase == FrpcSupervisor.Phase.RUNNING && runState.profileId == initial.id
@@ -95,11 +89,6 @@ fun ProfileEditScreen(
         draft = draft.copy(config = block(draft.config))
     }
 
-    /**
-     * 落盘 + 收尾。运行中的配置：
-     * - reload = true：保存后立刻重载，改动马上生效
-     * - reload = false：只存盘，打上「待重载」标记，由主页提示还有一笔改动没生效
-     */
     fun save(reload: Boolean) {
         scope.launch {
             val saved = draft.copy(name = draft.name.ifBlank { "未命名配置" })
@@ -120,7 +109,6 @@ fun ProfileEditScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // 顶栏
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -140,7 +128,6 @@ fun ProfileEditScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = onClose) { Text("取消") }
                 Button(onClick = {
-                    // 先做校验，运行中的配置再问要不要立刻重载（别校验都没过就弹窗）
                     updateConfig { it.copy(serverPort = serverPortText.toIntOrNull() ?: 0) }
                     draft.config.webServer?.let { ws ->
                         updateConfig { it.copy(webServer = ws.copy(port = adminPortText.toIntOrNull() ?: 0)) }
@@ -181,7 +168,6 @@ fun ProfileEditScreen(
                     )
                 }
             }
-            // 运行中编辑：不拦着改，但把「保存 ≠ 生效」写在最上面
             if (runningThis) {
                 SectionCard(title = "该配置正在运行") {
                     Text(
@@ -202,7 +188,6 @@ fun ProfileEditScreen(
                     }
                 }
             }
-            // 警告不阻止保存，但必须可见（例如 xtcp 未填 STUN：能启动，但打洞大概率超时）
             if (warnings.isNotEmpty()) {
                 SectionCard(title = "建议改进") {
                     warnings.forEach {
@@ -234,7 +219,6 @@ fun ProfileEditScreen(
                     )
                     NumberField(
                         value = serverPortText,
-                        // 只更新文本；解析成合法端口才提交，清空时保持输入而不是跳回 7000
                         onValueChange = { v ->
                             serverPortText = v
                             v.toIntOrNull()?.let { p -> updateConfig { it.copy(serverPort = p) } }
@@ -277,7 +261,6 @@ fun ProfileEditScreen(
             }
 
             SectionCard(title = "认证") {
-                // 无认证在模型里是 auth = null / method = "none"，编码时整段省略（frpc 不接受 none）
                 val auth = draft.config.auth ?: AuthConfig(method = "none", token = "")
                 DropdownField(
                     label = "认证方式",
@@ -307,7 +290,6 @@ fun ProfileEditScreen(
                 LabeledTextField(
                     value = draft.config.metadatas?.get("token").orEmpty(),
                     onValueChange = { v ->
-                        // frps 的 multiuser 插件按 metadatas.token 识别用户；空则整段不写
                         updateConfig {
                             it.copy(metadatas = v.trim().ifBlank { null }?.let { t -> mapOf("token" to t) })
                         }
@@ -315,7 +297,6 @@ fun ProfileEditScreen(
                     label = "多用户令牌（metadatas.token，可选）",
                     supportingText = "只有 frps 开了 multiuser 插件才需要填；普通服务器留空",
                 )
-                // 导入的配置可能是 oidc：这里没有对应的输入框，必须明确告诉用户去 toml 改
                 if (auth.method != "token" && auth.method != "none") {
                     Text(
                         "当前配置的认证方式是「${auth.method}」，App 不支持编辑；" +
@@ -416,7 +397,6 @@ fun ProfileEditScreen(
                     supportingText = "预先与 frps 建好的连接数，用来降低首次访问延迟；frp 默认 1",
                 )
 
-                // 这些字段平时不用动，默认收起；留空 = 不写入，由 frpc 用自身默认值
                 TextButton(onClick = { showTransportAdvanced = !showTransportAdvanced }) {
                     Text(if (showTransportAdvanced) "收起高级连接参数" else "高级连接参数（心跳 / 保活 / 绑定地址）")
                 }
@@ -517,7 +497,6 @@ fun ProfileEditScreen(
                     )
                     SwitchRow(
                         label = "发送自定义 TLS 首字节",
-                        // frp 默认 disableCustomTLSFirstByte = true（不发送），所以开关默认关闭
                         checked = tls.disableCustomTLSFirstByte == false,
                         onCheckedChange = { on ->
                             updateConfig {
@@ -576,7 +555,6 @@ fun ProfileEditScreen(
                 )
             }
 
-            // ---------------------------------------------------------- 代理规则
             SectionCard(
                 title = "代理规则（${draft.config.proxies.size}）",
                 trailing = {
@@ -598,7 +576,6 @@ fun ProfileEditScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else if (draft.config.proxies.size > 5) {
-                    // 规则一多就没法一眼找到，给个本地过滤（不影响索引：下面用 withIndex 保留原始下标）
                     LabeledTextField(
                         value = proxyQuery,
                         onValueChange = { proxyQuery = it },
@@ -635,7 +612,6 @@ fun ProfileEditScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        // 列表内直接启停，不必进编辑页翻开关：禁用的代理 frpc 会跳过注册
                         Switch(
                             checked = on,
                             onCheckedChange = { checked ->
@@ -660,7 +636,6 @@ fun ProfileEditScreen(
                 }
             }
 
-            // ---------------------------------------------------------- 访问者
             SectionCard(
                 title = "访问者（${draft.config.visitors.size}）",
                 trailing = {
@@ -697,7 +672,6 @@ fun ProfileEditScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        // 与代理规则一致：列表内直接启停，禁用的访问者 frpc 不会去注册
                         Switch(
                             checked = on,
                             onCheckedChange = { checked ->
@@ -728,7 +702,6 @@ fun ProfileEditScreen(
 
     if (proxyCreating || proxyEditing != null) {
         val existing = proxyEditing?.let { draft.config.proxies[it] }
-        // 批量生成的名字要和已有代理查重；编辑时排除自己
         val taken = draft.config.proxies.filterIndexed { i, _ -> i != proxyEditing }.map { it.name }.toSet()
         ProxyEditDialog(
             initial = existing,
@@ -741,7 +714,6 @@ fun ProfileEditScreen(
                 if (existing == null || index == null) {
                     list.addAll(created)
                 } else {
-                    // 编辑时改成了批量：原位替换第一条，其余插在它后面
                     list[index] = created.first()
                     if (created.size > 1) list.addAll(index + 1, created.drop(1))
                 }
@@ -768,7 +740,6 @@ fun ProfileEditScreen(
         )
     }
 
-    // 运行中保存的三岔口：立刻重载 / 只存盘 / 取消
     if (confirmSaveRunning) {
         AlertDialog(
             onDismissRequest = { confirmSaveRunning = false },
@@ -793,11 +764,6 @@ fun ProfileEditScreen(
     }
 }
 
-/**
- * 代理摘要：本地服务 → 对外入口。
- * 对外入口按 frp 类型区分：tcp/udp 是 frps 上的端口，http/https/tcpmux 是域名，
- * stcp/sudp/xtcp 不对外暴露，只能由访问者接入。
- */
 private fun describeProxy(proxy: ProxyConfig): String = buildString {
     append(proxy.type.uppercase())
     val type = proxy.proxyType
@@ -821,7 +787,6 @@ private fun describeProxy(proxy: ProxyConfig): String = buildString {
     if (proxy.enabled == false) append(" · 已禁用")
 }
 
-/** 访问者摘要：本机监听 · 访问 frps 上实际查找的代理名（含 serverUser / 本机 user 前缀） */
 private fun describeVisitor(visitor: VisitorConfig, localUser: String?): String = buildString {
     append(visitor.type.uppercase())
     if (visitor.bindPort < 0) {
@@ -829,16 +794,13 @@ private fun describeVisitor(visitor: VisitorConfig, localUser: String?): String 
     } else {
         append(" · 本地 ").append(visitor.bindAddr).append(":").append(visitor.bindPort)
     }
-    // 访问者没有远程端口，用「访问」而不是箭头，避免被读成指向某个端口
     append(" · 访问 ")
     append(
         com.frpc.shared.model.FrpcNaming.targetServerProxyName(localUser, visitor.serverUser, visitor.serverName),
     )
-    // 禁用态两端都能在列表里直接切换，这里也要显示出来（frpc 不会去连对方）
     if (visitor.enabled == false) append(" · 已禁用")
 }
 
-/** 字段路径 → 用户能看懂的名称（P3：错误文案不直接暴露 serverPort / auth.token 这类原始字段名） */
 private fun fieldDisplayName(field: String): String = when (field.substringAfterLast('.').substringAfter(']')) {
     "serverAddr" -> "服务器地址"
     "serverPort" -> "服务器端口"

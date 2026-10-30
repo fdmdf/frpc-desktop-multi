@@ -69,18 +69,14 @@ fun ProxyEditScreen(
     val store = container.configEditorStore
     val proxy by store.proxyDraft.collectAsStateWithLifecycle()
     var issues by remember { mutableStateOf<List<ValidationIssue>>(emptyList()) }
-    // 改过但没保存就返回：先问一句，避免手滑点掉一堆输入
     var confirmDiscard by remember { mutableStateOf(false) }
 
-    // 防重入：旋转/重绘时若草稿已属于该下标则跳过初始化（避免丢失未保存输入）
     LaunchedEffect(proxyIndex) {
         if (store.hasProxyDraft(proxyIndex)) return@LaunchedEffect
         val existing = store.draft.value?.config?.proxies?.getOrNull(proxyIndex)
         store.beginProxyEdit(proxyIndex, existing)
     }
 
-    // 返回 = 放弃：不保存就必须把草稿丢掉，
-    // 否则下次进同一条规则会看到上次没保存的修改（历史 bug）
     fun goBack() {
         if (store.isProxyDirty()) {
             confirmDiscard = true
@@ -92,7 +88,6 @@ fun ProxyEditScreen(
     androidx.activity.compose.BackHandler { goBack() }
 
     val current = proxy ?: return
-    // 用于实时展示 frps 上的完整代理名（前缀来自本配置的 user）
     val localUser = store.draft.collectAsStateWithLifecycle().value?.config?.user
     val type = ProxyType.fromId(current.type)
     val errorFields = remember(issues) { issues.map { it.formFieldKey() }.toSet() }
@@ -108,7 +103,6 @@ fun ProxyEditScreen(
                 },
                 actions = {
                     TextButton(onClick = {
-                        // 复用 shared 层校验器（单代理临时配置），必填项不满足则阻止保存
                         val proxyIssues = ConfigValidator.validate(
                             FrpcConfig(
                                 serverAddr = "validation",
@@ -164,12 +158,10 @@ fun ProxyEditScreen(
                     options = ProxyType.entries.map { it.id },
                     optionLabel = { id -> proxyTypeLabel(id) },
                     onSelect = { v ->
-                        // 切换类型时清理新类型不支持的字段，避免生成 frp 拒绝的配置
                         store.updateProxy { it.copy(type = v).sanitizedForType() }
                     },
                 )
                 Text(
-                    // frp 会用 {user}.{name} 作为最终代理名（user 为空则不加前缀）
                     text = stringResource(
                         R.string.proxy_full_name,
                         com.frpc.shared.model.FrpcNaming.targetServerProxyName(
@@ -203,14 +195,12 @@ fun ProxyEditScreen(
                         },
                         label = requiredLabel(stringResource(R.string.field_local_port), true),
                         isError = "localPort" in errorFields,
-                        // https 类型 frp 只按 SNI 做 TCP 透传，不做 TLS 卸载（N1）
                         supportingText = if (type.id == "https") {
                             stringResource(R.string.field_local_port_https_hint)
                         } else {
                             null
                         },
                     )
-                    // 本机端口选择器：列出正在监听的端口，点一行直接填入
                     var showPortPicker by remember { mutableStateOf(false) }
                     TextButton(onClick = { showPortPicker = true }) {
                         Text(stringResource(R.string.proxy_pick_local_port))
@@ -275,7 +265,6 @@ fun ProxyEditScreen(
                 SectionCard(title = stringResource(R.string.proxy_section_entry)) {
                     DropdownField(
                         label = stringResource(R.string.field_multiplexer),
-                        // frp 只接受 httpconnect，做成固定选项而不是自由文本
                         selected = "httpconnect",
                         options = listOf("httpconnect"),
                         optionLabel = { it },
@@ -289,8 +278,6 @@ fun ProxyEditScreen(
                 }
             }
 
-            // HTTP 认证字段只属于 http / tcpmux：frp 的 https 代理没有 httpUser 字段，
-            // 写进去会被严格解码直接拒掉（原来这里把 https 也包含进来了）
             if (type?.supportsHttpAuth == true) {
                 SectionCard(title = stringResource(R.string.proxy_section_access)) {
                     LabeledTextField(
@@ -390,7 +377,6 @@ fun ProxyEditScreen(
                     label = stringResource(R.string.field_bandwidth_limit),
                     placeholder = "1MB",
                     supportingText = stringResource(R.string.field_bandwidth_limit_hint),
-                    // 带宽字段的路径是 proxies[i].transport.bandwidthLimit，高亮要用完整相对路径
                     isError = "transport.bandwidthLimit" in errorFields,
                 )
                 if (!current.transport?.bandwidthLimit.isNullOrBlank()) {
@@ -438,7 +424,6 @@ fun ProxyEditScreen(
                     },
                     supportingText = stringResource(R.string.field_use_compression_hint),
                 )
-                // 仅 https：把真实来源 IP 透传给本地服务
                 if (type == ProxyType.HTTPS) {
                     DropdownField(
                         label = stringResource(R.string.field_proxy_protocol),
@@ -464,7 +449,6 @@ fun ProxyEditScreen(
                 }
             }
 
-            // 插件：只对 https 开放，把 TLS 终结在 frpc 侧（本地服务不用配证书）
             if (type == ProxyType.HTTPS) {
                 val plugin = current.plugin
                 SectionCard(title = stringResource(R.string.proxy_section_plugin)) {
@@ -554,7 +538,6 @@ fun ProxyEditScreen(
     }
 }
 
-/** 必填项标签加 * 标记 */
 @Composable
 private fun requiredLabel(label: String, required: Boolean): String =
     if (required) "$label *" else label
@@ -572,10 +555,6 @@ fun proxyTypeLabel(id: String): String = when (id) {
     else -> id
 }
 
-/**
- * 本机端口选择器：枚举正在监听的端口，点一行填入本地端口。
- * 扫描走 IO 线程（读 /proc/net 或调 netstat），失败时降级为「手动输入」而不是弹错误。
- */
 @Composable
 private fun LocalPortPickerDialog(onDismiss: () -> Unit, onPick: (Int) -> Unit) {
     var ports by remember { mutableStateOf<List<ListeningPort>?>(null) }
@@ -627,7 +606,6 @@ private fun LocalPortPickerDialog(onDismiss: () -> Unit, onPick: (Int) -> Unit) 
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
         dismissButton = {
-            // 扫不到时（比如目标服务刚起来）给个重来一次的出口，不用退出再点进来
             TextButton(onClick = { scanToken++ }) {
                 Text(stringResource(R.string.action_rescan))
             }

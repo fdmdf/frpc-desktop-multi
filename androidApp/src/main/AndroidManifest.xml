@@ -32,7 +32,6 @@
             </intent-filter>
         </activity>
 
-        <!-- frpc 常驻服务：specialUse 类型（长时间运行的网络代理隧道，无更贴切的类型） -->
         <service
             android:name=".service.FrpcService"
             android:exported="false"

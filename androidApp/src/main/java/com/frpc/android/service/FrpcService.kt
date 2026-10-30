@@ -26,12 +26,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-/**
- * frpc 常驻前台服务。
- * - START：拉起 FrpcSupervisor 运行指定配置，服务提升为前台（specialUse）
- * - STOP / RELOAD：转发给 Supervisor
- * - 运行时状态变化时刷新常驻通知；回到 IDLE 时自停
- */
 class FrpcService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -52,7 +46,6 @@ class FrpcService : Service() {
                 return START_STICKY
             }
             else -> {
-                // ACTION_START 或系统重启（START_STICKY 重投时 intent 为 null → 重启默认配置）
                 val profileId = intent?.getStringExtra(EXTRA_PROFILE_ID)
                 startAsForeground()
                 scope.launch {
@@ -75,7 +68,6 @@ class FrpcService : Service() {
     }
 
     private fun appendSystemLog(message: String) {
-        // 通知用户可感知的启动失败原因
         Notifications.postEvent(this, message)
     }
 
@@ -93,13 +85,10 @@ class FrpcService : Service() {
         }
     }
 
-    /** 组装常驻通知数据：服务器 / 在线代理 / 运行时长 / CPU / 内存 */
     private fun buildNotificationData(): StatusNotificationData {
         val st = FrpcSupervisor.state.value
         val container = (applicationContext as FrpcApplication).container
         val profile = container.configRepository.find(st.profileId)
-        // 分母与「在线数」同口径：运行中就用 frpc 真正加载的那份配置
-        // （禁用一条但没重载时，最新配置会少一条，frpc 却还在跑它 → 分子大于分母）
         val counts = FrpcSupervisor.activeCounts.value
         val runningNow = st.phase == FrpcSupervisor.Phase.RUNNING
         val total = if (runningNow) {
@@ -107,13 +96,11 @@ class FrpcService : Service() {
         } else {
             profile?.config?.proxies?.count { it.enabled != false } ?: 0
         }
-        // Admin 优先，其次日志推断（与主页保持一致）
         val online = FrpcSupervisor.status.value?.all?.count { it.status == "running" }
             ?: FrpcSupervisor.logProxyStates.value.count { it.value.phase == LogProxyPhase.RUNNING }
         val uptime = st.startedAtMs
             ?.let { formatDuration(System.currentTimeMillis() - it) }
             ?: "--"
-        // 访问者同样只注册一次，状态取自日志
         val visitorTotal = if (runningNow) {
             counts.visitors
         } else {
@@ -149,7 +136,6 @@ class FrpcService : Service() {
                 if (st.phase != FrpcSupervisor.Phase.IDLE) everActive = true
                 refreshNotification()
                 when (st.phase) {
-                    // 仅在服务真正运行过后回到 IDLE（用户停止）才退场，避免启动竞态误停
                     FrpcSupervisor.Phase.IDLE -> if (everActive) stopSelfSafely()
                     FrpcSupervisor.Phase.ERROR -> {
                         Notifications.postEvent(
@@ -162,7 +148,6 @@ class FrpcService : Service() {
                 }
             }
         }
-        // 运行中每 5 秒刷新一次（运行时长/CPU/内存/在线数实时变化）
         scope.launch {
             while (true) {
                 delay(5000)

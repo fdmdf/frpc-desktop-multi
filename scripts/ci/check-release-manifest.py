@@ -13,7 +13,6 @@ path = ".github/workflows/release.yml"
 d = yaml.safe_load(open(path, encoding="utf-8"))
 jobs = d["jobs"]
 
-# ---- 1) 收集各 job 产出的目标文件名 ----
 produced = set()
 for jn in ("desktop", "android"):
     for st in jobs[jn]["steps"]:
@@ -23,7 +22,6 @@ for jn in ("desktop", "android"):
             m = re.match(r"\s*(take|take_opt)\s+\"[^\"]+\"\s+'[^']+'\s+\"([^\"]+)\"", line)
             if m:
                 produced.add(m.group(2))
-            # cp "$DIR/androidApp-release.apk" "$OUT/$PRODUCT-$V-android-arm64.apk"
             m = re.search(r'cp\s+"[^"]+"\s+"[^"]*/\$OUT/([^"]+)"', line)
             if not m:
                 m = re.search(r'cp\s+"[^"]+"\s+"\$OUT/([^"]+)"', line)
@@ -36,7 +34,6 @@ for jn in ("desktop", "android"):
             if m:
                 produced.add(m.group(1))
 
-# macOS 两个架构共用一段脚本，按矩阵展开
 expanded = set()
 for name in produced:
     for arch in ("arm64", "x64"):
@@ -46,17 +43,13 @@ for name in produced:
             expanded.add(name)
             break
 
-# 运行时常量（引擎版本留档、zip 内的 exe 名等不走 dist 根目录的忽略）
 expanded.add("frpc-engine-VERSION.txt")
-
 
 def sub(s):
     return s.replace("$V", V).replace("$PRODUCT", P)
 
-
 expanded = {sub(x) for x in expanded}
 
-# ---- 2) release job 的校验清单 ----
 required, optional = set(), set()
 for st in jobs["release"]["steps"]:
     if st.get("name") != "Verify artifact manifest":
@@ -65,7 +58,6 @@ for st in jobs["release"]["steps"]:
         f = sub(m.group(1))
         (required if m.group(2) == "required" else optional).add(f)
 
-# Android 签名与否二选一，两个名字都要认
 required.discard(P + "-" + V + "-android-arm64-unsigned.apk")
 
 print("=== 发布前必需清单（%d 项）===" % len(required))

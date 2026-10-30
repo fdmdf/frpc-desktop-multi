@@ -10,7 +10,6 @@ class FrpcTomlTest {
 
     @Test
     fun encode_omitsRemotePortWhenEmpty() {
-        // 留空 = 交给 frps 随机分配：不能写出 null，也不能写出 0（frp 两种都当随机，但 0 更易误读）
         val config = FrpcConfig(
             serverAddr = "frps.example.com",
             proxies = listOf(
@@ -115,7 +114,6 @@ class FrpcTomlTest {
         assertTrue("transport" !in toml, "transport section should be omitted")
         assertTrue("[[proxies]]" !in toml, "no proxies should be emitted")
         val decoded = FrpcToml.decode(toml)
-        // 解码时 webServer 取默认值（App 默认开启 Admin API），其余保持
         assertEquals(config.copy(webServer = WebServerConfig()), decoded)
     }
 
@@ -140,7 +138,6 @@ class FrpcTomlTest {
         assertTrue(toml.contains("port = 7400"))
     }
 
-    /** 回归：keepTunnelOpen 只属于 xtcp visitor；stcp visitor 带上会让 frpc 直接退出 */
     @Test
     fun visitor_xtcpOnlyFields_sanitizedPerType() {
         val toml = """
@@ -159,7 +156,6 @@ class FrpcTomlTest {
         val stcpToml = FrpcToml.encode(stcp)
         assertTrue(!stcpToml.contains("keepTunnelOpen"), stcpToml)
 
-        // xtcp 保留该字段
         val xtcp = stcp.copy(
             visitors = stcp.visitors.map { it.copy(type = "xtcp", keepTunnelOpen = true) },
         )
@@ -168,11 +164,6 @@ class FrpcTomlTest {
         assertTrue(FrpcToml.decode(xtcpToml).visitors.first().keepTunnelOpen == true)
     }
 
-    /**
-     * 访问者同样支持 enabled：frp 的 VisitorBaseConfig 有这个字段，
-     * `FilterClientConfigurers` 对代理与访问者一视同仁地按它过滤。
-     * 关掉必须真的写进 TOML，否则「列表里关了、frpc 照样连」。
-     */
     @Test
     fun visitor_enabled_roundTrip() {
         val toml = """
@@ -191,7 +182,6 @@ class FrpcTomlTest {
         assertTrue(encoded.contains("enabled = false"), encoded)
         assertEquals(false, FrpcToml.decode(encoded).visitors.first().enabled)
 
-        // 没设过就不写，避免给 frpc 塞它没见过的多余字段
         val enabled = decoded.copy(visitors = decoded.visitors.map { it.copy(enabled = null) })
         assertTrue(!FrpcToml.encode(enabled).contains("enabled"), FrpcToml.encode(enabled))
     }

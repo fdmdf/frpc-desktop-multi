@@ -57,14 +57,12 @@ fun VisitorEditScreen(
     var issues by remember { mutableStateOf<List<ValidationIssue>>(emptyList()) }
     var confirmDiscard by remember { mutableStateOf(false) }
 
-    // 防重入：旋转/重绘时若草稿已属于该下标则跳过初始化（避免丢失未保存输入）
     LaunchedEffect(visitorIndex) {
         if (store.hasVisitorDraft(visitorIndex)) return@LaunchedEffect
         val existing = store.draft.value?.config?.visitors?.getOrNull(visitorIndex)
         store.beginVisitorEdit(visitorIndex, existing)
     }
 
-    // 返回 = 放弃：不保存就必须丢掉草稿，否则下次进来看到的还是上次没保存的内容
     fun goBack() {
         if (store.isVisitorDirty()) {
             confirmDiscard = true
@@ -77,7 +75,6 @@ fun VisitorEditScreen(
 
     val current = visitor ?: return
     val errorFields = remember(issues) { issues.map { it.formFieldKey() }.toSet() }
-    // frp 的拼接规则：serverUser 非空用它，留空用本机 user；这里实时展示最终会查找的名字
     val localUser = store.draft.collectAsStateWithLifecycle().value?.config?.user
     val targetName = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
         localUser, current.serverUser, current.serverName,
@@ -94,7 +91,6 @@ fun VisitorEditScreen(
                 },
                 actions = {
                     TextButton(onClick = {
-                        // 复用 shared 层校验器（单访问者临时配置），必填项不满足则阻止保存
                         val visitorIssues = ConfigValidator.validate(
                             FrpcConfig(
                                 serverAddr = "validation",
@@ -155,7 +151,6 @@ fun VisitorEditScreen(
                     options = listOf("stcp", "sudp", "xtcp"),
                     optionLabel = { id -> visitorTypeLabel(id) },
                     onSelect = { v ->
-                        // 切类型时清掉不适用字段（keepTunnelOpen 仅 xtcp 有）
                         store.updateVisitor { it.copy(type = v).sanitizedForType() }
                     },
                 )
@@ -180,7 +175,6 @@ fun VisitorEditScreen(
                             modifier = Modifier.weight(1f),
                         )
                         TextButton(onClick = {
-                            // 一键拆成「对方前缀 + 代理名」，这样本机用户名前缀就不会被拼进去
                             store.updateVisitor { it.copy(serverUser = prefix, serverName = rest) }
                         }) {
                             Text(stringResource(R.string.visitor_target_apply_fix))
@@ -225,7 +219,6 @@ fun VisitorEditScreen(
                 NumberField(
                     value = current.bindPort.toString(),
                     onValueChange = { v ->
-                        // 解析失败给 0：让校验器明确报「不能为 0」，不静默塞默认值
                         store.updateVisitor { it.copy(bindPort = v.trim().toIntOrNull() ?: 0) }
                     },
                     label = stringResource(R.string.field_bind_port) + " *",
@@ -295,7 +288,6 @@ fun VisitorEditScreen(
     }
 }
 
-/** 访问者类型的中文说明（复用代理类型的文案资源） */
 @Composable
 private fun visitorTypeLabel(id: String): String = when (id) {
     "stcp" -> stringResource(R.string.proxy_type_stcp)

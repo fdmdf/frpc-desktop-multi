@@ -8,16 +8,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
 
-/**
- * frpc admin API 客户端（webServer 段启用后可用）。
- * 契约来自 frp v0.71.1 client/api_router.go：
- *   GET  /api/status   全部代理状态（按类型分组）
- *   GET  /api/reload   重载配置
- *   POST /api/stop     停止 frpc
- *   GET  /api/config   当前生效配置（TOML 原文）
- *   GET  /healthz      探活（免鉴权）
- * 鉴权为 HTTP Basic（webServer.user / webServer.password）。
- */
 class FrpcAdminClient(
     private val addr: String = "127.0.0.1",
     private val port: Int,
@@ -57,7 +47,6 @@ class FrpcAdminClient(
         true
     }
 
-    /** 返回 frpc 当前生效的 TOML 配置原文 */
     suspend fun configToml(): String = withContext(Dispatchers.IO) {
         request("GET", "/api/config", expectedCodes = setOf(200))
     }
@@ -68,7 +57,6 @@ class FrpcAdminClient(
         body: String? = null,
         expectedCodes: Set<Int>,
     ): String {
-        // 强制直连：不走系统/ VPN 配置的 HTTP 代理（否则 127.0.0.1 可能被代理拦截）
         val connection = (URL("http://$addr:$port$path").openConnection(java.net.Proxy.NO_PROXY)
             as HttpURLConnection).apply {
             requestMethod = method

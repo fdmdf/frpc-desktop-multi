@@ -6,10 +6,6 @@ import android.content.Intent
 import com.frpc.android.FrpcApplication
 import com.frpc.android.R
 
-/**
- * 开机自启：BOOT_COMPLETED / 更新后重启。
- * Android 12+ 对后台启动 FGS 有限制，失败时降级为事件通知提示用户手动打开。
- */
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {

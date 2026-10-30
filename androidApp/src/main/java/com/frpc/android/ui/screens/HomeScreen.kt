@@ -65,7 +65,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** 切换配置时等旧进程退出的上限：超时就不再等，交给 supervisor 自己串行处理 */
 private const val SWITCH_STOP_TIMEOUT_MS = 10_000L
 
 @Composable
@@ -81,24 +80,18 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
     val adminReachable by FrpcSupervisor.adminReachable.collectAsStateWithLifecycle()
     val serverConnected by FrpcSupervisor.serverConnected.collectAsStateWithLifecycle()
     val loginError by FrpcSupervisor.loginError.collectAsStateWithLifecycle()
-    // 运行中改了配置但只存盘没重载：frpc 还在用旧配置，这里必须给个出口
     val pendingReloadId by FrpcSupervisor.pendingReloadProfileId.collectAsStateWithLifecycle()
     val profiles by container.configRepository.profiles.collectAsStateWithLifecycle()
     val defaultId by container.settingsRepository.defaultProfileId.collectAsStateWithLifecycle()
 
-    // 未设默认配置时回退到第一个，避免"有配置却显示还没有配置"
     val currentProfileId = state.profileId ?: defaultId ?: profiles.firstOrNull()?.id
     val currentProfile = profiles.firstOrNull { it.id == currentProfileId }
     val uiScope = rememberCoroutineScope()
 
-    // 启动前自检被拦下时弹出原因，并引导去配置页（引擎缺失只能重装，不给跳转）
     var blockedReason by remember { mutableStateOf<FrpcSupervisor.StartBlockReason?>(null) }
-    // 自检本身在后台线程做，期间先把按钮按住，避免连点重复拉起服务
     var checking by remember { mutableStateOf(false) }
-    // 运行中点了别的配置：先确认，再「停止当前 → 用新配置启动」，而不是偷偷改默认配置
     var switchTarget by remember { mutableStateOf<ServerProfile?>(null) }
 
-    // 运行时长秒级刷新
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(state.phase) {
         while (FrpcSupervisor.state.value.phase == FrpcSupervisor.Phase.RUNNING) {
@@ -109,7 +102,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
     val uptime = state.startedAtMs?.let { formatDuration(nowMs - it) } ?: "--"
     val startedAtText = state.startedAtMs?.let { formatClock(it) }
 
-    // 进程活着但一直登录失败：不能只显示「运行中」（P4）
     val loginFailed = state.phase == FrpcSupervisor.Phase.RUNNING && serverConnected == false
     val phaseLabel = when {
         loginFailed -> stringResource(R.string.phase_connect_failed)
@@ -129,22 +121,16 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
 
     val proxies = proxiesOf(currentProfile)
     val visitors = currentProfile?.config?.visitors.orEmpty()
-    // 禁用的规则 frpc 不注册，既不占在线数也不该进分母（否则永远显示 0/1）
     val enabledProxies = proxies.filter { it.enabled != false }
     val enabledVisitors = visitors.filter { it.enabled != false }
-    // 在线数优先取 Admin API，其次日志推断
     val onlineCount = status?.all?.count { it.status == "running" }
         ?: logProxyStates.count { it.value.phase == LogProxyPhase.RUNNING }
-    // 分母必须与「在线数」同口径：运行中就拿 frpc 真正加载的那份配置来算，
-    // 否则点开关禁用一条（还没重载）会出现「在线 3 / 总 2」这种分子大于分母的数字
     val totalCount = if (state.phase == FrpcSupervisor.Phase.RUNNING) {
         activeCounts.proxies
     } else {
         enabledProxies.size
     }
 
-    // 行内启停：与桌面端一致，首页直接开关，不必进配置页翻开关。
-    // 运行中改完不会自动生效（frpc 拿的还是旧配置），所以记一笔「待重载」给出口
     fun setRuleEnabled(name: String, enabled: Boolean, isVisitor: Boolean) {
         val profile = currentProfile ?: return
         val updated = profile.copy(
@@ -216,7 +202,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    // 状态页（本机浏览器）入口提示：frp 的面板要登录，账号是配置里的面板用户名/密码
                     if (state.adminEnabled && state.adminPort > 0) {
                         Text(
                             text = stringResource(
@@ -234,7 +219,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val running = state.phase == FrpcSupervisor.Phase.RUNNING
-                    // 端口探测涉及连/绑 socket，必须在后台做，别占主线程
                     val busy = checking ||
                         state.phase == FrpcSupervisor.Phase.STARTING ||
                         state.phase == FrpcSupervisor.Phase.STOPPING
@@ -289,7 +273,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
             }
         }
 
-        // 「已保存但还没重载」：不提示的话，用户会以为改完就生效了
         if (state.phase == FrpcSupervisor.Phase.RUNNING && pendingReloadId == currentProfileId) {
             item {
                 SectionCard(title = stringResource(R.string.home_pending_reload_title)) {
@@ -308,7 +291,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
             }
         }
 
-        // 配置切换（多个配置时）
         if (profiles.size > 1) {
             item {
                 SectionCard(title = stringResource(R.string.home_current_config)) {
@@ -318,15 +300,12 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        // 全部列出（外层可横向滚动）：之前 take(4) 会让第 5 份配置在主页选不到
                         profiles.forEach { profile ->
                             FilterChip(
                                 selected = profile.id == currentProfileId,
                                 onClick = {
                                     if (profile.id == currentProfileId) return@FilterChip
                                     if (state.phase == FrpcSupervisor.Phase.RUNNING) {
-                                        // 运行中不能只改默认：那样首页显示的是 A、frpc 跑的还是 B，
-                                        // 两边分叉最难排查。切成真正生效的那份（停止 → 用新配置启动）
                                         switchTarget = profile
                                     } else {
                                         uiScope.launch {
@@ -376,8 +355,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
             }
         }
 
-        // 分组标题用普通文字，不再用「空标题卡片」——空卡片会渲染成一个只有标题的方框
-        // 计数只算已启用的：禁用的规则不注册到 frps，混进总数会让「0/1 在线」看起来像故障
         item {
             GroupHeader(
                 text = if (proxies.isEmpty()) {
@@ -386,7 +363,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                     stringResource(
                         R.string.home_group_count,
                         stringResource(R.string.home_proxies),
-                        // 标题跟「列表里有多少条」走；概览里的分母才跟 frpc 生效配置走
                         enabledProxies.size,
                     )
                 },
@@ -406,7 +382,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
         items(proxies) { proxy ->
             val adminItem = status?.item(proxy.name)
             val logState = logProxyStates[proxy.name]
-            // 状态优先级：enabled=false（frpc 不注册）> Admin API 实际状态 > 日志推断 > 未知
             val (label, color) = when {
                 proxy.enabled == false ->
                     stringResource(R.string.proxy_status_disabled) to StatusIdle
@@ -425,7 +400,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                     stringResource(R.string.proxy_status_unknown) to StatusIdle
                 else -> stringResource(R.string.proxy_status_off) to StatusIdle
             }
-            // 只有 tcp/udp 有远程端口；remotePort 留空或 0 都表示 frps 随机分配
             val proxyType = proxy.proxyType
             val remoteText = when {
                 !adminItem?.remoteAddr.isNullOrBlank() ->
@@ -495,10 +469,8 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                 )
             }
             items(visitors) { visitor ->
-                // admin API 不返回 visitor，是否注册成功只能从 "visitor added: [...]" 日志判断
                 val online = state.phase == FrpcSupervisor.Phase.RUNNING &&
                     visitor.name in visitorsOnline
-                // 状态优先级：enabled=false（frpc 不注册）> 日志推断 > 未启动
                 val (label, color) = when {
                     visitor.enabled == false ->
                         stringResource(R.string.proxy_status_disabled) to StatusIdle
@@ -512,7 +484,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                 } else {
                     "${visitor.bindAddr}:${visitor.bindPort}"
                 }
-                // 显示 frps 上实际查找的名字（含对方设备前缀 / 本机前缀），跨设备时才好排查
                 val target = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
                     currentProfile?.config?.user, visitor.serverUser, visitor.serverName,
                 )
@@ -552,7 +523,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
         }
     }
 
-    // 运行中切换配置：必须让 frpc 真正换到那份配置，只改默认会让「首页显示的」和「实际跑的」分叉
     switchTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { switchTarget = null },
@@ -573,8 +543,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                         uiScope.launch {
                             container.settingsRepository.setDefaultProfileId(target.id)
                             context.startService(FrpcService.stopIntent(context))
-                            // 先等旧进程退出再自检：它还占着状态接口端口时，
-                            // checkBeforeStart 会把「自己占的端口」误报成端口冲突
                             withTimeoutOrNull(SWITCH_STOP_TIMEOUT_MS) {
                                 FrpcSupervisor.state.first { !it.isActive }
                             }
@@ -601,7 +569,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
         )
     }
 
-    // 启动前自检未通过：说清原因并给出下一步，而不是让 frpc 默默退出后被自动重启掩盖
     blockedReason?.let { reason ->
         AlertDialog(
             onDismissRequest = { blockedReason = null },
@@ -625,7 +592,6 @@ fun HomeScreen(container: AppContainer, navigator: AppNavigator) {
                 TextButton(
                     onClick = {
                         blockedReason = null
-                        // 引擎缺失只能重装应用，跳配置页没有意义
                         if (reason != FrpcSupervisor.StartBlockReason.ENGINE_MISSING) {
                             currentProfile?.let { navigator.push(Screen.ServerEdit(it.id)) }
                         }
@@ -651,7 +617,6 @@ private fun proxiesOf(profile: ServerProfile?): List<ProxyConfig> =
 
 @Composable
 private fun RowScope.StatCell(label: String, value: String) {
-    // weight(1f)：四个格子等分宽度，长数值（如内存/时长）只会自身省略，不会把邻居挤出屏幕
     Column(
         modifier = Modifier.weight(1f),
         horizontalAlignment = Alignment.CenterHorizontally,

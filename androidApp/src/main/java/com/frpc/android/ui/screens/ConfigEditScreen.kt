@@ -71,19 +71,14 @@ fun ConfigEditScreen(
     val scope = rememberCoroutineScope()
     val draft by store.draft.collectAsStateWithLifecycle()
     val supervisorState by FrpcSupervisor.state.collectAsStateWithLifecycle()
-    // 正在运行的配置允许直接编辑，保存后自动重载；不再要求先停止服务
     val editingRunning = supervisorState.phase == FrpcSupervisor.Phase.RUNNING &&
         supervisorState.profileId == profileId
     var showValidation by remember { mutableStateOf<List<ValidationIssue>?>(null) }
-    // 服务器端口的输入中间态：清空时不能跳回 7000（与桌面端一致的 P2 修复）
     var serverPortText by remember { mutableStateOf<String?>(null) }
     var nameError by remember { mutableStateOf<String?>(null) }
     var confirmDiscard by remember { mutableStateOf(false) }
-    // 运行中保存：先问「要不要立刻重载」，别默默存盘让用户以为已经生效
     var confirmSaveRunning by remember { mutableStateOf(false) }
 
-    // 防重入：从代理/访问者编辑页返回时本屏幕会重新进入组合，
-    // 若草稿已属于当前配置则跳过初始化，否则整个草稿（含已添加的代理）会被清空
     LaunchedEffect(profileId) {
         if (store.hasDraft(profileId)) return@LaunchedEffect
         if (profileId == null) {
@@ -93,7 +88,6 @@ fun ConfigEditScreen(
         }
     }
 
-    // 不保存就退出 = 放弃整份草稿：否则下次进这份配置看到的还是上次没保存的修改
     fun goBack() {
         if (store.isConfigDirty()) {
             confirmDiscard = true
@@ -107,20 +101,11 @@ fun ConfigEditScreen(
     val current = draft ?: return
     val config = current.config
 
-    // 警告不阻止保存，但要一直可见（例如 xtcp 未填 STUN：能启动，但打洞大概率超时）
     val warnings = remember(config) {
         com.frpc.shared.validate.ConfigValidator.validate(config)
             .filter { it.severity == com.frpc.shared.validate.Severity.WARNING }
     }
 
-    /**
-     * 落盘 + 收尾。
-     *
-     * 运行中的配置也允许保存（旧做法是整页禁用编辑，改个端口都得先停服务），
-     * 但 frpc 手里拿的还是旧配置：
-     * - reload = true：保存后立刻重载，配置马上生效，清掉「待重载」标记
-     * - reload = false：只存盘，打上「待重载」标记，由主页/列表页提示用户还有一笔没生效的改动
-     */
     fun doSave(reload: Boolean) {
         serverPortText?.let { t -> store.update { it.copy(serverPort = t.toIntOrNull() ?: 0) } }
         nameError = null
@@ -134,7 +119,6 @@ fun ConfigEditScreen(
             it.name == profile.name.trim() && it.id != profile.id
         }
         if (dup) {
-            // 同名配置无法区分，直接拦下（P5）
             nameError = context.getString(R.string.error_duplicate_profile_name, profile.name.trim())
             showValidation = null
             return
@@ -174,7 +158,6 @@ fun ConfigEditScreen(
                 },
                 actions = {
                     TextButton(onClick = {
-                        // 运行中的配置：先问清楚要不要顺手重载，不要默默存盘
                         if (editingRunning) confirmSaveRunning = true else doSave(reload = false)
                     }) {
                         Text(stringResource(R.string.action_save))
@@ -201,7 +184,6 @@ fun ConfigEditScreen(
                     }
                 }
             }
-            // 运行中编辑：不拦着改，但把「保存 ≠ 生效」写在最上面，避免误判
             if (editingRunning) {
                 item {
                     SectionCard(title = stringResource(R.string.config_running_editing_title)) {
@@ -281,7 +263,6 @@ fun ConfigEditScreen(
 
             item {
                 SectionCard(title = stringResource(R.string.section_auth)) {
-                    // 无认证 = auth 为空 / method = "none"；编码时整段省略（frpc 不接受 none）
                     val auth = config.auth ?: com.frpc.shared.model.AuthConfig(method = "none", token = "")
                     DropdownField(
                         label = stringResource(R.string.field_auth_method),
@@ -323,7 +304,6 @@ fun ConfigEditScreen(
                     LabeledTextField(
                         value = config.metadatas?.get("token").orEmpty(),
                         onValueChange = { v ->
-                            // frps 的 multiuser 插件按 metadatas.token 识别用户；空则整段不写
                             store.update {
                                 it.copy(metadatas = v.trim().ifBlank { null }?.let { t -> mapOf("token" to t) })
                             }
@@ -435,7 +415,6 @@ fun ConfigEditScreen(
                         },
                         supportingText = stringResource(R.string.field_tls_hint),
                     )
-                    // 心跳 / 多路复用保活：留空表示不写入，沿用 frpc 默认值（10 / 90 / 30 秒）
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         NumberField(
                             value = config.transport?.heartbeatInterval?.toString().orEmpty(),
@@ -526,7 +505,6 @@ fun ConfigEditScreen(
                     )
                     SwitchRow(
                         label = stringResource(R.string.field_disable_tls_first_byte),
-                        // frp 默认 disableCustomTLSFirstByte = true（不发送），开关默认关闭
                         checked = config.transport?.tls?.disableCustomTLSFirstByte == false,
                         onCheckedChange = { on ->
                             store.update {
@@ -542,7 +520,6 @@ fun ConfigEditScreen(
                         },
                         supportingText = stringResource(R.string.field_disable_tls_first_byte_hint),
                     )
-                    // UDP 包大小属于传输层（影响 udp/sudp 分片），原来误放在日志区
                     LabeledTextField(
                         value = (config.udpPacketSize ?: 1500).toString(),
                         onValueChange = { v ->
@@ -596,7 +573,6 @@ fun ConfigEditScreen(
                 }
             }
 
-            // 代理规则
             item {
                 SectionHeaderRow(
                     title = stringResource(
@@ -637,7 +613,6 @@ fun ConfigEditScreen(
                 }
             })
 
-            // 访问者
             item {
                 SectionHeaderRow(
                     title = stringResource(
@@ -724,7 +699,6 @@ fun ConfigEditScreen(
         )
     }
 
-    // 运行中保存的三岔口：立刻重载 / 只存盘 / 取消
     if (confirmSaveRunning) {
         AlertDialog(
             onDismissRequest = { confirmSaveRunning = false },
@@ -755,7 +729,6 @@ fun ConfigEditScreen(
     }
 }
 
-/** 代理列表行 */
 private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedProxies(
     config: FrpcConfig,
     onEdit: (Int) -> Unit,
@@ -787,7 +760,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedProxies(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                // 列表内直接启停，不必进编辑页翻开关：禁用的代理 frpc 会跳过注册
                 Switch(
                     checked = enabled,
                     onCheckedChange = { onToggleEnabled(index, it) },
@@ -834,7 +806,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedVisitors(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                // 与代理规则一致：列表内直接启停，禁用的访问者 frpc 不会去注册
                 Switch(
                     checked = enabled,
                     onCheckedChange = { onToggleEnabled(index, it) },
@@ -850,7 +821,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedVisitors(
     }
 }
 
-/** 分组标题 + 右侧新增按钮：比「标题卡片 + 空内容」更紧凑，也避免出现空盒子 */
 @Composable
 private fun SectionHeaderRow(title: String, onAdd: () -> Unit, addDescription: String) {
     Row(

@@ -183,7 +183,6 @@ fun MonitorScreen(container: AppContainer) {
             }
         }
 
-        // 访问者：admin API 不返回，状态取自 "visitor added" 日志
         if (visitors.isNotEmpty()) {
             SectionCard(title = "访问者状态") {
                 visitors.forEach { visitor ->
@@ -207,7 +206,6 @@ fun MonitorScreen(container: AppContainer) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        // 与主页一致：enabled = false 的访问者根本没注册，不该显示「启动中」
                         StatusChip(
                             text = when {
                                 visitor.enabled == false -> "已禁用"
@@ -241,7 +239,6 @@ private fun Sparkline(values: List<Float>, maxValue: Float) {
     ) {
         val w = size.width
         val h = size.height
-        // 三条水平参考线
         repeat(3) { i ->
             val y = h * i / 2f
             drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)

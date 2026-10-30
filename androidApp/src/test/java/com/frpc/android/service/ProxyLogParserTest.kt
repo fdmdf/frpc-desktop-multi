@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** 代理状态日志推断测试（样本取自 frpc 0.71.1 真实输出） */
 class ProxyLogParserTest {
 
     @Test
@@ -66,7 +65,6 @@ class ProxyLogParserTest {
     @Test
     fun unrelatedLineIgnored() {
         assertNull(ProxyLogParser.parse("start frpc service for config file [x] with aggregated configuration"))
-        // 登录成功现在是显式事件（P4：主页需要区分「运行中」与「未连上」）
         assertEquals(ProxyLogEvent.LoginSuccess, ProxyLogParser.parse("login to server success, get run id [9fb017f1cc6095e5]"))
     }
 

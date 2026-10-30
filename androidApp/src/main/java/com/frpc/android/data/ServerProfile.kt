@@ -4,7 +4,6 @@ import com.frpc.shared.model.FrpcConfig
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
-/** 一个服务器配置档案：元信息 + frpc 配置本体 */
 @Serializable
 data class ServerProfile(
     val id: String = UUID.randomUUID().toString(),

@@ -143,7 +143,6 @@ fun MonitorScreen(container: AppContainer) {
                 }
             }
         }
-        // Admin API 有数据时用真实状态；否则展示日志推断结果
         val adminItems = status?.all ?: emptyList()
         if (adminItems.isNotEmpty()) {
             itemsCounted(adminItems) { item ->
@@ -215,14 +214,12 @@ fun MonitorScreen(container: AppContainer) {
             }
         }
 
-        // 访问者：admin API 不返回，状态取自 "visitor added" 日志
         if (visitors.isNotEmpty()) {
             item {
                 SectionCard(title = stringResource(R.string.monitor_visitor_status)) {}
             }
             items(visitors) { visitor ->
                 val online = visitor.name in visitorsOnline
-                // 与主页一致：enabled = false 的访问者根本没注册，不该显示「启动中」
                 val (label, color) = when {
                     visitor.enabled == false ->
                         stringResource(R.string.proxy_status_disabled) to StatusIdle
@@ -234,7 +231,6 @@ fun MonitorScreen(container: AppContainer) {
                 } else {
                     "${visitor.bindAddr}:${visitor.bindPort}"
                 }
-                // 显示 frps 上实际查找的名字（含对方设备前缀 / 本机前缀）
                 val target = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
                     profile?.config?.user, visitor.serverUser, visitor.serverName,
                 )
@@ -263,7 +259,6 @@ fun MonitorScreen(container: AppContainer) {
 
 @Composable
 private fun RowScope.StatCell2(label: String, value: String) {
-    // 等分宽度 + 单行省略：数值再长也只截断自己，不会把相邻格子挤出卡片
     Column(
         modifier = Modifier.weight(1f),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -284,7 +279,6 @@ private fun RowScope.StatCell2(label: String, value: String) {
     }
 }
 
-/** 简易折线图（Canvas，无图表依赖） */
 @Composable
 private fun LineChart(values: List<Float>, modifier: Modifier = Modifier) {
     val lineColor = MaterialTheme.colorScheme.primary
@@ -299,7 +293,6 @@ private fun LineChart(values: List<Float>, modifier: Modifier = Modifier) {
             if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
         drawPath(path = path, color = lineColor, style = Stroke(width = 2f))
-        // 末端点
         val lastValue = values.last()
         val lastY = size.height - (lastValue / maxValue) * size.height
         drawCircle(color = lineColor, radius = 3f, center = Offset(size.width, lastY))

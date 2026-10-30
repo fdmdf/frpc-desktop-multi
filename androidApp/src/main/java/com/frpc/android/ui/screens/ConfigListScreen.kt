@@ -74,7 +74,6 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
     var pendingSave by remember { mutableStateOf<Pair<String, String>?>(null) }
     val loadErrors by container.configRepository.loadErrors.collectAsStateWithLifecycle()
 
-    // 导入：用 */* 才能选中 .toml / .conf 这类系统未登记 mime 的文件
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -96,7 +95,6 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
                     container.configRepository.importToml(fileName ?: "导入配置", text)
                 }.onSuccess { profile ->
                     container.configRepository.upsert(profile)
-                    // 仓库里只有这一份配置（或还没设默认）时，自动设为默认，避免"导入了但启动时找不到配置"
                     val onlyOne = container.configRepository.profiles.value.count { it.id != profile.id } == 0
                     val asDefault = onlyOne || container.settingsRepository.defaultProfileId.value == null
                     if (asDefault) {
@@ -114,7 +112,6 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
         }
     }
 
-    // 导出到文件：走系统文件选择器，可存到“下载/文档”等任意位置
     val saveLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain"),
     ) { uri: Uri? ->
@@ -139,7 +136,6 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            // 底部留出操作条空间，避免最后一张卡片被遮挡
             contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 104.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -199,7 +195,6 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
                         scope.launch { container.settingsRepository.setDefaultProfileId(profile.id) }
                     },
                     onDelete = {
-                        // 运行中的配置删掉会让 frpc 继续跑着一份已经不存在的配置
                         if (profileRunning) {
                             toast(context, context.getString(R.string.config_running_cannot_delete))
                         } else {
@@ -210,9 +205,6 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
             }
         }
 
-        // 底部操作条：左侧导入（始终可用），右侧新建。
-        // 让「新建配置」保持自身宽度、由左侧「导入」去吸收剩余空间，
-        // 否则大字号/窄屏时被挤压的是主操作按钮
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -254,7 +246,6 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
         }
     }
 
-    // 导出选项：保存到文件 / 分享 / 复制
     exportTarget?.let { profile ->
         val toml = container.configRepository.tomlOf(profile)
         val fileName = "${profile.name.ifBlank { "frpc" }}-frpc.toml"
@@ -306,7 +297,6 @@ fun ConfigListScreen(container: AppContainer, navigator: AppNavigator) {
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text(stringResource(R.string.config_delete_title)) },
-            // 同名配置时只有名字没法区分（P5）：补上服务器摘要与代理数量
             text = {
                 Text(
                     stringResource(
@@ -352,7 +342,6 @@ private fun ProfileCard(
     profile: ServerProfile,
     isDefault: Boolean,
     isRunning: Boolean,
-    /** 已保存但还没重载：运行中配置改完未生效的提示态 */
     pendingReload: Boolean,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
@@ -416,8 +405,6 @@ private fun ProfileCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                // 运行中的配置允许编辑保存，但必须让人看到「还没生效」，
-                // 否则容易以为存盘即生效（真正生效要靠「重载配置」）
                 if (isRunning) {
                     Text(
                         text = if (pendingReload) {

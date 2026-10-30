@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# 同步 docs/wiki/*.md 到 GitHub Wiki
-#
-# 用法: bash scripts/sync-wiki.sh <owner> <repo>
-#
-# 会做三件事：
-#   1. 克隆（或复用）wiki 仓库
-#   2. 复制页面，并把仓库内相对链接改写为 wiki/仓库绝对链接
-#   3. 提交并推送（GitHub Wiki 默认分支为 master）
 
 set -euo pipefail
 

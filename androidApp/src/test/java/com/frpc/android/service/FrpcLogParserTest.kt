@@ -3,7 +3,6 @@ package com.frpc.android.service
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** frpc 日志解析测试（样本取自 frp v0.71.1 真实输出） */
 class FrpcLogParserTest {
 
     @Test
@@ -18,7 +17,6 @@ class FrpcLogParserTest {
             "start frpc service for config file [frpc-e2e.toml] with aggregated configuration",
             line.message,
         )
-        // 本地时区解析，非 0 即成功
         assertEquals(true, line.timeMs > 0)
     }
 
@@ -60,7 +58,6 @@ class FrpcLogParserTest {
         assertEquals(12345, line.timeMs)
     }
 
-    /** 状态接口轮询日志（frp v0.71.1 pkg/util/http/middleware.go 的真实输出）应被识别并默认隐藏 */
     @Test
     fun detectStatusEndpointAccessLog() {
         val request = FrpcLogParser.parse(
@@ -71,7 +68,6 @@ class FrpcLogParserTest {
         )
         assertEquals(true, FrpcLogParser.isAccessLog(request.message))
         assertEquals(true, FrpcLogParser.isAccessLog(response.message))
-        // 普通业务日志不能被误杀
         assertEquals(false, FrpcLogParser.isAccessLog("[ssh] start proxy success"))
         assertEquals(false, FrpcLogParser.isAccessLog("login to server success, get run id [abc]"))
         assertEquals(false, FrpcLogParser.isAccessLog("http request failed"))

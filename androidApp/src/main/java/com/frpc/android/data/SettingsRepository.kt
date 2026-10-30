@@ -6,17 +6,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** 主题模式 */
 object ThemeMode {
     const val SYSTEM = "system"
     const val LIGHT = "light"
     const val DARK = "dark"
 }
 
-/**
- * 界面语言（应用内切换，不跟随系统时覆盖系统语言）。
- * 取值即 Locale 的 BCP-47 标签；`zh-CN` / `en` 有对应的 values-* 资源目录。
- */
 object AppLanguage {
     const val SYSTEM = "system"
     const val ZH = "zh-CN"
@@ -24,9 +19,6 @@ object AppLanguage {
     val ALL = listOf(SYSTEM, ZH, EN)
 }
 
-/**
- * 应用设置（SharedPreferences + StateFlow 双通道，轻量零依赖）。
- */
 class SettingsRepository(context: Context) {
 
     private val prefs: SharedPreferences =
@@ -45,10 +37,6 @@ class SettingsRepository(context: Context) {
     private val _defaultProfileId = MutableStateFlow(prefs.getString(KEY_DEFAULT_PROFILE, null))
     val defaultProfileId: StateFlow<String?> = _defaultProfileId.asStateFlow()
 
-    /**
-     * 是否在日志中显示状态接口的访问记录（frpc 每 4 秒被轮询一次会刷屏）。
-     * 默认关闭；排查状态接口问题时可打开。
-     */
     private val _showAccessLogs = MutableStateFlow(prefs.getBoolean(KEY_SHOW_ACCESS_LOGS, false))
     val showAccessLogs: StateFlow<Boolean> = _showAccessLogs.asStateFlow()
 

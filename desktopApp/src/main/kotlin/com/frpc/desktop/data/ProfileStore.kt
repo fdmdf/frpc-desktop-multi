@@ -12,10 +12,6 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
 
-/**
- * 配置档案仓库：单 JSON 文件 + 原子写（tmp → rename）。
- * 桌面端配置规模很小，不引入数据库，保持零额外依赖。
- */
 class ProfileStore(private val file: File) {
 
     private val json = Json {
@@ -27,7 +23,6 @@ class ProfileStore(private val file: File) {
     private val _profiles = MutableStateFlow<List<ServerProfile>>(emptyList())
     val profiles: StateFlow<List<ServerProfile>> = _profiles.asStateFlow()
 
-    /** 最近一次加载时被跳过的损坏档案，用于 UI 提示 */
     private val _loadErrors = MutableStateFlow<List<String>>(emptyList())
     val loadErrors: StateFlow<List<String>> = _loadErrors.asStateFlow()
 
@@ -36,7 +31,6 @@ class ProfileStore(private val file: File) {
             _loadErrors.value = emptyList()
             if (!file.exists()) return@withContext
             runCatching {
-                // 先按 JsonElement 解析，再逐条解码：跳过损坏条目而不是让整份配置失效
                 val rawList = json.decodeFromString<List<kotlinx.serialization.json.JsonElement>>(file.readText())
                 val ok = mutableListOf<ServerProfile>()
                 val bad = mutableListOf<String>()
@@ -52,7 +46,6 @@ class ProfileStore(private val file: File) {
                 _profiles.value = ok
                 if (bad.isNotEmpty()) _loadErrors.value = bad
             }.onFailure { e ->
-                // 整份文件都读不出来（非法 JSON 等）：保留为一条整体错误提示
                 _loadErrors.value = listOf("配置文件解析失败：${e.message ?: "未知错误"}")
             }
         }
@@ -86,32 +79,19 @@ class ProfileStore(private val file: File) {
     }
 
     suspend fun markUsed(id: String) {
-        // 只更新内存态，不写盘：lastUsedAt 是辅助信息，
-        // 若在这里 persist 会把内存旧列表整份写回，覆盖运行期间的外部修改
         _profiles.value = _profiles.value.map { if (it.id == id) it.copy(lastUsedAt = System.currentTimeMillis()) else it }
     }
 
-    /** 生成标准 frpc.toml 文本 */
     fun tomlOf(profile: ServerProfile): String = FrpcToml.encode(profile.config)
 
-    /** 从 frpc.toml 导入（未建模字段按设计丢弃） */
     fun importToml(name: String, toml: String): ServerProfile =
         ServerProfile(name = name, config = FrpcToml.decode(toml))
 
-    // ------------------------------------------------------------ 全量备份/恢复
-
-    /** 全量导出：带 schemaVersion 的包装，和磁盘格式同构 */
     fun exportAll(): String = json.encodeToString(
         ProfileBundle.serializer(),
         ProfileBundle(profiles = _profiles.value),
     )
 
-    /**
-     * 全量导入。
-     * - [replace] = true 时先清空再导入（换机迁移）；false 时按 id 合并（同 id 覆盖）
-     * - 重名的不同档案自动加「(2)」后缀，避免列表里两个同名配置分不清
-     * - 坏条目跳过并回报名字，不让一条坏数据毁掉整次导入
-     */
     suspend fun importAll(text: String, replace: Boolean): Result<ImportSummary> =
         withContext(Dispatchers.IO) {
             mutex.withLock {
@@ -144,7 +124,6 @@ class ProfileStore(private val file: File) {
             }
         }
 
-    /** 一键清空（调用方负责先停掉正在跑的 frpc） */
     suspend fun clearAll() {
         withContext(Dispatchers.IO) { mutex.withLock { writeLocked(emptyList()) } }
     }
@@ -152,7 +131,6 @@ class ProfileStore(private val file: File) {
     private fun parseBundle(text: String): Pair<List<ServerProfile>, List<String>> {
         val root = runCatching { json.parseToJsonElement(text) }.getOrNull()
             ?: return emptyList<ServerProfile>() to listOf("文件不是合法 JSON")
-        // 兼容两种格式：ProfileBundle 包装对象、以及旧版直接导出的数组
         val rawProfiles: List<kotlinx.serialization.json.JsonElement> = when (root) {
             is kotlinx.serialization.json.JsonArray -> root
             is kotlinx.serialization.json.JsonObject ->
@@ -178,7 +156,6 @@ class ProfileStore(private val file: File) {
         Unit
     }
 
-    /** 已持锁时的落盘实现；不要在内部再次获取 mutex（Mutex 不可重入） */
     private fun writeLocked(list: List<ServerProfile>) {
         val parent = file.absoluteFile.parentFile ?: return
         parent.mkdirs()

@@ -8,11 +8,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * ConfigEditorStore 回归测试。
- * 重点覆盖"从代理/访问者编辑页返回时草稿被清空"的历史 bug：
- * 屏幕重入时若草稿已属于当前编辑目标，必须跳过重复初始化。
- */
 class ConfigEditorStoreTest {
 
     private val store = ConfigEditorStore()
@@ -32,14 +27,12 @@ class ConfigEditorStoreTest {
 
     @Test
     fun draftSurvivesReentry_regressionForWipeOnReturn() {
-        // 模拟：进入编辑页 → 填服务器字段 → 添加代理 → 从子页返回（屏幕重入）
         store.beginNew()
         store.update { it.copy(serverAddr = "frps.example.com") }
         store.commitProxy(
             0,
             ProxyConfig(name = "web", type = "tcp", localIP = "127.0.0.1", localPort = 80, remotePort = 6002),
         )
-        // 重入守卫：草稿已属于当前配置，不得重新初始化
         assertTrue(store.hasDraft(null))
         assertEquals("frps.example.com", store.draft.value?.config?.serverAddr)
         assertEquals(1, store.draft.value?.config?.proxies?.size)
@@ -108,11 +101,6 @@ class ConfigEditorStoreTest {
         assertFalse(store.hasDraft(null))
     }
 
-    /**
-     * 未保存就返回必须真丢掉：改过 → isDirty() 为真（弹确认）→ clearXxx 后草稿消失。
-     * 屏幕重入时 `hasProxyDraft` 为真才跳过初始化，所以「返回不清草稿」会让
-     * 上一次没保存的修改一直显示在编辑页里（用户报的 bug）。
-     */
     @Test
     fun proxyDraft_dirtyOnlyAfterEdit_andDiscardedOnClear() {
         store.beginNew()
@@ -151,7 +139,6 @@ class ConfigEditorStoreTest {
         assertFalse(store.isConfigDirty())
     }
 
-    /** 离开编辑栈的兜底：草稿、代理草稿、访问者草稿一并清空 */
     @Test
     fun clearAll_wipesEverything() {
         store.beginNew()

@@ -55,7 +55,6 @@ fun SettingsScreen(container: AppContainer, navigator: AppNavigator) {
     val profiles by container.configRepository.profiles.collectAsStateWithLifecycle()
     val state by FrpcSupervisor.state.collectAsStateWithLifecycle()
 
-    // 清空全部配置是不可逆操作：先确认，运行中也禁止执行（配置正被 frpc 使用）
     var confirmResetAll by remember { mutableStateOf(false) }
 
     val powerManager = remember(context) { context.getSystemService<PowerManager>() }
@@ -159,7 +158,6 @@ fun SettingsScreen(container: AppContainer, navigator: AppNavigator) {
                 text = stringResource(R.string.settings_binary_version, engineVersion, engineAbi),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            // 运行时引擎实际路径：新版应为 /data/app/.../lib/arm64/libfrpc.so（jniLibs 解压位）
             MonoText(
                 text = stringResource(
                     R.string.settings_binary_path,
@@ -190,7 +188,6 @@ fun SettingsScreen(container: AppContainer, navigator: AppNavigator) {
             }
         }
 
-        // 危险操作：清空全部配置档案。运行中禁止，避免删掉 frpc 正在读的配置
         SectionCard {
             TextButton(
                 onClick = { confirmResetAll = true },

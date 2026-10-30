@@ -1,13 +1,3 @@
-// Frpc-Android-Multi 端到端协议测试台（仅用 Go 标准库，无需任何外部依赖）。
-//
-// 两个模式：
-//   go run harness.go serve   启动各协议所需的真实后端（TCP/UDP 回声、HTTP、HTTPS）
-//   go run harness.go check   经 frps + frpc 隧道逐协议真实访问并校验
-//
-// 拓扑（全部本机）：
-//
-//	checker --(frps 端口)--> frps <--(控制连接)-- frpc(A: 8 种 proxy)  --> 后端
-//	checker --(visitor 端口)--> frpc(B: stcp/xtcp/sudp visitor) --> frps --> frpc(A) --> 后端
 package main
 
 import (
@@ -31,27 +21,22 @@ import (
 )
 
 const (
-	// 后端监听端口（serve 模式）
-	backendTCP   = 18001 // tcp 代理后端
-	backendUDP   = 18002 // udp 代理后端
-	backendHTTP  = 18003 // http 代理后端
-	backendHTTPS = 18004 // https 代理后端（真 TLS）
-	backendSTCP  = 18005 // stcp 后端
-	backendXTCP  = 18006 // xtcp 后端
-	backendSUDP  = 18007 // sudp 后端（UDP）
-	backendMUX   = 18008 // tcpmux 后端
+	backendTCP   = 18001
+	backendUDP   = 18002
+	backendHTTP  = 18003
+	backendHTTPS = 18004
+	backendSTCP  = 18005
+	backendXTCP  = 18006
+	backendSUDP  = 18007
+	backendMUX   = 18008
 
-	// frps 监听端口
 	frpsHTTPPort  = 17080
 	frpsHTTPSPort = 17443
-	// tcpmux(httpconnect) 专用端口：frps 需要在服务端显式开启 tcpmuxHTTPConnectPort
 	frpsMuxPort = 17081
 
-	// 本机最小 STUN 服务（xtcp 打洞要做 NAT 发现，默认公网 STUN 在 CI 里不可达）
 	stunPort    = 17900
 	stunPortAlt = 17901
 
-	// frps 侧映射出的端口（check 模式访问）
 	remoteTCP   = 17001
 	remoteUDP   = 17002
 	visitorSTCP = 17005
@@ -79,8 +64,6 @@ func main() {
 	}
 }
 
-// ------------------------------------------------------------------ 后端
-
 func serve() {
 	mustTCP(backendTCP, echo)
 	mustTCP(backendSTCP, echo)
@@ -95,7 +78,6 @@ func serve() {
 		fatal("生成自签证书失败: %v", err)
 	}
 	mustHTTP(backendHTTPS, "https-backend", cert)
-	// serve 只在父脚本里作为后台进程使用，等父进程杀掉即可
 	fmt.Println("READY")
 	select {}
 }
@@ -157,13 +139,6 @@ func mustHTTP(port int, banner string, cert *tls.Certificate) {
 	go func() { _ = srv.Serve(ln) }()
 }
 
-// stunServer 最小可用的 STUN Binding 服务（RFC 5389）。
-//
-// frp 的 nathole.Prepare 要求至少拿到 2 个外部地址（len(addrs) < 2 直接报
-// "not enough addresses"），只有 STUN 响应里带 OTHER-ADDRESS 时它才会向该地址
-// 再发一次 Binding 请求、从而得到第二个地址。所以这里起两个监听：
-// 17900 主口（回 OTHER-ADDRESS 指向 17901）+ 17901 备口。
-// CI/内网里公网 STUN 通常不可达，xtcp 会卡在 "wait response from stun server timeout"。
 func stunServer() {
 	startStunListener(stunPort, stunPortAlt)
 	startStunListener(stunPortAlt, 0)
@@ -184,7 +159,7 @@ func startStunListener(port, otherPort int) {
 				return
 			}
 			if n < 20 || binary.BigEndian.Uint16(buf[0:2]) != 0x0001 {
-				continue // 只处理 Binding Request
+				continue
 			}
 			if binary.BigEndian.Uint32(buf[4:8]) != magicCookie {
 				continue
@@ -200,15 +175,15 @@ func startStunListener(port, otherPort int) {
 			cookie := make([]byte, 4)
 			binary.BigEndian.PutUint32(cookie, magicCookie)
 
-			attrLen := 12 // XOR-MAPPED-ADDRESS
+			attrLen := 12
 			if otherPort > 0 {
-				attrLen += 12 // OTHER-ADDRESS
+				attrLen += 12
 			}
 			resp := make([]byte, 0, 20+attrLen)
-			resp = append(resp, 0x01, 0x01, byte(attrLen>>8), byte(attrLen)) // Binding Success Response
+			resp = append(resp, 0x01, 0x01, byte(attrLen>>8), byte(attrLen))
 			resp = append(resp, cookie...)
-			resp = append(resp, buf[8:20]...)                       // 原样回传 transaction id
-			resp = append(resp, 0x00, 0x20, 0x00, 0x08, 0x00, 0x01) // XOR-MAPPED-ADDRESS (IPv4)
+			resp = append(resp, buf[8:20]...)
+			resp = append(resp, 0x00, 0x20, 0x00, 0x08, 0x00, 0x01)
 			xport := make([]byte, 2)
 			binary.BigEndian.PutUint16(xport, uint16(udpAddr.Port)^uint16(magicCookie>>16))
 			resp = append(resp, xport...)
@@ -216,7 +191,6 @@ func startStunListener(port, otherPort int) {
 				resp = append(resp, ip4[i]^cookie[i])
 			}
 			if otherPort > 0 {
-				// OTHER-ADDRESS（不 XOR）：备用 STUN 的地址
 				resp = append(resp, 0x80, 0x2c, 0x00, 0x08, 0x00, 0x01,
 					byte(otherPort>>8), byte(otherPort), 127, 0, 0, 1)
 			}
@@ -257,8 +231,6 @@ func selfSigned() (*tls.Certificate, error) {
 	}
 	return &pair, nil
 }
-
-// ------------------------------------------------------------------ 校验
 
 type result struct {
 	name string
@@ -362,7 +334,7 @@ func httpClient() *http.Client {
 	return &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
-			Proxy:             nil, // 强制直连，避免被系统代理劫持
+			Proxy:             nil,
 			DisableKeepAlives: true,
 		},
 	}
@@ -413,7 +385,6 @@ func httpsCheck() error {
 	return nil
 }
 
-// tcpmux（multiplexer = httpconnect）：在 vhost HTTP 端口上用 HTTP CONNECT 打开隧道
 func tcpmuxCheck() error {
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", frpsMuxPort), 10*time.Second)
 	if err != nil {
@@ -431,7 +402,6 @@ func tcpmuxCheck() error {
 	if !strings.Contains(status, "200") {
 		return fmt.Errorf("CONNECT 未成功: %s", strings.TrimSpace(status))
 	}
-	// 吃掉响应头
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {

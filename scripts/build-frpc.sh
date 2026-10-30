@@ -1,29 +1,4 @@
 #!/usr/bin/env bash
-# 统一引擎构建脚本：一份 frp 源码同时产出「桌面端引擎」与「Android jniLibs 引擎」。
-#
-# 用法：
-#   bash scripts/build-frpc.sh             # 两端都编（当前平台）
-#   bash scripts/build-frpc.sh desktop     # 只编桌面端
-#   bash scripts/build-frpc.sh android     # 只编 Android
-#
-# 环境变量：
-#   FRP_VERSION   frp 版本（默认 v0.71.1）
-#   TARGETS       桌面端目标平台：current（默认）/ windows / linux / darwin / all
-#   SKIP_X86_64   1（默认）只编 arm64-v8a；0 额外编 x86_64（需 NDK，模拟器用）
-#   GO            go 可执行文件（默认 go）
-#   GOPROXY       Go 模块代理（默认 goproxy.cn）
-#
-# 产物：
-#   desktopApp/engine/frpc[.exe] + VERSION
-#   androidApp/src/main/jniLibs/<abi>/libfrpc.so
-#   androidApp/src/main/assets/frpc/VERSION
-#
-# 说明：
-#   - 源码按版本缓存在 .build/frpc-engine/，重复构建不再下载。
-#   - armeabi-v7a 未提供：Go 对 android/arm 32 位不支持 CGO_ENABLED=0 静态链接，
-#     上游 frp 官方发布版同样只提供 android/arm64。
-#   - web/frpc/dist 优先使用仓库内置官方控制台产物（scripts/frpc-web-dist），
-#     否则放占位页保证 go:embed 可编译（App 只用 admin JSON API，不需要 Web 面板）。
 
 set -euo pipefail
 
@@ -48,7 +23,7 @@ DESKTOP_ENGINE_DIR="$REPO_ROOT/desktopApp/engine"
 JNILIBS="$REPO_ROOT/androidApp/src/main/jniLibs"
 ASSETS="$REPO_ROOT/androidApp/src/main/assets/frpc"
 
-unzip_to() { # <zip> <dest>
+unzip_to() {
   local py="python3"
   command -v python3 >/dev/null 2>&1 || py="python"
   "$py" -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$1" "$2"
@@ -80,7 +55,7 @@ prepare_web_assets() {
   fi
 }
 
-build_frpc() { # <goos> <goarch> <out>
+build_frpc() {
   local goos="$1" goarch="$2" out="$3"
   echo "==> 编译 frpc $goos/$goarch -> $out"
   mkdir -p "$(dirname "$out")"

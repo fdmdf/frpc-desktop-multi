@@ -59,7 +59,6 @@ fun ProfilesScreen(
     val profiles by container.profiles.profiles.collectAsState()
     val defaultId by container.settings.state.collectAsState()
     val supervisorState by container.supervisor.state.collectAsState()
-    // 运行中的配置允许编辑保存，改动要等「重载配置」才生效（见列表里的提示文案）
     val runningId = supervisorState.profileId
         .takeIf { supervisorState.phase == FrpcSupervisor.Phase.RUNNING }
     val pendingReloadId by container.supervisor.pendingReloadProfileId.collectAsState()
@@ -72,7 +71,6 @@ fun ProfilesScreen(
     var clearAllConfirm by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
 
-    // 从主页「编辑配置」跳进来时直接打开对应配置（运行中的也可以，保存时会问是否重载）
     LaunchedEffect(openProfileId) {
         if (openProfileId != null) {
             editingId = openProfileId
@@ -150,7 +148,6 @@ fun ProfilesScreen(
             }
         }
 
-        // 搜索 + 备份：配置多了以后，翻列表找一份比导入还慢
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -179,7 +176,6 @@ fun ProfilesScreen(
                         .onSuccess { s ->
                             message = "已导入：新增 ${s.added} 份、更新 ${s.updated} 份" +
                                 if (s.skipped.isNotEmpty()) "，跳过 ${s.skipped.size} 条（${s.skipped.joinToString("、")}）" else ""
-                            // 导入后没有默认配置时补一个，否则主页空着
                             if (container.settings.state.value.defaultProfileId == null) {
                                 container.profiles.profiles.value.firstOrNull()?.let {
                                     container.settings.setDefaultProfileId(it.id)
@@ -278,7 +274,6 @@ fun ProfilesScreen(
                                     modifier = Modifier.padding(start = 8.dp),
                                 )
                             }
-                            // 运行中改完没重载：还有一笔改动没生效，标出来
                             if (profile.id == pendingReloadId) {
                                 StatusChip(
                                     text = "待重载",
@@ -300,7 +295,6 @@ fun ProfilesScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        // 运行中的配置允许编辑保存，但要把「保存 ≠ 生效」说清楚
                         if (profile.id == runningId) {
                             Text(
                                 text = if (profile.id == pendingReloadId) {
@@ -385,7 +379,6 @@ fun ProfilesScreen(
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text("删除配置") },
-            // 同名配置时只有名字没法区分（P5）：补上服务器摘要与代理数量
             text = {
                 Text(
                     "确定删除「${profile.name}」（${profile.serverSummary}，" +
@@ -410,7 +403,6 @@ fun ProfilesScreen(
     }
 }
 
-/** 系统文件选择器（AWT，跨平台，无需额外依赖） */
 fun chooseFile(title: String, mode: Int, defaultName: String? = null): File? {
     val dialog = FileDialog(null as Frame?, title, mode)
     if (defaultName != null) dialog.file = defaultName

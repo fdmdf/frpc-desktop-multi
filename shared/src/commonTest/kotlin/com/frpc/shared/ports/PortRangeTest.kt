@@ -49,7 +49,6 @@ class PortRangeTest {
 
     @Test
     fun rejectsTooMany() {
-        // 1-65535 会被上限拦住，避免一次生成几万条代理
         assertEquals(PortRange.Reason.TOO_MANY, failed("1-65535").reason)
         assertEquals(PortRange.MAX_EXPAND, ok("1000-1099").size)
         assertEquals(PortRange.Reason.TOO_MANY, failed("1000-1100").reason)

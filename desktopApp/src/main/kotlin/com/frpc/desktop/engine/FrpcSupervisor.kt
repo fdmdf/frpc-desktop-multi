@@ -26,10 +26,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.ArrayDeque
 
-/**
- * frpc 进程守护：启动/停止/热重载、日志采集、状态轮询、资源采样、崩溃自动重启。
- * 单实例（应用内同时只跑一个 frpc），与桌面客户端的使用模型一致。
- */
 class FrpcSupervisor(
     private val scope: CoroutineScope,
     private val engineManager: EngineManager,
@@ -50,14 +46,6 @@ class FrpcSupervisor(
         val restartCount: Int = 0,
     )
 
-    /**
-     * frpc **当前真正加载的那份配置**里启用中的规则数（代理 / 访问者）。
-     *
-     * 界面列表来自「最新保存的配置」：禁一条但还没重载时，列表少一条、frpc 却还在跑它，
-     * 直接按最新配置算分母就会出现「在线 3 / 总 2」这种分子大于分母的数字。
-     * 这份快照只在 frpc 真正加载配置时更新（启动 / 重载成功 / 自动重启），
-     * 拿它当分母才和「在线数」是同一套口径。
-     */
     data class ActiveRuleCounts(
         val proxies: Int = 0,
         val visitors: Int = 0,
@@ -66,12 +54,6 @@ class FrpcSupervisor(
     private val _state = MutableStateFlow(RunState())
     val state: StateFlow<RunState> = _state.asStateFlow()
 
-    /**
-     * 已存盘但还没重载的配置 id。
-     *
-     * 运行中的配置允许直接编辑保存（旧做法是整页禁用，改个端口都得先停服务），
-     * 但 frpc 手里还是旧配置 —— 这个标记让界面把「保存 ≠ 生效」说清楚。
-     */
     private val _pendingReloadProfileId = MutableStateFlow<String?>(null)
     val pendingReloadProfileId: StateFlow<String?> = _pendingReloadProfileId.asStateFlow()
 
@@ -92,11 +74,9 @@ class FrpcSupervisor(
     private val _status = MutableStateFlow<ProxyStatusSnapshot?>(null)
     val status: StateFlow<ProxyStatusSnapshot?> = _status.asStateFlow()
 
-    /** 已注册的访问者名字（admin API 不返回 visitor，来自 "visitor added: [...]" 日志） */
     private val _visitors = MutableStateFlow<Set<String>>(emptySet())
     val visitors: StateFlow<Set<String>> = _visitors.asStateFlow()
 
-    /** frpc 当前生效配置里启用中的规则数（口径见 [ActiveRuleCounts]） */
     private val _activeCounts = MutableStateFlow(ActiveRuleCounts())
     val activeCounts: StateFlow<ActiveRuleCounts> = _activeCounts.asStateFlow()
 
@@ -107,15 +87,9 @@ class FrpcSupervisor(
         )
     }
 
-    /**
-     * 与 frps 的登录状态（P4）：null=未知（还没看到登录日志），
-     * false=最近一次登录失败（token 错/网络不通），true=登录成功。
-     * 进程活着 ≠ 连上了服务器，主页需要区分这两种"运行中"。
-     */
     private val _serverConnected = MutableStateFlow<Boolean?>(null)
     val serverConnected: StateFlow<Boolean?> = _serverConnected.asStateFlow()
 
-    /** 最近一次登录失败的描述，连接成功后清空 */
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError.asStateFlow()
 
@@ -135,15 +109,11 @@ class FrpcSupervisor(
     private var watcherJob: Job? = null
     private var stopping = false
 
-    /** 启停串行锁：避免「停止」收尾把紧接着的「启动」状态覆盖掉 */
     private val opMutex = Mutex()
-
-    // ---------------------------------------------------------------- 对外操作
 
     fun start(profile: ServerProfile, isRestart: Boolean = false) {
         scope.launch {
             opMutex.withLock {
-                // 已经在跑就先停掉，否则旧进程会变成孤儿继续占用端口
                 if (process?.isAlive == true) stopInternal()
                 startInternal(profile, isRestart)
             }
@@ -154,10 +124,6 @@ class FrpcSupervisor(
         scope.launch { opMutex.withLock { stopInternal() } }
     }
 
-    /**
-     * 同步停止：给"应用退出"用。
-     * JVM 退出不会自动回收子进程，必须在这里把 frpc.exe 杀掉，否则会留下孤儿进程占着端口。
-     */
     fun stopBlocking() {
         stopping = true
         statusJob?.cancel(); statusJob = null
@@ -180,18 +146,12 @@ class FrpcSupervisor(
         _adminReachable.value = false
         _serverConnected.value = null
         _loginError.value = null
-        // 进程都停了，「待重载」自然失效
         clearPendingReload()
         _state.value = RunState(phase = Phase.IDLE)
     }
 
     val isRunning: Boolean get() = process?.isAlive == true
 
-    /**
-     * 启动时清扫上次强杀留下的孤儿 frpc。
-     * 任务管理器结束进程 / kill -9 不会执行 shutdown hook，frpc 会继续占着端口；
-     * 判定标准是命令行里包含我们的 run 目录——只杀自己拉起来的，不碰别人的 frpc。
-     */
     fun cleanupOrphans() {
         scope.launch(Dispatchers.IO) {
             val killed = runCatching { killOrphans() }.getOrDefault(0)
@@ -221,7 +181,6 @@ class FrpcSupervisor(
                 process.destroy()
             }
         } else {
-            // pgrep 数一下个数，有再杀；pkill -f 的 pattern 是正则，路径里的点会多匹配但不会误伤（仍要求完整路径）
             val pgrep = ProcessBuilder("pgrep", "-f", token).start()
             val pids = pgrep.inputStream.bufferedReader().readText().lineSequence()
                 .filter { it.trim().toIntOrNull() != null }.toList()
@@ -231,7 +190,6 @@ class FrpcSupervisor(
         }
     }
 
-    /** 热重载：先写回最新配置，再走 admin API；端口变化或无 admin 时整进程重启 */
     fun reload() {
         scope.launch {
             opMutex.withLock {
@@ -247,7 +205,6 @@ class FrpcSupervisor(
                         if (ok) "已通过 admin API 重载配置" else "admin API 重载失败",
                     )
                     if (ok) {
-                        // 重载成功 = frpc 现在跑的就是这份最新配置
                         rememberActiveCounts(profile)
                         clearPendingReload()
                     }
@@ -278,8 +235,6 @@ class FrpcSupervisor(
         target
     }
 
-    // ---------------------------------------------------------------- 内部实现
-
     private suspend fun startInternal(profile: ServerProfile, isRestart: Boolean = false) {
         stopping = false
         metricsReader.reset()
@@ -306,7 +261,6 @@ class FrpcSupervisor(
             return
         }
 
-        // 启动前三态预检：把「点了启动才在日志里看到失败」提前成一句可读的原因
         checkBeforeStart(profile)?.let { msg ->
             appendSystemLog(LogLevel.ERROR, msg)
             _state.update { it.copy(phase = Phase.ERROR, error = msg) }
@@ -315,15 +269,11 @@ class FrpcSupervisor(
 
         try {
             val toml = writeToml(profile)
-            // toml 落盘的这一刻起 frpc 用的就是这份配置：分母以此为准
             rememberActiveCounts(profile)
             appendSystemLog(LogLevel.INFO, "启动引擎：${engine.absolutePath} -c ${toml.absolutePath}")
             val builder = ProcessBuilder(engine.absolutePath, "-c", toml.absolutePath)
                 .directory(AppPaths.runDir)
                 .redirectErrorStream(true)
-            // frpc 是 Go 程序，会无条件读取 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY：
-            // 机器上一旦存在这些环境变量，连内网/本机 frps 也会被塞进代理，直接 502。
-            // 默认清掉；需要走代理的用户请在配置里显式设置 transport.proxyURL。
             val env = builder.environment()
             env.keys.filter { it.lowercase() in PROXY_ENV_KEYS }.forEach { env.remove(it) }
             val started = builder.start()
@@ -353,11 +303,9 @@ class FrpcSupervisor(
             }
             runCatching { profileStore.markUsed(profile.id) }
 
-            // 立刻采一次作为基准，否则 CPU 要等第二个采样周期（约 4~6 秒）才有值
             runCatching { metricsReader.read(started.pid()) }
 
             readOutput(started)
-            // 先起轮询再挂看护：startPollers 会重置轮询任务，顺序反了会把看护任务一起取消
             startPollers()
             watch(started, profile)
         } catch (e: Exception) {
@@ -371,7 +319,6 @@ class FrpcSupervisor(
     private suspend fun stopInternal() {
         stopping = true
         val adminPort = _state.value.adminPort
-        // 停止后界面按「当前显示的配置」算数，这份快照不再有意义
         _activeCounts.value = ActiveRuleCounts()
         _state.update { it.copy(phase = Phase.STOPPING) }
         stopPollers()
@@ -387,8 +334,6 @@ class FrpcSupervisor(
         }
         process = null
         adminClient = null
-        // 等端口被内核收回去再对外宣布「已停止」，
-        // 否则停止后立刻启动会撞上上一次实例残留的监听/连接（见 PortCheck 注释）
         if (adminPort > 0) {
             val freed = PortCheck.awaitFree(adminPort, timeoutMs = 3000)
             if (!freed) {
@@ -412,10 +357,8 @@ class FrpcSupervisor(
     private fun readOutput(proc: Process) {
         scope.launch(Dispatchers.IO) {
             runCatching {
-                // frpc 输出 UTF-8；Windows 默认字符集是 GBK，不指定会乱码
                 proc.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { line ->
                     appendLog(FrpcLogParser.parse(line))
-                    // frp 报错太原始：追加一条人话说明，用户不用查文档
                     com.frpc.shared.logs.FrpcErrorHints.hintFor(line)?.let { hint ->
                         appendSystemLog(LogLevel.WARN, hint)
                     }
@@ -434,7 +377,6 @@ class FrpcSupervisor(
 
             appendSystemLog(LogLevel.ERROR, "frpc 进程退出（exit=$code），准备自动重启")
             _state.update { it.copy(phase = Phase.ERROR, error = "进程退出（exit=$code）") }
-            // 只停状态/资源轮询：stopPollers() 会把本协程自己也取消掉，导致 autoRestart 永远执行不到
             stopStatusPollers()
             watcherJob = null
             autoRestart(profile)
@@ -474,7 +416,6 @@ class FrpcSupervisor(
         }
     }
 
-    /** 只停状态/资源轮询，不动看护任务（看护任务内调用它时不能自杀） */
     private fun stopStatusPollers() {
         statusJob?.cancel(); statusJob = null
         metricsJob?.cancel(); metricsJob = null
@@ -511,11 +452,6 @@ class FrpcSupervisor(
         return file
     }
 
-    /**
-     * 启动前置检查，返回 null 表示可以启动。
-     * 对齐参考项目的 B1001（没填地址）/ B1006（webServer 端口被占）两类拦截。
-     * UI 层也可以在点「启动」时先调它，直接弹提示并引导到配置页，不必等 frpc 退出。
-     */
     fun checkBeforeStart(profile: ServerProfile): String? {
         val config = profile.config
         if (config.serverAddr.isBlank()) {
@@ -533,10 +469,8 @@ class FrpcSupervisor(
     }
 
     private fun appendLog(line: LogLine) {
-        // 状态接口每 4 秒被轮询一次会产生两条访问日志，默认隐藏
         if (!settings.state.value.showAccessLogs && FrpcLogParser.isAccessLog(line.message)) return
         applyProxyEvent(line)
-        // 输出线程与 UI/协程线程都会写：ArrayDeque 非线程安全，必须加锁
         synchronized(logBuffer) {
             logBuffer.addLast(line)
             while (logBuffer.size > MAX_LOG_LINES) logBuffer.removeFirst()
@@ -575,7 +509,6 @@ class FrpcSupervisor(
         const val STATUS_INTERVAL_MS = 4_000L
         const val METRICS_INTERVAL_MS = 2_000L
 
-        /** 启动引擎时需要剥离的代理环境变量（大小写不敏感比较） */
         val PROXY_ENV_KEYS = setOf("http_proxy", "https_proxy", "all_proxy", "no_proxy")
     }
 }

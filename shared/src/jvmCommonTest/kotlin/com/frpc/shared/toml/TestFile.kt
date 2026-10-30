@@ -2,7 +2,6 @@ package com.frpc.shared.toml
 
 import java.io.InputStream
 
-/** 测试资源读取（jvmCommonTest，androidUnitTest 同样跑在 JVM 上） */
 object TestFile {
     fun read(name: String): String {
         val stream: InputStream = requireNotNull(

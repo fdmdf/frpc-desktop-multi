@@ -7,7 +7,6 @@ import com.frpc.android.data.SettingsRepository
 import com.frpc.android.service.FrpcBinaryManager
 import java.io.File
 
-/** 手写依赖容器：无 DI 框架，保持包体与启动开销最小 */
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 

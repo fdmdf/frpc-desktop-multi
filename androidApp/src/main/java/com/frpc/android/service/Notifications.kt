@@ -12,7 +12,6 @@ import androidx.core.app.NotificationManagerCompat
 import com.frpc.android.MainActivity
 import com.frpc.android.R
 
-/** 常驻通知展示数据（由服务侧组装） */
 data class StatusNotificationData(
     val state: FrpcSupervisor.RuntimeState,
     val onlineCount: Int,
@@ -25,7 +24,6 @@ data class StatusNotificationData(
     val memText: String,
 )
 
-/** 通知：常驻状态（低优先级）+ 事件提醒（默认优先级） */
 object Notifications {
 
     const val CHANNEL_STATUS = "frpc_status"
@@ -82,7 +80,6 @@ object Notifications {
                         ),
                     )
                     append('\n')
-                    // 有访问者时单独一行，避免折叠态信息过长
                     if (data.visitorTotal > 0) {
                         append(
                             context.getString(

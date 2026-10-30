@@ -50,3 +50,6 @@ dist/
 
 # 构建/测试缓存
 .build/
+
+# 图标生成器的中间产物（入库的是 icon.ico / icon.png / tray/）
+desktopApp/src/main/resources/icon/

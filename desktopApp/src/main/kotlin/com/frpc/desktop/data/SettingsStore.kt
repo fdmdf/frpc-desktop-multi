@@ -9,17 +9,11 @@ import java.io.File
 
 @Serializable
 data class SettingsData(
-    /** system / light / dark */
     val theme: String = "system",
-    /** 自定义引擎路径，空则用内置引擎 */
     val enginePath: String = "",
-    /** 日志里是否显示状态接口轮询噪音 */
     val showAccessLogs: Boolean = false,
-    /** 默认配置 id */
     val defaultProfileId: String? = null,
-    /** 桌面端：启动时自动启动默认配置 */
     val autoStartOnLaunch: Boolean = false,
-    /** 关闭窗口时最小化到托盘而不是退出 */
     val closeToTray: Boolean = true,
 )
 

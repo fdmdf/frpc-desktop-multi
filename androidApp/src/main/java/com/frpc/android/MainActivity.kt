@@ -83,10 +83,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * 语言必须在 super.attachBaseContext 之前换掉：
-     * 那之后 Activity 的 Resources 已经按旧语言加载完了，再改就只有部分字符串生效。
-     */
     override fun attachBaseContext(newBase: Context?) {
         if (newBase == null) return super.attachBaseContext(newBase)
         val language = runCatching {
@@ -118,7 +114,6 @@ fun FrpcApp(container: com.frpc.android.di.AppContainer) {
     val navigator = androidx.compose.runtime.remember { AppNavigator() }
     val current = navigator.current
 
-    // 应用内语言：首次进入已由 attachBaseContext 生效，之后切换需要重建 Activity 才能换掉资源
     val activity = LocalContext.current as? Activity
     val language by container.settingsRepository.language.collectAsStateWithLifecycle()
     val initialLanguage = remember { language }
@@ -138,9 +133,6 @@ fun FrpcApp(container: com.frpc.android.di.AppContainer) {
         navigator.pop()
     }
 
-    // 兜底：只要当前不在任何编辑页，编辑草稿就必须清干净。
-    // 覆盖「切底部 Tab 直接离开配置页」这类没走返回箭头的路径，
-    // 否则草稿会一直存活，下次点开同一份配置看到的还是上次没保存的内容。
     LaunchedEffect(current) {
         val inEditor = current is Screen.ServerEdit ||
             current is Screen.ProxyEdit ||

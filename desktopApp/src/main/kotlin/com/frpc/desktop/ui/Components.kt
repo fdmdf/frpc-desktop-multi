@@ -34,7 +34,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** 状态小圆片（在线/离线/异常等） */
 @Composable
 fun StatusChip(text: String, color: Color, modifier: Modifier = Modifier) {
     Surface(
@@ -52,7 +51,6 @@ fun StatusChip(text: String, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** 分组卡片 */
 @Composable
 fun SectionCard(
     title: String? = null,
@@ -126,12 +124,10 @@ fun NumberField(
     supportingText: String? = null,
     isError: Boolean = false,
     enabled: Boolean = true,
-    /** 允许负数：访问者的 bindPort 用 -1 表示「不监听」，其余端口字段保持纯数字 */
     allowNegative: Boolean = false,
 ) {
     LabeledTextField(
         value = value,
-        // 端口上限 65535 只有 5 位：输入时直接拦住 6 位数字，别等保存才报错
         onValueChange = { input ->
             val negative = allowNegative && input.startsWith("-")
             val digits = input.filter { it.isDigit() }.take(5)
@@ -147,10 +143,6 @@ fun NumberField(
     )
 }
 
-/**
- * 文件路径输入 + 浏览按钮。
- * 可直接粘贴路径（Linux 下常没有可用的图形文件选择器），也可以点「浏览」走系统对话框。
- */
 @Composable
 fun FilePathField(
     value: String?,
@@ -180,7 +172,6 @@ fun FilePathField(
     }
 }
 
-/** 开关行：文字列必须带 weight，否则长说明会把 Switch 挤出卡片 */
 @Composable
 fun SwitchRow(
     label: String,

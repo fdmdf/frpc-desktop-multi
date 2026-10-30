@@ -34,9 +34,7 @@ fun SettingsScreen(container: AppContainer) {
     val settings by container.settings.state.collectAsState()
     val profiles by container.profiles.profiles.collectAsState()
     var engineMessage by remember { mutableStateOf<String?>(null) }
-    // 自定义引擎路径属于排障用的高级选项，默认收起，避免误填
     var showEngineAdvanced by remember { mutableStateOf(false) }
-    // 提前算好，避免在字符串模板里嵌 lambda（Kotlin 解析会报错）
     val defaultProfileName: String? = profiles.firstOrNull { it.id == settings.defaultProfileId }?.name
         ?: profiles.firstOrNull()?.name
 

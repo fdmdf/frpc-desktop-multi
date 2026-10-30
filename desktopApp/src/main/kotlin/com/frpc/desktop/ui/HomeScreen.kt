@@ -54,7 +54,6 @@ fun HomeScreen(
     val profiles by container.profiles.profiles.collectAsState()
     val settings by container.settings.state.collectAsState()
     val state by container.supervisor.state.collectAsState()
-    // 运行中改了配置但只存盘没重载：frpc 还在用旧配置，这里必须给个出口
     val pendingReloadId by container.supervisor.pendingReloadProfileId.collectAsState()
     val metrics by container.supervisor.metrics.collectAsState()
     val status by container.supervisor.status.collectAsState()
@@ -68,12 +67,9 @@ fun HomeScreen(
     val currentProfile = profiles.firstOrNull { it.id == (state.profileId ?: settings.defaultProfileId) }
         ?: profiles.firstOrNull()
 
-    // 启动前自检被拦下时弹出原因（对齐参考项目的 B1001 / B1006 拦截）
     var blockedReason by remember { mutableStateOf<String?>(null) }
-    // 运行中选了别的配置：先确认，再「停止当前 → 用新配置启动」，不能只改默认配置
     var switchTarget by remember { mutableStateOf<ServerProfile?>(null) }
 
-    // 运行时长每秒刷新
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(state.startedAtMs) {
         while (true) {
@@ -85,14 +81,11 @@ fun HomeScreen(
     val running = state.phase == FrpcSupervisor.Phase.RUNNING
     val proxies = currentProfile?.config?.proxies.orEmpty()
     val visitors = currentProfile?.config?.visitors.orEmpty()
-    // 计数只算已启用的：禁用的规则不注册，混进总数会让「0/1 在线」看起来像故障（与 Android 端一致）
     val enabledProxies = proxies.filter { it.enabled != false }
     val enabledVisitors = visitors.filter { it.enabled != false }
     val scope = rememberCoroutineScope()
     var copied by remember { mutableStateOf<String?>(null) }
 
-    // 行内启停：只改 enabled 一个字段，其余仍受「运行中不可编辑」约束。
-    // 代理与访问者共用这一条路径，避免两端行为分叉
     fun setEnabled(profile: ServerProfile, name: String, enabled: Boolean, visitor: Boolean) {
         val updated = profile.copy(
             config = if (visitor) {
@@ -111,7 +104,6 @@ fun HomeScreen(
         )
         scope.launch {
             container.profiles.upsert(updated)
-            // 运行中改 enabled 必须让 frpc 重读配置，否则只是文件变了、进程没变
             if (running) container.supervisor.reload()
         }
     }
@@ -150,7 +142,6 @@ fun HomeScreen(
                     optionLabel = { it.name },
                     onSelect = { target ->
                         if (running && target.id != currentProfile?.id) {
-                            // 运行中不能只改默认：首页会显示 A、frpc 还在跑 B，两边分叉最难排查
                             switchTarget = target
                         } else {
                             container.settings.setDefaultProfileId(target.id)
@@ -168,7 +159,6 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 val (label, color) = when {
-                    // 进程活着但一直登录失败：不能只显示「运行中」，用户会被误导（P4）
                     state.phase == FrpcSupervisor.Phase.RUNNING && serverConnected == false ->
                         "未连上服务器" to StatusError
                     state.phase == FrpcSupervisor.Phase.RUNNING -> "运行中" to StatusRunning
@@ -216,7 +206,6 @@ fun HomeScreen(
                 )
             }
 
-            // P4：登录失败要在主页直接可见，而不是只有日志页能翻到
             if (running && serverConnected == false) {
                 Text(
                     text = "连接 frps 失败：" + (loginError ?: "未知原因") +
@@ -302,7 +291,6 @@ fun HomeScreen(
             }
         }
 
-        // 「已保存但还没重载」：不提示的话，用户会以为改完就生效了
         if (running && pendingReloadId != null && pendingReloadId == state.profileId) {
             SectionCard(title = "配置尚未生效") {
                 Text(
@@ -333,7 +321,6 @@ fun HomeScreen(
                     "在线代理",
                     proxySummary(
                         proxies,
-                        // 运行中拿 frpc 真正加载的那份配置，未运行时按当前显示的配置算
                         if (running) activeCounts.proxies else enabledProxies.size,
                         status?.all?.size,
                         status?.all?.count { it.status == "running" },
@@ -387,7 +374,6 @@ fun HomeScreen(
             val adminItem = status?.item(proxy.name)
             val logState = logStates[proxy.name]
             val (label, color) = when {
-                // enabled = false 的代理 frpc 根本不会注册，不该显示「未知/未运行」让人以为没生效
                 proxy.enabled == false -> "已禁用" to StatusIdle
                 adminItem?.status == "running" -> "在线" to StatusRunning
                 adminItem?.status == "error" -> "错误" to StatusError
@@ -398,8 +384,6 @@ fun HomeScreen(
                 running -> "未知" to StatusIdle
                 else -> "未运行" to StatusIdle
             }
-            // 目标端展示按类型区分：只有 tcp/udp 有「远程端口」，stcp/xtcp 只有访问者能连，
-            // remotePort = 0 与留空一样表示由 frps 随机分配（不能显示成 ":0"）
             val proxyType = proxy.proxyType
             val remote = when {
                 !adminItem?.remoteAddr.isNullOrBlank() -> adminItem?.remoteAddr ?: ""
@@ -441,7 +425,6 @@ fun HomeScreen(
                         Icon(Icons.Filled.ContentCopy, contentDescription = "复制访问地址")
                     }
                     StatusChip(label, color)
-                    // 行内启停：运行中改完立刻 reload，不用进编辑页
                     Switch(
                         checked = proxy.enabled != false,
                         onCheckedChange = { on ->
@@ -462,9 +445,7 @@ fun HomeScreen(
         }
 
         visitors.forEach { visitor ->
-            // admin API 不返回 visitor，注册成功与否只能从 "visitor added: [...]" 日志判断
             val online = running && visitor.name in visitorsOnline
-            // 与代理一致：enabled = false 的访问者 frpc 根本不会注册，不该显示「启动中」
             val (label, color) = when {
                 visitor.enabled == false -> "已禁用" to StatusIdle
                 online -> "在线" to StatusRunning
@@ -472,7 +453,6 @@ fun HomeScreen(
                 else -> "未运行" to StatusIdle
             }
             val listen = if (visitor.bindPort < 0) "不监听端口" else "${visitor.bindAddr}:${visitor.bindPort}"
-            // 卡片上显示 frps 实际查找的名字（含 serverUser / 本机 user 前缀），跨设备时才好排查
             val target = com.frpc.shared.model.FrpcNaming.targetServerProxyName(
                 currentProfile?.config?.user, visitor.serverUser, visitor.serverName,
             )
@@ -492,7 +472,6 @@ fun HomeScreen(
                         )
                     }
                     StatusChip(label, color)
-                    // 行内启停：与代理一致，改完立刻 reload
                     Switch(
                         checked = visitor.enabled != false,
                         onCheckedChange = { on ->
@@ -506,7 +485,6 @@ fun HomeScreen(
         Box(modifier = Modifier.padding(bottom = 8.dp))
     }
 
-    // 运行中切换配置：必须让 frpc 真正换过去，只改默认会让「显示的」和「跑着的」分叉
     switchTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { switchTarget = null },
@@ -524,8 +502,6 @@ fun HomeScreen(
                         scope.launch {
                             container.settings.setDefaultProfileId(target.id)
                             container.supervisor.stop()
-                            // 先等旧进程退出再自检：它还占着状态接口端口时，
-                            // checkBeforeStart 会把「自己占的端口」误报成端口冲突
                             withTimeoutOrNull(10_000) {
                                 container.supervisor.state.first {
                                     it.phase == FrpcSupervisor.Phase.IDLE ||
@@ -548,7 +524,6 @@ fun HomeScreen(
         )
     }
 
-    // 启动前自检未通过：给出可读原因，并可直接跳到配置页修正，而不是只在日志里留一行
     blockedReason?.let { reason ->
         AlertDialog(
             onDismissRequest = { blockedReason = null },
@@ -582,9 +557,6 @@ private fun proxySummary(
     totalFromAdmin: Int?,
     onlineFromAdmin: Int?,
 ): String {
-    // 没有状态接口（admin 关闭）时按生效配置算：
-    // 一是排除已禁用规则（frpc 不注册它们，算进分母就是永远凑不齐的 0/1），
-    // 二是用 frpc 真正加载的那份配置，否则禁用后未重载时会出现「在线 3 / 总 2」
     val total = totalFromAdmin ?: effectiveTotal
     val online = onlineFromAdmin ?: 0
     return if (total > 0) "$online/$total" else "--"

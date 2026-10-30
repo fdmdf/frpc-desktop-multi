@@ -2,7 +2,6 @@
 <resources>
     <string name="app_name">Frpc-Android-Multi</string>
 
-    <!-- 导航 / 通用 -->
     <string name="nav_home">主页</string>
     <string name="nav_configs">配置</string>
     <string name="nav_logs">日志</string>
@@ -28,7 +27,6 @@
     <string name="action_discard">放弃修改</string>
     <string name="action_keep_editing">继续编辑</string>
 
-    <!-- 主页 -->
     <string name="home_no_config">还没有配置，先去「配置」页新建一份</string>
     <string name="home_current_config">当前配置</string>
     <string name="home_switch_config_title">切换配置</string>
@@ -58,7 +56,6 @@
     <string name="home_quick_stats">概览</string>
     <string name="home_group_count">%1$s（%2$d）</string>
 
-    <!-- 运行状态 -->
     <string name="phase_idle">未启动</string>
     <string name="phase_starting">启动中…</string>
     <string name="phase_running">运行中</string>
@@ -67,7 +64,6 @@
     <string name="phase_connect_failed">未连上服务器</string>
     <string name="connect_failed_hint">连接 frps 失败：%1$s。frpc 会持续重试；常见原因是 token 不一致，或地址/端口填错，详情见日志页。</string>
 
-    <!-- 配置管理 -->
     <string name="config_list_title">服务器配置</string>
     <string name="config_new">新建配置</string>
     <string name="config_edit">编辑配置</string>
@@ -97,7 +93,6 @@
     <string name="config_imported_as_default">已导入配置「%1$s」并设为默认</string>
     <string name="config_running">运行中</string>
     <string name="config_back_to_list">返回配置列表</string>
-    <!-- 运行中的配置允许编辑，但要说清「保存 ≠ 生效」 -->
     <string name="config_running_edit_hint">运行中，保存后需「重载配置」才生效</string>
     <string name="config_running_editing_title">该配置正在运行</string>
     <string name="config_running_editing_body">可以直接改并保存，但 frpc 仍在使用旧配置，需要「重载配置」（或停止后重新启动）才会生效。</string>
@@ -113,7 +108,6 @@
     <string name="config_load_errors_title">部分配置无法加载，已跳过：</string>
     <string name="config_load_errors_hint">可删除该配置后重新添加</string>
 
-    <!-- 服务器字段 -->
     <string name="section_server">服务器</string>
     <string name="section_auth">认证</string>
     <string name="section_admin">状态监控</string>
@@ -178,7 +172,6 @@
     <string name="field_udp_packet_size">UDP 包大小</string>
     <string name="field_udp_packet_size_hint">单位字节，默认 1500；需与 frps 一致，影响 udp/sudp</string>
 
-    <!-- 代理字段 -->
     <string name="proxies_title">代理规则</string>
     <string name="proxies_empty">还没有代理规则，点右上角 + 添加</string>
     <string name="proxy_new">新建代理</string>
@@ -253,12 +246,10 @@
     <string name="proxy_type_xtcp">XTCP · P2P 打洞</string>
     <string name="proxy_type_tcpmux">TCPMUX · 端口复用</string>
 
-    <!-- 访问者 -->
     <string name="visitors_title">访问者</string>
     <string name="visitors_empty">还没有访问者规则</string>
     <string name="home_visitors">访问者</string>
     <string name="visitor_no_listen">不监听端口</string>
-    <!-- 访问者没有「远程端口」，摘要里不能用 →，否则会被读成指向一个端口 -->
     <string name="visitor_target_label">访问</string>
     <string name="visitor_new">新建访问者</string>
     <string name="visitor_edit">编辑访问者</string>
@@ -284,11 +275,9 @@
     <string name="field_fallback_timeout">等待时长（毫秒）</string>
     <string name="field_fallback_timeout_hint">留空 = 1000；超时还没打通就切兜底</string>
 
-    <!-- 未保存就退出 -->
     <string name="edit_discard_title">放弃未保存的修改？</string>
     <string name="edit_discard_body">还没点保存，返回后这些改动会丢掉。</string>
 
-    <!-- 校验 -->
     <string name="validation_title">配置校验未通过</string>
     <string name="validation_warnings_title">建议改进</string>
     <string name="reason_empty_required_field">%1$s 不能为空</string>
@@ -309,7 +298,6 @@
     <string name="reason_xtcp_stun_not_set">未填 %1$s：默认地址常超时，打洞会失败。建议填 stun.miwifi.com:3478</string>
     <string name="validation_ok">配置校验通过</string>
 
-    <!-- 日志 -->
     <string name="log_empty">暂无日志</string>
     <string name="log_filter_all">全部</string>
     <string name="log_filter_info">信息</string>
@@ -320,7 +308,6 @@
     <string name="log_clear">清空</string>
     <string name="log_lines">共 %1$d 行</string>
 
-    <!-- 监控 -->
     <string name="monitor_title">运行监控</string>
     <string name="monitor_not_running">frpc 未在运行</string>
     <string name="monitor_process">进程信息</string>
@@ -331,7 +318,6 @@
     <string name="monitor_proxy_status">代理状态</string>
     <string name="monitor_visitor_status">访问者状态</string>
 
-    <!-- 设置 -->
     <string name="settings_theme">主题</string>
     <string name="settings_theme_system">跟随系统</string>
     <string name="settings_theme_light">浅色</string>
@@ -355,7 +341,6 @@
     <string name="settings_show_access_logs_summary">状态页每 4 秒刷新会产生两条日志，默认隐藏</string>
     <string name="settings_about_version">版本 %1$s</string>
 
-    <!-- 服务通知 -->
     <string name="notification_channel_status">运行状态</string>
     <string name="notification_channel_events">事件提醒</string>
     <string name="notification_starting">frpc 启动中…</string>
@@ -370,21 +355,18 @@
     <string name="notification_crashed">frpc 进程退出，正在重启…</string>
     <string name="notification_boot_failed">开机自启失败，请手动打开应用启动</string>
 
-    <!-- 其他 -->
     <string name="error_start_failed">启动失败：%1$s</string>
     <string name="error_binary_missing">未找到适用于当前设备（%1$s）的 frpc 二进制</string>
     <string name="error_no_config">未选择配置</string>
     <string name="copied_to_clipboard">已复制到剪贴板</string>
     <string name="unknown">未知</string>
 
-    <!-- 启动前阻断 -->
     <string name="start_block_title">无法启动</string>
     <string name="start_block_no_server_addr">还没填服务端地址，先去配置里填上 frps 的地址和端口</string>
     <string name="start_block_engine_missing">内置 frpc 引擎缺失，请重新安装应用</string>
     <string name="start_block_admin_port_in_use">状态接口端口 %1$d 已被其他程序占用，换一个端口再启动</string>
     <string name="start_block_go_config">去配置</string>
 
-    <!-- 关于 -->
     <string name="nav_about">关于</string>
     <string name="about_tagline">frp 内网穿透的可视化客户端</string>
     <string name="about_version">版本 %1$s</string>
@@ -394,20 +376,17 @@
     <string name="about_license">开源许可：MIT</string>
     <string name="about_frp_note">内置引擎来自 fatedier/frp（Apache-2.0）</string>
 
-    <!-- 语言 -->
     <string name="settings_language">语言</string>
     <string name="settings_language_system">跟随系统</string>
     <string name="settings_language_zh">简体中文</string>
     <string name="settings_language_en">English</string>
 
-    <!-- 清空全部配置 -->
     <string name="action_reset_all">清空全部配置</string>
     <string name="reset_all_title">清空全部配置？</string>
     <string name="reset_all_message">会删除全部 %1$d 份配置档案，且无法撤销。建议先导出备份。</string>
     <string name="reset_all_done">已清空全部配置</string>
     <string name="settings_reset_all_blocked">frpc 正在运行，请先停止再清空</string>
 
-    <!-- 本机端口选择器 -->
     <string name="proxy_pick_local_port">选择本机端口</string>
     <string name="proxy_scanning_ports">正在扫描本机监听端口…</string>
     <string name="proxy_no_listening_ports">没有扫描到正在监听的端口，请手动输入</string>

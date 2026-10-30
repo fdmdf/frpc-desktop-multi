@@ -7,10 +7,6 @@ import com.frpc.shared.validate.Reason
 import com.frpc.shared.validate.Scope
 import com.frpc.shared.validate.ValidationIssue
 
-/**
- * 校验问题 → 本地化文案。
- * 字段标签从字段路径末段映射；文案模板见 strings.xml（reason_*）。
- */
 fun fieldLabelRes(field: String): Int {
     val key = field.substringAfterLast('.')
     return when (key) {
@@ -81,11 +77,9 @@ fun ValidationIssue.scopePrefixRes(): Int = when (scope) {
     Scope.VISITOR -> R.string.visitors_title
 }
 
-/** 校验问题 → 本地化文案 */
 @Composable
 fun validationMessage(issue: ValidationIssue): String {
     val fieldLabel = stringResource(fieldLabelRes(issue.field))
-    // 重名类问题要展示「哪个名字重了」，不是「哪个字段重了」
     val arg = if (issue.reason == Reason.DUPLICATE_NAME) {
         issue.entityName ?: fieldLabel
     } else {
@@ -95,6 +89,5 @@ fun validationMessage(issue: ValidationIssue): String {
     return issue.detail?.let { "$base（$it）" } ?: base
 }
 
-/** 从 "proxies[0].remotePort" 这类路径中取出表单字段键（"remotePort"） */
 fun ValidationIssue.formFieldKey(): String =
     field.substringAfter("].", field)
