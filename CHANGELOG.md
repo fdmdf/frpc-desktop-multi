@@ -2,6 +2,36 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [未发布]
+
+### 变更
+
+- **代码基线回退到 v1.3.1**：按用户决定整体回退，放弃 1.3.2~1.3.4 的改动；
+  仅从 v1.3.2 保留「桌面端托盘图标重做」这一项（见下）。
+- **桌面端托盘图标重做（自 v1.3.2 保留）**：托盘不再用 512 的 `icon.png` 缩放
+  （24 位 RGB 无 alpha，圆角外是纯白不透明像素，托盘上就是一圈白边），
+  改为按平台 + 屏幕缩放挑选尺寸最接近的图标：
+  Windows/Linux 用 `tray/tray-<n>.png`（16/20/22/24/32/40/48/64/128/256），
+  macOS 用模板图 `tray/tray-mac.png`（22px）与 `tray/tray-mac@2x.png`（44px），
+  由系统对深浅色菜单栏自动反色；取不到任何一档时退回 `/icon.png`。
+  资源由 `scripts/gen-tray-icons/GenTrayIcons.java` 在构建期生成（ARGB 透明）。
+  `icon.png` 重新导出为带 alpha 的 512，`icon.ico` 内嵌 16–256 多档，避免 Explorer 缩放发虚。
+
+### 说明
+
+- 本次回退**连带放弃**以下内容（用户已知并接受）：
+  - 1.3.2：桌面端托盘菜单补全到 12 项、菜单美化与图标资源、Android 主页/设置页视觉分层
+  - 1.3.3：托盘菜单精简为四项、全自绘、三态、四种关闭路径、DPI 适配
+  - 1.3.4：冷启动修复、托盘生命周期幂等、Windows 安装包改用 Inno Setup（图标 + 中文向导）、
+    以及重构（`ServerProfile` 去重 / 格式化统一 / Android 端口 TIME_WAIT 误报修复）
+- **发版前必须改版本号**：当前 `versionCode = 5` / `versionName = 1.3.1`，
+  但已发布过 1.3.4（versionCode 8）。versionCode 单调不减，
+  直接发 1.3.1 会让已装 1.3.2~1.3.4 的用户 `INSTALL_FAILED_VERSION_DOWNGRADE`。
+  实际发版时须改成新版本号（如 1.3.5 / versionCode 9），名字不能再叫 1.3.1。
+- Windows 安装包已回到 jpackage / WiX 产出的 MSI：装过 1.3.4（Inno Setup 安装）的用户
+  无法原地升级，**需先卸载**；且向导会回到英文、安装包无图标（即 1.3.4 修掉的两个问题重现）。
+- `docs/design/` 与 `docs/qa/` 未随代码删除，作为历史记录保留。
+
 ## [1.3.1] - 2026-10-28
 
 ### 修复

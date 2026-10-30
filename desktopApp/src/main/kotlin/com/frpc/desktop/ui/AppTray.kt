@@ -16,6 +16,8 @@ import javax.swing.JPopupMenu
 import javax.swing.JWindow
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * 系统托盘。
@@ -27,6 +29,9 @@ import javax.swing.UIManager
  * 托盘图标本身仍必须是 AWT 的 `TrayIcon`（Swing 没有替代实现），只是弹出菜单换成 Swing 的。
  */
 object AppTray {
+    /** 与 scripts/gen-tray-icons/GenTrayIcons.java 的 COLOR_SIZES 保持一致 */
+    private val TRAY_SIZES = intArrayOf(16, 20, 22, 24, 32, 40, 48, 64, 128, 256)
+
     private var icon: TrayIcon? = null
     private var stopItem: JMenuItem? = null
     private var menu: JPopupMenu? = null
@@ -134,9 +139,35 @@ object AppTray {
         return Font(hit ?: Font.SANS_SERIF, Font.PLAIN, size)
     }
 
+    /**
+     * 按平台 + 缩放挑一张尺寸最接近的托盘图标，避免 AWT 把 512 缩到 16 导致的发虚与边缘杂色。
+     * 资源由 scripts/gen-tray-icons/GenTrayIcons.java 生成；取不到任何一档时退回 /icon.png。
+     */
     private fun loadIcon(): Image? = runCatching {
-        AppTray::class.java.getResourceAsStream("/icon.png")?.use { ImageIO.read(it) }
+        val stream = AppTray::class.java.getResourceAsStream(trayIconResource())
+            ?: AppTray::class.java.getResourceAsStream("/icon.png")
+        stream?.use { ImageIO.read(it) }
     }.getOrNull()
+
+    private fun trayIconResource(): String {
+        val os = System.getProperty("os.name").orEmpty().lowercase()
+        val scale = screenScale()
+        if (os.contains("mac")) {
+            // macOS 菜单栏按模板图处理（AWT 会 setTemplate），只需给出 @1x / @2x 的镂空剪影，
+            // 深浅色菜单栏由系统自动反色
+            return if (scale >= 1.5) "/tray/tray-mac@2x.png" else "/tray/tray-mac.png"
+        }
+        // Windows 托盘 16px@100%（120/144/192/240 DPI 对应 20/24/32/40），Linux 常见 22/24
+        val base = if (os.contains("win")) 16 else 22
+        val target = (base * scale).roundToInt().coerceIn(16, 256)
+        val best = TRAY_SIZES.minByOrNull { abs(it - target) } ?: 32
+        return "/tray/tray-$best.png"
+    }
+
+    private fun screenScale(): Double = runCatching {
+        GraphicsEnvironment.getLocalGraphicsEnvironment()
+            .defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX
+    }.getOrDefault(1.0)
 
     /** 在 EDT 上执行；install 常从 Compose 主线程调用，直接 invokeAndWait 会死锁 */
     private fun onEdt(block: () -> Unit) {
