@@ -46,6 +46,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.frpc.desktop.engine.FrpcSupervisor
 import com.frpc.desktop.core.AppPaths
 import com.frpc.desktop.core.SingleInstance
+import com.frpc.desktop.core.StartupTrace
 import com.frpc.desktop.ui.AppTheme
 import com.frpc.desktop.ui.AppTray
 import com.frpc.desktop.ui.HomeScreen
@@ -53,7 +54,9 @@ import com.frpc.desktop.ui.LogScreen
 import com.frpc.desktop.ui.MonitorScreen
 import com.frpc.desktop.ui.ProfilesScreen
 import com.frpc.desktop.ui.SettingsScreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.awt.Desktop
 import java.awt.Dimension
 import java.awt.Rectangle
@@ -89,6 +92,11 @@ private fun appIconPainter(): BitmapPainter? = runCatching {
 }.getOrNull()
 
 fun main(args: Array<String>) {
+    System.setProperty("compose.application.configure.swing.globals", "false")
+    StartupTrace.mark("main-enter")
+    if (System.getProperty("os.name").orEmpty().lowercase().contains("mac")) {
+        System.setProperty("apple.awt.application.appearance", "system")
+    }
     if ("--smoke" in args) {
         runSmoke(args)
         return
@@ -111,6 +119,7 @@ fun main(args: Array<String>) {
     if (!SingleInstance.acquire(File(AppPaths.home, "app.lock")) { AppActivation.request() }) {
         return
     }
+    StartupTrace.mark("lock-acquired")
     app()
 }
 
@@ -140,6 +149,9 @@ private fun runTrayTest(args: Array<String>) {
 
 private fun app() = application {
     val container = remember { AppContainer().also { it.init() } }
+    StartupTrace.mark("container-ready")
+    val appIcon = remember { appIconPainter() }
+    val engineVersion = remember { container.engine.bundledVersion() }
     val shotPath = System.getProperty("frpc.screenshot")
     val settings by container.settings.state.collectAsState()
     var tab by remember {
@@ -153,6 +165,7 @@ private fun app() = application {
     var windowVisible by remember { mutableStateOf(System.getProperty("frpc.silent") != "true") }
 
     LaunchedEffect(Unit) {
+        StartupTrace.mark("first-composition")
         AppActivation.requests.collect {
             windowVisible = true
         }
@@ -206,16 +219,19 @@ private fun app() = application {
     }
 
     LaunchedEffect(Unit) {
-        AppTray.install(
-            onShow = { windowVisible = true },
-            onStop = { container.supervisor.stop() },
-            onQuit = {
-                container.shutdown()
-                AppTray.remove()
-                SingleInstance.release()
-                exitApplication()
-            },
-        )
+        withContext(Dispatchers.Default) {
+            AppTray.install(
+                onShow = { windowVisible = true },
+                onStop = { container.supervisor.stop() },
+                onQuit = {
+                    container.shutdown()
+                    AppTray.remove()
+                    SingleInstance.release()
+                    exitApplication()
+                },
+            )
+        }
+        StartupTrace.mark("tray-ready")
     }
     LaunchedEffect(trayTooltip, runState.phase) {
         AppTray.updateTooltip(trayTooltip)
@@ -225,7 +241,7 @@ private fun app() = application {
 
     if (windowVisible) {
         Window(
-            icon = appIconPainter(),
+            icon = appIcon,
             onCloseRequest = {
                 if (settings.closeToTray) {
                     windowVisible = false
@@ -244,6 +260,10 @@ private fun app() = application {
         ) {
             LaunchedEffect(Unit) {
                 window.minimumSize = Dimension(1120, 720)
+            }
+            LaunchedEffect(Unit) {
+                while (!window.isShowing) delay(5)
+                StartupTrace.mark("window-showing")
             }
             LaunchedEffect(Unit) {
                 val target = shotPath ?: return@LaunchedEffect
@@ -265,7 +285,7 @@ private fun app() = application {
                     Sidebar(
                         current = tab,
                         onSelect = { tab = it },
-                        version = container.engine.bundledVersion(),
+                        version = engineVersion,
                     )
                     VerticalDivider()
                     Box(modifier = Modifier.weight(1f).fillMaxHeight().background(MaterialTheme.colorScheme.background)) {

@@ -14,10 +14,12 @@ import java.util.UUID
 
 class ProfileStore(private val file: File) {
 
-    private val json = Json {
-        prettyPrint = true
-        ignoreUnknownKeys = true
-        encodeDefaults = true
+    private val json by lazy {
+        Json {
+            prettyPrint = true
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
     }
     private val mutex = Mutex()
     private val _profiles = MutableStateFlow<List<ServerProfile>>(emptyList())

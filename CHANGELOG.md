@@ -2,6 +2,19 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [未发布]
+
+### 性能
+
+- **桌面端冷启动从 ~2.77s 降到 ~1.68s（-39%，本机 7 次采样中位数）**，三处改动：
+  - 关闭 Compose 的 `compose.application.configure.swing.globals`。它会在 `application {}`
+    之前加载 Skiko 原生库并做全局 LAF 初始化，实测占 660ms；本项目不使用 Compose 的
+    Swing 互操作，托盘菜单改用原生 Swing，因此跳过它不会影响功能（托盘弹出方式已手动
+    设为 heavyweight，避免被 1×1 锚点窗口裁剪）。
+  - 托盘安装移到后台线程，右键菜单改为首次弹出时才构建，不再占用首帧路径。
+  - 设置文件的读取改用轻量解析（正则读 6 个扁平字段），失败时自动回退到
+    kotlinx.serialization，避免启动时首次初始化序列化框架的 390ms 开销。
+
 ## [1.3.3] - 2026-10-30
 
 ### 修复

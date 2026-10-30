@@ -22,49 +22,30 @@ import kotlin.math.roundToInt
 object AppTray {
     private val TRAY_SIZES = intArrayOf(16, 20, 22, 24, 32, 40, 48, 64, 128, 256)
 
+    init {
+        runCatching { JPopupMenu.setDefaultLightWeightPopupEnabled(false) }
+    }
+
+    private class Actions(val show: () -> Unit, val stop: () -> Unit, val quit: () -> Unit)
+
     private var icon: TrayIcon? = null
     private var stopItem: JMenuItem? = null
     private var menu: JPopupMenu? = null
     private var anchor: JWindow? = null
+    private var actions: Actions? = null
+    private var running = false
 
     fun install(onShow: () -> Unit, onStop: () -> Unit, onQuit: () -> Unit): Boolean = runCatching {
         if (!SystemTray.isSupported()) return false
+        actions = Actions(onShow, onStop, onQuit)
         val image = loadIcon() ?: return false
-        val font = menuFont(12)
-
-        onEdt {
-            runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
-            UIManager.put("PopupMenu.font", font)
-            UIManager.put("MenuItem.font", font)
-
-            val popup = JPopupMenu().apply { this.font = font }
-
-            fun addItem(text: String, action: () -> Unit): JMenuItem = JMenuItem(text).apply {
-                this.font = font
-                addActionListener { action() }
-                popup.add(this)
-            }
-
-            addItem("显示窗口", onShow)
-            stopItem = addItem("停止 frpc", onStop)
-            popup.addSeparator()
-            addItem("退出", onQuit)
-            menu = popup
-
-            anchor = JWindow().apply {
-                setSize(1, 1)
-                background = Color(0, 0, 0, 0)
-                type = Window.Type.POPUP
-                isVisible = true
-            }
-        }
-
         val trayIcon = TrayIcon(image, "Frpc-Android-Multi").apply { isImageAutoSize = true }
         trayIcon.addActionListener { onShow() }
         trayIcon.addMouseListener(object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) {
                 if (e.isPopupTrigger) showAtMouse()
             }
+
             override fun mouseReleased(e: MouseEvent) {
                 if (e.isPopupTrigger) showAtMouse()
             }
@@ -78,20 +59,26 @@ object AppTray {
         runCatching { icon?.toolTip = text }
     }
 
-    fun updateRunning(running: Boolean) {
-        onEdt { stopItem?.isEnabled = running }
+    fun updateRunning(value: Boolean) {
+        running = value
+        onEdt { stopItem?.isEnabled = value }
     }
 
     fun remove() {
         runCatching { icon?.let { SystemTray.getSystemTray().remove(it) } }
-        onEdt {
-            menu?.isVisible = false
-            anchor?.dispose()
+        val popup = menu
+        val holder = anchor
+        if (popup != null || holder != null) {
+            onEdt {
+                runCatching { popup?.isVisible = false }
+                runCatching { holder?.dispose() }
+            }
         }
         icon = null
         stopItem = null
         menu = null
         anchor = null
+        actions = null
     }
 
     fun showAtMouse() {
@@ -101,14 +88,43 @@ object AppTray {
 
     fun showMenuAt(x: Int, y: Int) {
         onEdt {
-            val m = menu ?: return@onEdt
-            val a = anchor ?: return@onEdt
-            a.setLocation(x, y)
-            m.show(a, 0, 0)
+            val popup = ensureMenu() ?: return@onEdt
+            val holder = anchor ?: return@onEdt
+            holder.setLocation(x, y)
+            popup.show(holder, 0, 0)
         }
     }
 
-    internal fun popupForTest(): JPopupMenu? = menu
+    internal fun popupForTest(): JPopupMenu? = runCatching { ensureMenu() }.getOrNull()
+
+    private fun ensureMenu(): JPopupMenu? {
+        menu?.let { return it }
+        val act = actions ?: return null
+        val font = menuFont(12)
+        runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
+        UIManager.put("PopupMenu.font", font)
+        UIManager.put("MenuItem.font", font)
+        val popup = JPopupMenu().apply { this.font = font }
+
+        fun addItem(text: String, action: () -> Unit): JMenuItem = JMenuItem(text).apply {
+            this.font = font
+            addActionListener { action() }
+            popup.add(this)
+        }
+
+        addItem("显示窗口", act.show)
+        stopItem = addItem("停止 frpc", act.stop).apply { isEnabled = running }
+        popup.addSeparator()
+        addItem("退出", act.quit)
+        anchor = JWindow().apply {
+            setSize(1, 1)
+            background = Color(0, 0, 0, 0)
+            type = Window.Type.POPUP
+            isVisible = true
+        }
+        menu = popup
+        return popup
+    }
 
     private fun menuFont(size: Int): Font {
         val candidates = listOf(
@@ -149,7 +165,7 @@ object AppTray {
         if (SwingUtilities.isEventDispatchThread()) {
             block()
         } else {
-            runCatching { SwingUtilities.invokeAndWait(block) }
+            runCatching { SwingUtilities.invokeLater(block) }
         }
     }
 }
