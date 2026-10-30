@@ -1,38 +1,3 @@
-/*
- * 桌面端图标资源生成器（一次性工具，入库以便随时重跑）。
- *
- * 背景：原来的 desktopApp/src/main/resources/icon.png 是 512x512 的 **24 位 RGB（无 alpha）**，
- * 圆角底板外面是纯白不透明像素 —— 托盘上就是一圈白底/白边；而且只有 512 一张，
- * 运行时由 AWT 缩到 16/20/24，插值又把白色边缘混进图形（发虚 + 白 fringe）。
- *
- * 本生成器改为：**每个尺寸单独绘制**（不是缩放 512），画布一律 ARGB 全透明，
- * 形状用不透明颜色填充，抗锯齿只作用在形状边缘的 alpha 上 —— 不会掺进白色。
- *
- * ## 唯一生成源
- * 改图标一律改本文件头部的**几何常量**，然后：
- *   java scripts/gen-tray-icons/GenTrayIcons.java . --check
- *   java scripts/gen-tray-icons/GenTrayIcons.java . --sync-svg   # 把图标 -a 同步回设计稿
- * `desktopApp/icon.svg` 由 --sync-svg 从常量反向生成，**禁止手改**；
- * `--check` 会比对 SVG 与常量是否同步，漂了就报 FAIL。
- *
- * 用法：
- *   java scripts/gen-tray-icons/GenTrayIcons.java <仓库根目录> [--preview|--check|--sync-svg]
- * 产物：
- *   desktopApp/src/main/resources/tray/tray-<n>.png        彩色透明（Windows / Linux 托盘）
- *   desktopApp/src/main/resources/tray/tray-mac.png        macOS 模板图 @1x（22px，纯黑 + alpha）
- *   desktopApp/src/main/resources/tray/tray-mac@2x.png     macOS 模板图 @2x（44px）
- *   desktopApp/src/main/resources/icon/icon-<n>.png        窗口 / 任务栏多尺寸（见下）
- *   desktopApp/src/main/resources/icon.png                 512 带 alpha（向后兼容：
- *                                                          linux iconFile 与 AppIcons 的兜底路径）
- *   desktopApp/icon.ico                                    多尺寸 ICO（16..256）
- *   desktopApp/icon.svg                                    --sync-svg 时反向生成
- *   .build/icon-preview-{dark,light}.png                   深浅背景合成预览（--preview / --check 时输出）
- *
- * ## 为什么窗口图标要单独出一套多尺寸
- * 以前窗口只有一张 512，AWT 按场景把它缩到 16/20/24/32 —— 缩出来的图既有插值模糊，
- * 细节也会消失（用户看到的就是"标题栏/任务栏发虚"）。AWT 只有拿到**多尺寸列表**
- * （Window.iconImages）才会按场景挑最接近的原图，所以这里为每个尺寸单独绘制。
- */
 import javax.imageio.ImageIO;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
@@ -47,6 +12,7 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -59,56 +25,27 @@ import java.util.Map;
 
 public class GenTrayIcons {
 
-    /**
-     * 彩色托盘图标尺寸：覆盖 Windows 96/120/144/192/240/288/384 DPI 与 Linux 22/24 系列。
-     * 必须与 desktopApp/.../ui/AppIcons.kt 的 COLOR_SIZES 一致（改一边要同步另一边）。
-     */
     static final int[] COLOR_SIZES = {16, 20, 22, 24, 32, 40, 48, 64, 128, 256};
-    /**
-     * 窗口 / 任务栏图标尺寸：交给 Window.iconImages，让 AWT 按场景挑原图而不是缩放 512。
-     * 必须与 desktopApp/.../ui/AppIcons.kt 的 WINDOW_SIZES 一致（改一边要同步另一边）。
-     */
+
     static final int[] WINDOW_SIZES = {16, 20, 24, 32, 40, 48, 64, 128, 256, 512};
-    /** macOS 菜单栏模板图：@1x=22pt, @2x=44px */
     static final int MAC_1X = 22, MAC_2X = 44;
-    /** ICO 内嵌尺寸（Windows Explorer / 任务栏各视图按需取用，避免缩放发虚） */
     static final int[] ICO_SIZES = {16, 20, 24, 32, 40, 48, 64, 128, 256};
 
-    // ---------- 几何常量（单位：画布边长的比例） ----------
-    // 这里是整张图标的唯一真源：所有尺寸的 PNG 与 desktopApp/icon.svg 都由它派生。
-    // 数值是「占边长多少」，所以把 size 乘上去就能得到任何画布上的绝对坐标。
-
-    /** 圆角底板半径。注意 Java 的 RoundRectangle2D 要的是**圆角直径**，乘 2 才是这个值对应的参数 */
     static final float PLATE_R = 0.2266f;
-    /** 渐变底板两端色 */
     static final int GRAD_START = 0x1E88E5, GRAD_END = 0x0B57D0;
 
-    /** 拱门左柱 x / 右柱 x */
     static final float ARCH_L = 0.293f, ARCH_R = 0.707f;
-    /** 柱顶所在的水平线（也是半圆的圆心线） / 柱底 */
     static final float ARCH_TOP_Y = 0.520f, ARCH_BASE_Y = 0.714f;
-    /** 拱门笔画宽 */
     static final float ARCH_W = 0.066f;
 
-    /** 数据流（圆点 + 箭头）所在的水平线 */
     static final float FLOW_Y = 0.605f;
-    /** 源点圆心 x / 半径 */
     static final float DOT_CX = 0.383f, DOT_R = 0.030f;
-    /** 箭头横线起点 / 终点（终点也是箭尖的基准 x） */
     static final float ARROW_X0 = 0.422f, ARROW_X1 = 0.559f;
-    /** 横线笔画宽 / 箭尖长度 / 箭尖半高 */
     static final float ARROW_W = 0.043f, ARROW_TIP = 0.078f, ARROW_HALF = 0.047f;
 
-    /**
-     * 小尺寸时已有元素的最大放大系数（取值见 [smallBoost]）。
-     * 16px 上按比例画出来的圆点直径不到 1px，降采样后 alpha 会掉到看不见，
-     * 于是托盘上又变成"和主窗口不是同一个东西" —— 这正是本轮要修的现象。
-     */
     static final float MAX_SMALL_BOOST = 1.20f;
-    /** 超过这个尺寸就完全按原比例画（多了也不需要：>=48 每个元素都有好几个像素宽） */
     static final int BOOST_OFF_SIZE = 48;
 
-    /** 反向生成 icon.svg 用的画布边长（同时也是向后兼容的那张 icon.png 的尺寸） */
     static final int SVG_SIZE = 512;
 
     public static void main(String[] args) throws Exception {
@@ -130,19 +67,18 @@ public class GenTrayIcons {
         write(drawTemplate(MAC_1X), new File(trayDir, "tray-mac.png"));
         write(drawTemplate(MAC_2X), new File(trayDir, "tray-mac@2x.png"));
 
-        // 窗口 / 任务栏：每个尺寸单独绘制。AWT 只有拿到多尺寸列表才会按场景选原图，
-        // 给单张 512 让它自己缩，缩出来的就是一根棍加两个模糊的点。
         for (int n : WINDOW_SIZES) {
             write(drawColor(n), new File(iconDir, "icon-" + n + ".png"));
         }
-        // 512 单张保留：build.gradle.kts 的 linux iconFile 与 AppIcons 的兜底路径还在用它
         write(drawColor(SVG_SIZE), new File(resDir, "icon.png"));
 
         if (syncSvg) writeSvg(svg);
 
-        Map<Integer, byte[]> icoPng = new LinkedHashMap<>();
-        for (int n : ICO_SIZES) { icoPng.put(n, pngBytes(drawColor(n))); }
-        writeIco(icoPng, new File(root, "desktopApp/icon.ico"));
+        Map<Integer, byte[]> icoFrames = new LinkedHashMap<>();
+        for (int n : ICO_SIZES) {
+            icoFrames.put(n, n >= 256 ? pngBytes(drawColor(n)) : dibBytes(drawColor(n)));
+        }
+        writeIco(icoFrames, new File(root, "desktopApp/icon.ico"));
 
         if (preview) {
             File previewDir = new File(root, ".build");
@@ -159,6 +95,7 @@ public class GenTrayIcons {
             failures += checkPng(new File(trayDir, "tray-mac@2x.png"));
             for (int n : WINDOW_SIZES) { failures += checkPng(new File(iconDir, "icon-" + n + ".png")); }
             failures += checkPng(new File(resDir, "icon.png"));
+            failures += checkIco(new File(root, "desktopApp/icon.ico"));
             failures += checkSvg(svg);
             System.out.println((failures == 0 ? "check: OK（全部产物 + SVG 与常量同步）"
                 : "check: " + failures + " 项 FAIL"));
@@ -167,10 +104,37 @@ public class GenTrayIcons {
         if (failures > 0) System.exit(1);
     }
 
-    /**
-     * 白边自查：透明通道是否存在、四角是否完全透明、最外 2px 有没有近白像素。
-     * 三项全过才算干净（旧 icon.png 在第一步就挂：color type 2，压根没有 alpha）。
-     */
+    static int checkIco(File f) throws Exception {
+        byte[] d = Files.readAllBytes(f.toPath());
+        ByteBuffer buf = ByteBuffer.wrap(d).order(ByteOrder.LITTLE_ENDIAN);
+        int n = buf.getShort(4) & 0xffff;
+        int fail = 0;
+        for (int k = 0; k < n; k++) {
+            int base = 6 + 16 * k;
+            int size = buf.get(base) & 0xff;
+            if (size == 0) size = 256;
+            int bpp = buf.getShort(base + 6) & 0xffff;
+            int len = buf.getInt(base + 8);
+            int off = buf.getInt(base + 12);
+            boolean png = (d[off] & 0xff) == 0x89 && d[off + 1] == 'P';
+            int cornerAlpha;
+            if (png) {
+                BufferedImage img = ImageIO.read(new ByteArrayInputStream(d, off, len));
+                cornerAlpha = (img.getRGB(0, 0) >>> 24) & 0xff;
+            } else {
+                int h = buf.getInt(off + 8) / 2;
+                int rowBytes = size * 4;
+                cornerAlpha = d[off + 40 + (h - 1) * rowBytes + 3] & 0xff;
+            }
+            boolean expectPng = size >= 256;
+            boolean ok = png == expectPng && bpp == 32 && cornerAlpha == 0;
+            if (!ok) fail++;
+            System.out.printf("  [%s] %-14s %3dx%-3d %-3s 角落alpha=%d%n",
+                ok ? "PASS" : "FAIL", f.getName(), size, size, png ? "PNG" : "DIB", cornerAlpha);
+        }
+        return fail;
+    }
+
     static int checkPng(File f) throws Exception {
         BufferedImage img = ImageIO.read(f);
         int w = img.getWidth(), h = img.getHeight();
@@ -196,10 +160,6 @@ public class GenTrayIcons {
         return ok ? 0 : 1;
     }
 
-    /**
-     * SVG 与常量是否同步：把期望文本与磁盘上的 icon.svg 逐字节比。
-     * 漂了说明有人手改了 SVG（或改了常量没重新同步），跑一次 --sync-svg 即可。
-     */
     static int checkSvg(File f) throws Exception {
         if (!f.isFile()) {
             System.out.printf("  [%s] %-28s 文件不存在%n", "FAIL", f.getName());
@@ -213,28 +173,14 @@ public class GenTrayIcons {
         return ok ? 0 : 1;
     }
 
-    // ---------- 绘制 ----------
-
-    /** 彩色版：蓝色渐变圆角底板 + 白色隧道拱门与数据流（源点 + 箭头） */
     static BufferedImage drawColor(int size) {
         return downsampled(size, false);
     }
 
-    /**
-     * macOS 模板图：alpha 决定形状、颜色被系统忽略（规范是黑色）。
-     * 做法是「底板减去字形」的镂空剪影，系统按深浅色自动反色。
-     */
     static BufferedImage drawTemplate(int size) {
         return downsampled(size, true);
     }
 
-    /**
-     * 先在 8 倍画布上画矢量图形，再面积平均降到目标尺寸。
-     *
-     * 不直接在小画布上画，是因为 Java2D 在 16/20/24px 上填充圆角矩形会产生「抗锯齿过覆盖」：
-     * 圆角外的角落会被涂上 36% / 21% / 6% 的底色（32px 起才是 0），托盘上就变成方块感 + 半透明雾点。
-     * 大图绘制没有这个问题（512px 角落 alpha=0），降采样后角落依然干净，边缘还是平滑的。
-     */
     static BufferedImage downsampled(int size, boolean template) {
         int superSize = Math.min(SVG_SIZE, size * 8);
         BufferedImage big = render(superSize, smallBoost(size), template);
@@ -242,25 +188,11 @@ public class GenTrayIcons {
         return areaAverage(big, size);
     }
 
-    /**
-     * 小尺寸时把**已有笔画 / 已有圆点**按比例放大一点点。
-     *
-     * 为什么需要：目标画布只有 size 个像素，圆点半径 DOT_R x 16 只有 0.48px，
-     * 面积平均之后 alpha 掉到 100 以下，肉眼看着就是"没这个点" —— 于是 16px 又变成
-     * 另一张图。这里只放大已有元素，**不增删任何元素**（增删元素 = 换一个图形，
-     * 那正是要修的问题），所以 16px 与 512px 仍然是同一个图案。
-     * >= [BOOST_OFF_SIZE] 一律 1.0。
-     */
     static float smallBoost(int size) {
         if (size >= BOOST_OFF_SIZE) return 1f;
         return 1f + (BOOST_OFF_SIZE - size) * (MAX_SMALL_BOOST - 1f) / BOOST_OFF_SIZE;
     }
 
-    /**
-     * 面积平均降采样。**不能用 Image.SCALE_AREA_AVERAGING**：它对不预乘的 ARGB
-     * 处理有 bug，透明像素的 RGB 会渗进结果（实测 16px 角落被染上 38% 的蓝色）。
-     * 这里改为按 alpha 加权累加 RGB —— 全透明像素（a=0）对颜色没有贡献，角落就还是干净的 0。
-     */
     static BufferedImage areaAverage(BufferedImage src, int size) {
         int sw = src.getWidth(), sh = src.getHeight();
         int[] sp = src.getRGB(0, 0, sw, sh, null, 0, sw);
@@ -299,7 +231,7 @@ public class GenTrayIcons {
         if (template) {
             Area a = new Area(plate(s));
             a.subtract(new Area(glyph(s, boost)));
-            g.setComposite(AlphaComposite.Src); // 只写形状，不与底色混合
+            g.setComposite(AlphaComposite.Src);
             g.setColor(Color.BLACK);
             g.fill(a);
         } else {
@@ -322,30 +254,11 @@ public class GenTrayIcons {
         return g;
     }
 
-    /**
-     * 圆角底板。注意 Java 的 RoundRectangle2D 最后两个参数是**圆角直径**（不是半径）：
-     * SVG 里 rx = PLATE_R x 512 是半径，换算成 Java 的 arcWidth 要乘 2。
-     * 之前直接传 0.23 当半径用，圆角只有原设计的一半，角落被底板填满（托盘上就是方块感）。
-     */
     static RoundRectangle2D plate(float s) {
         float d = s * PLATE_R * 2f;
         return new RoundRectangle2D.Float(0, 0, s, s, d, d);
     }
 
-    /**
-     * 白色字形：隧道拱门 + 数据流（源点圆点 + 向右的箭头）。
-     *
-     * **大小尺寸必须画同一个图形**（这条约定是本轮修的线上问题留下的）：
-     * 以前 <=24px 会走另一套分支 —— 删掉源点圆点、箭头换成居中的实心三角，
-     * 于是 Windows 100% DPI 的托盘（取 tray-16.png）和主窗口（取 icon.png 512）
-     * 画的压根不是同一个东西，用户报的就是"托盘图标跟程序图标不一样"。
-     *
-     * 所以：
-     * - 只有一组元素（拱门 + 圆点 + 横线 + 箭尖），任何尺寸都不许增删元素；
-     * - 小尺寸唯一的区别是 [smallBoost] 把**已有**笔画和圆点按比例放大一点点，
-     *   纯粹是为了在 16px 上还看得见，不是另一套画法；
-     * - 所有元素的位置都是「占边长的比例」，缩放天生就是等比的。
-     */
     static Area glyph(float s, float boost) {
         Area a = new Area();
         float archL = s * ARCH_L, archR = s * ARCH_R;
@@ -355,18 +268,14 @@ public class GenTrayIcons {
         float arrowW = s * ARROW_W * boost;
         float r = (archR - archL) / 2f;
 
-        // 拱门：左柱 → 半圆 → 右柱
         Path2D arch = new Path2D.Float();
         arch.moveTo(archL, baseY);
         arch.lineTo(archL, topY);
-        // 必须是 (180, -180)：从左柱顶出发、经 12 点方向到右柱顶，这样后面的 lineTo 才接得上右柱。
-        // 用 (0, ±180) 会从左柱顶先拉一条线到右端；用 (180, +180) 画出来是下半圆。
         arch.append(new Arc2D.Float(archL, topY - r, archR - archL, r * 2f, 180f, -180f, Arc2D.OPEN), true);
         arch.lineTo(archR, baseY);
         a.add(new Area(new BasicStroke(archW, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
             .createStrokedShape(arch)));
 
-        // 数据流横线：从左柱内侧向右穿出拱门
         float ax1 = s * ARROW_X1;
         Path2D line = new Path2D.Float();
         line.moveTo(s * ARROW_X0, cy);
@@ -374,7 +283,6 @@ public class GenTrayIcons {
         a.add(new Area(new BasicStroke(arrowW, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND)
             .createStrokedShape(line)));
 
-        // 箭尖：以横线终点为基准，向后收 35%、向前伸 65%
         float tip = s * ARROW_TIP, half = s * ARROW_HALF;
         Path2D head = new Path2D.Float();
         head.moveTo(ax1 - tip * 0.35f, cy - half);
@@ -383,23 +291,11 @@ public class GenTrayIcons {
         head.closePath();
         a.add(new Area(head));
 
-        // 源点：隧道左边那个"入口"。以前 <=24px 会被删掉，那样托盘就少了一个元素，
-        // 和主窗口不是同一张图 —— 现在任何尺寸都画，只按 boost 微调半径
         float rr = s * DOT_R * boost;
         a.add(new Area(new Ellipse2D.Float(s * DOT_CX - rr, cy - rr, rr * 2f, rr * 2f)));
         return a;
     }
 
-    // ---------- SVG 反向生成 ----------
-
-    /**
-     * 用上面的几何常量生成 icon.svg。
-     *
-     * 存在的意义：SVG 是给人看 / 给设计工具用的「稿」，Java2D 才是唯一生成源。
-     * 以前两边各写一份，改一边忘另一边就会漂（第一轮比对时就发现箭尖的 x 差了 10px，
-     * SVG 写 282/322，常量算出来是 272/312）。现在 SVG 由这里单向覆盖，
-     * `--check` 会比对两者是否一致 —— 从此不可能漂移。
-     */
     static String svgText() {
         float s = SVG_SIZE;
         int rx = round(PLATE_R * s);
@@ -456,8 +352,6 @@ public class GenTrayIcons {
         return String.format("#%06X", rgb & 0xFFFFFF);
     }
 
-    // ---------- 输出 ----------
-
     static void write(BufferedImage img, File f) throws Exception {
         f.getParentFile().mkdirs();
         if (!ImageIO.write(img, "png", f)) { throw new IllegalStateException("png writer missing: " + f); }
@@ -470,23 +364,69 @@ public class GenTrayIcons {
         return bos.toByteArray();
     }
 
-    /** 手写 ICO：ICONDIR + 若干 ICONDIRENTRY + PNG 数据（Vista 起支持 PNG 条目） */
+    static byte[] dibBytes(BufferedImage img) {
+        BufferedImage src = img;
+        if (src.getType() != BufferedImage.TYPE_INT_ARGB) {
+            BufferedImage tmp = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = tmp.createGraphics();
+            g.drawImage(src, 0, 0, null);
+            g.dispose();
+            src = tmp;
+        }
+        int w = src.getWidth(), h = src.getHeight();
+        int rowBytes = w * 4;
+        int maskRow = ((w + 31) / 32) * 4;
+        int maskSize = maskRow * h;
+        ByteBuffer buf = ByteBuffer.allocate(40 + rowBytes * h + maskSize).order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(40);
+        buf.putInt(w);
+        buf.putInt(h * 2);
+        buf.putShort((short) 1);
+        buf.putShort((short) 32);
+        buf.putInt(0);
+        buf.putInt(rowBytes * h);
+        buf.putInt(0);
+        buf.putInt(0);
+        buf.putInt(0);
+        buf.putInt(0);
+        for (int y = h - 1; y >= 0; y--) {
+            for (int x = 0; x < w; x++) {
+                int argb = src.getRGB(x, y);
+                buf.put((byte) (argb & 0xff));
+                buf.put((byte) ((argb >>> 8) & 0xff));
+                buf.put((byte) ((argb >>> 16) & 0xff));
+                buf.put((byte) ((argb >>> 24) & 0xff));
+            }
+        }
+        byte[] mask = new byte[maskSize];
+        for (int y = 0; y < h; y++) {
+            int row = (h - 1 - y) * maskRow;
+            for (int x = 0; x < w; x++) {
+                if ((src.getRGB(x, y) >>> 24) == 0) {
+                    mask[row + (x >> 3)] |= (byte) (0x80 >>> (x & 7));
+                }
+            }
+        }
+        buf.put(mask);
+        return buf.array();
+    }
+
     static void writeIco(Map<Integer, byte[]> images, File f) throws Exception {
         int n = images.size();
         ByteBuffer dir = ByteBuffer.allocate(6 + 16 * n).order(ByteOrder.LITTLE_ENDIAN);
-        dir.putShort((short) 0);          // reserved
-        dir.putShort((short) 1);          // type: icon
-        dir.putShort((short) n);          // count
+        dir.putShort((short) 0);
+        dir.putShort((short) 1);
+        dir.putShort((short) n);
         int offset = 6 + 16 * n;
         for (Map.Entry<Integer, byte[]> e : images.entrySet()) {
             int size = e.getKey();
             byte[] data = e.getValue();
-            dir.put(size >= 256 ? 0 : (byte) size);   // width
-            dir.put(size >= 256 ? 0 : (byte) size);   // height
-            dir.put((byte) 0);                        // color count
-            dir.put((byte) 0);                        // reserved
-            dir.putShort((short) 1);                  // planes
-            dir.putShort((short) 32);                 // bit count
+            dir.put(size >= 256 ? 0 : (byte) size);
+            dir.put(size >= 256 ? 0 : (byte) size);
+            dir.put((byte) 0);
+            dir.put((byte) 0);
+            dir.putShort((short) 1);
+            dir.putShort((short) 32);
             dir.putInt(data.length);
             dir.putInt(offset);
             offset += data.length;
@@ -499,10 +439,6 @@ public class GenTrayIcons {
             + images.keySet() + ", " + f.length() + " bytes)");
     }
 
-    /**
-     * 预览：把小尺寸那一档放大 6 倍（最近邻，不放插值），分别合成到浅色与深色托盘背景上。
-     * 用最近邻是为了看清真实的像素分布 —— 插值会把 16px 的锯齿抹平，反而看不出问题。
-     */
     static BufferedImage previewSheet(boolean dark) {
         int[] sizes = {16, 20, 24, 32, 48};
         int zoom = 6, pad = 10;
