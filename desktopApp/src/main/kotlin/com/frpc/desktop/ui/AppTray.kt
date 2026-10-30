@@ -1,53 +1,42 @@
 package com.frpc.desktop.ui
 
-import java.awt.Color
-import java.awt.Font
+import com.frpc.desktop.ui.tray.TrayMenuActions
+import com.frpc.desktop.ui.tray.TrayMenuState
+import com.frpc.desktop.ui.tray.TrayMenuWindow
 import java.awt.GraphicsEnvironment
 import java.awt.Image
 import java.awt.MouseInfo
 import java.awt.SystemTray
 import java.awt.TrayIcon
-import java.awt.Window
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
-import javax.swing.JMenuItem
-import javax.swing.JPopupMenu
-import javax.swing.JWindow
 import javax.swing.SwingUtilities
-import javax.swing.UIManager
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 object AppTray {
     private val TRAY_SIZES = intArrayOf(16, 20, 22, 24, 32, 40, 48, 64, 128, 256)
 
-    init {
-        runCatching { JPopupMenu.setDefaultLightWeightPopupEnabled(false) }
-    }
-
-    private class Actions(val show: () -> Unit, val stop: () -> Unit, val quit: () -> Unit)
-
     private var icon: TrayIcon? = null
-    private var stopItem: JMenuItem? = null
-    private var menu: JPopupMenu? = null
-    private var anchor: JWindow? = null
-    private var actions: Actions? = null
-    private var running = false
+    private var menu: TrayMenuWindow? = null
+    private var state = TrayMenuState()
+    private var actions = TrayMenuActions()
 
-    fun install(onShow: () -> Unit, onStop: () -> Unit, onQuit: () -> Unit): Boolean = runCatching {
+    fun install(handlers: TrayMenuActions): Boolean = runCatching {
         if (!SystemTray.isSupported()) return false
-        actions = Actions(onShow, onStop, onQuit)
+        actions = handlers
         val image = loadIcon() ?: return false
         val trayIcon = TrayIcon(image, "Frpc-Android-Multi").apply { isImageAutoSize = true }
-        trayIcon.addActionListener { onShow() }
+        trayIcon.addActionListener { handlers.show() }
         trayIcon.addMouseListener(object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) {
-                if (e.isPopupTrigger) showAtMouse()
+                if (e.isPopupTrigger) toggleMenu()
             }
 
             override fun mouseReleased(e: MouseEvent) {
-                if (e.isPopupTrigger) showAtMouse()
+                if (e.isPopupTrigger) toggleMenu()
             }
         })
         SystemTray.getSystemTray().add(trayIcon)
@@ -55,87 +44,81 @@ object AppTray {
         true
     }.getOrDefault(false)
 
+    fun updateState(value: TrayMenuState) {
+        state = value
+        onEdt { menu?.update(state, actions) }
+    }
+
     fun updateTooltip(text: String) {
         runCatching { icon?.toolTip = text }
     }
 
-    fun updateRunning(value: Boolean) {
-        running = value
-        onEdt { stopItem?.isEnabled = value }
-    }
-
     fun remove() {
-        runCatching { icon?.let { SystemTray.getSystemTray().remove(it) } }
-        val popup = menu
-        val holder = anchor
-        if (popup != null || holder != null) {
-            onEdt {
-                runCatching { popup?.isVisible = false }
-                runCatching { holder?.dispose() }
+        onEdt {
+            menu?.let { window ->
+                runCatching { window.hideMenu(restoreFocus = false) }
+                runCatching { window.dispose() }
             }
+            menu = null
         }
+        runCatching { icon?.let { SystemTray.getSystemTray().remove(it) } }
         icon = null
-        stopItem = null
-        menu = null
-        anchor = null
-        actions = null
-    }
-
-    fun showAtMouse() {
-        val p = runCatching { MouseInfo.getPointerInfo().location }.getOrNull() ?: return
-        showMenuAt(p.x, p.y)
     }
 
     fun showMenuAt(x: Int, y: Int) {
         onEdt {
-            val popup = ensureMenu() ?: return@onEdt
-            val holder = anchor ?: return@onEdt
-            holder.setLocation(x, y)
-            popup.show(holder, 0, 0)
+            val window = ensureMenu()
+            if (window.hasFocusOrVisible()) {
+                window.hideMenu(restoreFocus = false)
+            } else {
+                window.openAt(x, y)
+            }
         }
     }
 
-    internal fun popupForTest(): JPopupMenu? = runCatching { ensureMenu() }.getOrNull()
-
-    private fun ensureMenu(): JPopupMenu? {
-        menu?.let { return it }
-        val act = actions ?: return null
-        val font = menuFont(12)
-        runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
-        UIManager.put("PopupMenu.font", font)
-        UIManager.put("MenuItem.font", font)
-        val popup = JPopupMenu().apply { this.font = font }
-
-        fun addItem(text: String, action: () -> Unit): JMenuItem = JMenuItem(text).apply {
-            this.font = font
-            addActionListener { action() }
-            popup.add(this)
+    fun renderMenuImage(
+        target: TrayMenuState,
+        handlers: TrayMenuActions,
+        scale: Int,
+        hoverIndex: Int,
+        selectedIndex: Int,
+    ): BufferedImage? = runCatching {
+        var result: BufferedImage? = null
+        val task = Runnable {
+            val window = TrayMenuWindow()
+            window.update(target, handlers)
+            result = window.renderToImage(scale, hoverIndex, selectedIndex)
+            runCatching { window.dispose() }
         }
+        if (SwingUtilities.isEventDispatchThread()) task.run() else SwingUtilities.invokeAndWait(task)
+        result
+    }.getOrNull()
 
-        addItem("显示窗口", act.show)
-        stopItem = addItem("停止 frpc", act.stop).apply { isEnabled = running }
-        popup.addSeparator()
-        addItem("退出", act.quit)
-        anchor = JWindow().apply {
-            setSize(1, 1)
-            background = Color(0, 0, 0, 0)
-            type = Window.Type.POPUP
-            isVisible = true
+    private fun toggleMenu() {
+        onEdt {
+            val window = ensureMenu()
+            if (window.hasFocusOrVisible()) {
+                window.hideMenu(restoreFocus = false)
+            } else {
+                val point = runCatching { MouseInfo.getPointerInfo().location }.getOrNull() ?: return@onEdt
+                window.openAt(point.x, point.y)
+            }
         }
-        menu = popup
-        return popup
     }
 
-    private fun menuFont(size: Int): Font {
-        val candidates = listOf(
-            "Microsoft YaHei UI", "Microsoft YaHei", "SimHei", "SimSun",
-            "Noto Sans CJK SC", "PingFang SC",
-        )
-        val installed = runCatching {
-            GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toSet()
-        }.getOrDefault(emptySet())
-        val hit = candidates.firstOrNull { it in installed }
-        return Font(hit ?: Font.SANS_SERIF, Font.PLAIN, size)
+    private fun ensureMenu(): TrayMenuWindow {
+        menu?.let { existing ->
+            existing.update(state, actions)
+            return existing
+        }
+        val created = TrayMenuWindow()
+        created.update(state, actions)
+        menu = created
+        return created
+    }
+
+    private fun onEdt(block: () -> Unit) {
+        if (SwingUtilities.isEventDispatchThread()) block() else SwingUtilities.invokeLater(block)
     }
 
     private fun loadIcon(): Image? = runCatching {
@@ -160,12 +143,4 @@ object AppTray {
         GraphicsEnvironment.getLocalGraphicsEnvironment()
             .defaultScreenDevice.defaultConfiguration.defaultTransform.scaleX
     }.getOrDefault(1.0)
-
-    private fun onEdt(block: () -> Unit) {
-        if (SwingUtilities.isEventDispatchThread()) {
-            block()
-        } else {
-            runCatching { SwingUtilities.invokeLater(block) }
-        }
-    }
 }

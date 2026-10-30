@@ -43,8 +43,12 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.frpc.desktop.core.AppInfo
 import com.frpc.desktop.engine.FrpcSupervisor
 import com.frpc.desktop.core.AppPaths
+import com.frpc.desktop.ui.tray.TrayMenuActions
+import com.frpc.desktop.ui.tray.TrayMenuState
 import com.frpc.desktop.core.SingleInstance
 import com.frpc.desktop.core.StartupTrace
 import com.frpc.desktop.ui.AppTheme
@@ -113,6 +117,10 @@ fun main(args: Array<String>) {
         runTrayTest(args)
         return
     }
+    if ("--tray-menu-render" in args) {
+        runTrayMenuRender(args)
+        return
+    }
     if ("--silent" in args) {
         System.setProperty("frpc.silent", "true")
     }
@@ -130,20 +138,48 @@ object AppActivation {
     }
 }
 
+private fun demoMenuState(running: Boolean, dark: Boolean): TrayMenuState = TrayMenuState(
+    running = running,
+    busy = false,
+    statusLine = if (running) "运行中 · 代理 3/3 · 访问者 1/1" else "未运行 · 默认配置",
+    statusDot = if (running) java.awt.Color(0x2E7D32) else java.awt.Color(0x5B6068),
+    adminPort = 7400,
+    version = AppInfo.version,
+    engineVersion = "0.71.1",
+    dark = dark,
+)
+
 private fun runTrayTest(args: Array<String>) {
     val target = File(args.getOrNull(args.indexOf("--tray-test") + 1) ?: "tray-test.png")
-    if (!AppTray.install(onShow = {}, onStop = {}, onQuit = {})) {
+    if (!AppTray.install(TrayMenuActions())) {
         println("tray not supported")
         exitProcess(4)
     }
     AppTray.updateTooltip("Frpc-Android-Multi · 运行中 · 代理 3/3 · 访问者 1/1")
-    AppTray.updateRunning(true)
-    val popup = AppTray.popupForTest() ?: run { println("no popup"); exitProcess(5) }
-    AppTray.showMenuAt(60, 60)
+    AppTray.updateState(demoMenuState(running = true, dark = false))
+    AppTray.showMenuAt(120, 120)
     Thread.sleep(1_200)
-    val shot = Robot().createScreenCapture(Rectangle(55, 55, 240, 170))
+    val shot = Robot().createScreenCapture(Rectangle(100, 100, 300, 420))
     ImageIO.write(shot, "png", target)
     println("saved: ${target.absolutePath}")
+    exitProcess(0)
+}
+
+private fun runTrayMenuRender(args: Array<String>) {
+    val index = args.indexOf("--tray-menu-render")
+    val target = File(args.getOrNull(index + 1) ?: "tray-menu.png")
+    val hover = args.getOrNull(index + 2)?.toIntOrNull() ?: -1
+    val dark = "--dark" in args
+    val running = "--idle" !in args
+    val image = AppTray.renderMenuImage(
+        demoMenuState(running = running, dark = dark),
+        TrayMenuActions(),
+        3,
+        hover,
+        -1,
+    ) ?: run { println("render failed"); exitProcess(6) }
+    ImageIO.write(image, "png", target)
+    println("saved: ${target.absolutePath} (${image.width}x${image.height})")
     exitProcess(0)
 }
 
@@ -218,24 +254,107 @@ private fun app() = application {
         }
     }
 
+    val systemDark = isSystemInDarkTheme()
+    val trayDark = when (settings.theme) {
+        "dark" -> true
+        "light" -> false
+        else -> systemDark
+    }
+    val trayStatusText = buildString {
+        when (runState.phase) {
+            FrpcSupervisor.Phase.RUNNING -> {
+                append("运行中")
+                if (activeCounts.proxies > 0) {
+                    val online = proxyStatus?.all?.count { it.status == "running" } ?: 0
+                    append(" · 代理 ").append(online).append('/').append(activeCounts.proxies)
+                }
+                if (activeCounts.visitors > 0) {
+                    val online = activeProfile?.config?.visitors
+                        ?.count { it.enabled != false && it.name in visitorsOnline } ?: 0
+                    append(" · 访问者 ").append(online).append('/').append(activeCounts.visitors)
+                }
+            }
+            FrpcSupervisor.Phase.STARTING -> append("启动中")
+            FrpcSupervisor.Phase.STOPPING -> append("停止中")
+            FrpcSupervisor.Phase.ERROR -> append("异常")
+            FrpcSupervisor.Phase.IDLE -> append("未运行")
+        }
+        activeProfile?.let { append(" · ").append(it.name) }
+    }
+    val trayStatusDot = when (runState.phase) {
+        FrpcSupervisor.Phase.RUNNING -> java.awt.Color(0x2E7D32)
+        FrpcSupervisor.Phase.STARTING, FrpcSupervisor.Phase.STOPPING -> java.awt.Color(0xB26A00)
+        FrpcSupervisor.Phase.ERROR -> java.awt.Color(0xB3261E)
+        FrpcSupervisor.Phase.IDLE -> java.awt.Color(0x5B6068)
+    }
+    val trayState = TrayMenuState(
+        running = runState.phase == FrpcSupervisor.Phase.RUNNING,
+        busy = runState.phase == FrpcSupervisor.Phase.STARTING ||
+            runState.phase == FrpcSupervisor.Phase.STOPPING,
+        statusLine = trayStatusText,
+        statusDot = trayStatusDot,
+        adminPort = runState.adminPort,
+        version = AppInfo.version,
+        engineVersion = engineVersion,
+        dark = trayDark,
+    )
+
+    val trayActions = remember {
+        TrayMenuActions(
+            show = { windowVisible = true },
+            toggleRun = {
+                val phase = container.supervisor.state.value.phase
+                if (phase == FrpcSupervisor.Phase.RUNNING || phase == FrpcSupervisor.Phase.STARTING) {
+                    container.supervisor.stop()
+                } else {
+                    val stored = container.settings.state.value
+                    val profile = container.profiles.find(stored.defaultProfileId)
+                        ?: container.profiles.profiles.value.firstOrNull()
+                    if (profile != null) container.supervisor.start(profile)
+                }
+            },
+            restart = {
+                val profile = container.profiles.find(container.supervisor.state.value.profileId)
+                if (profile != null) {
+                    container.supervisor.stop()
+                    container.supervisor.start(profile, isRestart = true)
+                }
+            },
+            openStatusPage = { port ->
+                runCatching {
+                    if (Desktop.isDesktopSupported()) {
+                        Desktop.getDesktop().browse(URI("http://127.0.0.1:$port/static/"))
+                    }
+                }
+            },
+            openLogs = {
+                runCatching {
+                    if (Desktop.isDesktopSupported()) Desktop.getDesktop().open(AppPaths.logsDir)
+                }
+            },
+            openData = {
+                runCatching {
+                    if (Desktop.isDesktopSupported()) Desktop.getDesktop().open(AppPaths.home)
+                }
+            },
+            quit = {
+                container.shutdown()
+                AppTray.remove()
+                SingleInstance.release()
+                exitApplication()
+            },
+        )
+    }
+
     LaunchedEffect(Unit) {
         withContext(Dispatchers.Default) {
-            AppTray.install(
-                onShow = { windowVisible = true },
-                onStop = { container.supervisor.stop() },
-                onQuit = {
-                    container.shutdown()
-                    AppTray.remove()
-                    SingleInstance.release()
-                    exitApplication()
-                },
-            )
+            AppTray.install(trayActions)
         }
         StartupTrace.mark("tray-ready")
     }
-    LaunchedEffect(trayTooltip, runState.phase) {
+    LaunchedEffect(trayState, trayTooltip) {
+        AppTray.updateState(trayState)
         AppTray.updateTooltip(trayTooltip)
-        AppTray.updateRunning(runState.phase == FrpcSupervisor.Phase.RUNNING)
     }
     DisposableEffect(Unit) { onDispose { AppTray.remove() } }
 
