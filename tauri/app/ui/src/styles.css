@@ -567,6 +567,27 @@ body {
   padding: 2px 0;
 }
 
+/* 轻提示（复制结果等）：底部居中，避开移动端底部导航 */
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 24px;
+  z-index: 200;
+  max-width: calc(100vw - 32px);
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme="dark"] .toast {
+  background: rgba(255, 255, 255, 0.92);
+  color: #141518;
+}
+
 /* ---------------- 窄屏（手机 / Android）适配 ----------------
    桌面端是「224px 侧栏 + 内容」两栏，直接套到手机上会把内容挤成一条，
    所以窄屏改为「顶栏 + 内容 + 底部导航栏」的移动端骨架。 */
@@ -695,5 +716,10 @@ body {
   /* 固定宽度的选择器（当前配置 / 日志筛选）窄屏改为整行 */
   .fixed-field {
     width: 100%;
+  }
+
+  /* 抬到底部导航栏之上 */
+  .toast {
+    bottom: 80px;
   }
 }

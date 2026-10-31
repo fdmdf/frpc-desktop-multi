@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { api } from "../api";
 import { formatDateTime, formatDuration, formatMemoryKb, formatPercent, snapshotAll, snapshotItem, targetServerProxyName } from "../format";
 import { useEngineStore } from "../stores/engine";
 
 const store = useEngineStore();
+const router = useRouter();
+// Android 上无法用 xdg-open 唤起浏览器，面板改成复制地址让用户自己粘贴
+const isAndroid = /Android/i.test(navigator.userAgent || "");
 const now = ref(Date.now());
 let timer: number | undefined;
 onMounted(() => {
@@ -68,10 +72,35 @@ const onlineSummary = computed(() => {
 });
 
 const copied = ref("");
-function copyRemote(text: string) {
-  navigator.clipboard?.writeText(text).catch(() => {});
-  copied.value = text;
-  setTimeout(() => (copied.value = ""), 1500);
+
+/// 可复制的真实访问地址；拿不到（随机端口 / 私密代理 / 还没上线）时返回 null
+function copyableAddr(proxy: (typeof proxies.value)[number]): string | null {
+  const item = snapshotItem(store.status, proxy.name);
+  if (item?.remoteAddr) return item.remoteAddr;
+  const domain = proxy.customDomains?.[0] || proxy.subdomain;
+  if (domain) return domain;
+  const host = currentProfile.value?.config.serverAddr?.trim();
+  if (proxy.remotePort != null && proxy.remotePort !== 0) {
+    return host ? `${host}:${proxy.remotePort}` : String(proxy.remotePort);
+  }
+  return null;
+}
+
+function visitorAddr(visitor: (typeof visitors.value)[number]): string | null {
+  if (visitor.bindPort < 0) return null;
+  return `${visitor.bindAddr}:${visitor.bindPort}`;
+}
+
+async function copyRemote(text: string | null) {
+  if (!text) return;
+  try {
+    if (!navigator.clipboard) throw new Error("clipboard 不可用");
+    await navigator.clipboard.writeText(text);
+    copied.value = `已复制 ${text}`;
+  } catch {
+    copied.value = `复制失败，可手动复制：${text}`;
+  }
+  setTimeout(() => (copied.value = ""), 2500);
 }
 
 async function toggleEnabled(name: string, enabled: boolean, visitor: boolean) {
@@ -146,10 +175,21 @@ async function toggleRun() {
   }
 }
 
-function editProfile() {
-  if (currentProfile.value) {
-    store.editingProfileId = currentProfile.value.id;
+const panelUrl = computed(() => `http://127.0.0.1:${store.runState.adminPort}/static/`);
+
+function openPanel() {
+  if (isAndroid) {
+    void copyRemote(panelUrl.value);
+    return;
   }
+  void api.openUrl(panelUrl.value);
+}
+
+function editProfile() {
+  if (!currentProfile.value) return;
+  // 只置 editingProfileId 不够：配置页还没挂载，点了会像没反应 —— 必须同时跳转
+  store.editingProfileId = currentProfile.value.id;
+  void router.push("/profiles");
 }
 
 const uptime = computed(() =>
@@ -202,11 +242,8 @@ const uptime = computed(() =>
         v-if="running && store.runState.adminEnabled && store.runState.adminPort > 0"
         style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap"
       >
-        <button
-          class="btn text-btn"
-          @click="api.openUrl(`http://127.0.0.1:${store.runState.adminPort}/static/`)"
-        >
-          打开 frp 面板（浏览器需登录）
+        <button class="btn text-btn" @click="openPanel">
+          {{ isAndroid ? "复制 frp 面板地址" : "打开 frp 面板（浏览器需登录）" }}
         </button>
         <span class="muted small">http://127.0.0.1:{{ store.runState.adminPort }}/static/</span>
         <span v-if="!store.adminReachable" class="error-text small">
@@ -276,7 +313,7 @@ const uptime = computed(() =>
         <h3 class="page-title" style="font-size: 16px; color: var(--brand); margin: 4px 0 0">
           代理规则（{{ enabledProxies.length }}）
         </h3>
-        <span v-if="copied" class="muted small">已复制：{{ copied }}</span>
+        <span v-if="!isAndroid && copied" class="muted small">{{ copied }}</span>
       </div>
 
       <div v-for="proxy in proxies" :key="proxy.name" class="section-card">
@@ -297,7 +334,8 @@ const uptime = computed(() =>
           <button
             class="icon-btn"
             title="复制访问地址"
-            @click="copyRemote(remoteOf(proxy, snapshotItem(store.status, proxy.name)))"
+            :disabled="!copyableAddr(proxy)"
+            @click="copyRemote(copyableAddr(proxy))"
           >
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
@@ -337,6 +375,16 @@ const uptime = computed(() =>
               {{ targetServerProxyName(currentProfile?.config.user, visitor.serverUser, visitor.serverName) }}
             </div>
           </div>
+          <button
+            class="icon-btn"
+            title="复制本地监听地址"
+            :disabled="!visitorAddr(visitor)"
+            @click="copyRemote(visitorAddr(visitor))"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+            </svg>
+          </button>
           <span
             class="status-chip"
             :class="
@@ -372,6 +420,9 @@ const uptime = computed(() =>
     </template>
 
     <div style="height: 8px"></div>
+
+    <!-- 复制结果提示：放在底部固定层，任何位置点了复制都看得见 -->
+    <div v-if="copied" class="toast">{{ copied }}</div>
 
     <div v-if="switchTargetId" class="modal-mask" @click.self="switchTargetId = ''">
       <div class="modal" style="width: 480px">

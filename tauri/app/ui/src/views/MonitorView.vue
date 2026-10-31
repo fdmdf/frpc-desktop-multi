@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { formatDuration, formatMemoryKb, formatPercent, snapshotAll } from "../format";
 import { useEngineStore } from "../stores/engine";
 
@@ -12,7 +12,13 @@ const memHistory = computed(() =>
   store.metricsHistory.map((m) => m.rssKb == null ? null : m.rssKb / 1024).filter((v): v is number => v != null),
 );
 
-const now = computed(() => Date.now());
+// 运行时长要自己走：computed 里没有响应式依赖，Date.now() 只会算一次（旧实现导致时长停滞）
+const now = ref(Date.now());
+let timer: number | undefined;
+onMounted(() => {
+  timer = window.setInterval(() => (now.value = Date.now()), 1000);
+});
+onUnmounted(() => window.clearInterval(timer));
 
 const phaseText = computed(() => {
   const s = store.runState;

@@ -50,9 +50,19 @@ async function save() {
     filters: [{ name: "文本文件", extensions: ["txt"] }],
   });
   if (!target) return;
-  await api.writeTextFile(target, await api.getLogsText());
-  saved.value = `已保存到 ${target}`;
+  // 所见即所得：界面上有筛选（标签页 / 级别 / 搜索）时只导出筛选出来的行
+  const filtering = filtered.value.length !== store.logs.length;
+  const text = filtering
+    ? filtered.value.map((l) => `${formatLogTime(l.timeMs)} ${l.message}`).join("\n")
+    : await api.getLogsText();
+  await api.writeTextFile(target, text);
+  saved.value = filtering
+    ? `已保存当前筛选的 ${filtered.value.length} 行到 ${target}`
+    : `已保存到 ${target}`;
 }
+
+// Android 属于 unix 但没有 xdg-open，也没有可唤起的文件管理器
+const isAndroid = /Android/i.test(navigator.userAgent || "");
 
 async function openLogsDir() {
   const dataDir = await api.getDataDir();
@@ -76,7 +86,7 @@ async function openLogsDir() {
         </div>
         <button class="btn filled" @click="save">保存</button>
         <button class="btn filled" @click="store.clearLogs()">清空</button>
-        <button class="btn" @click="openLogsDir">日志目录</button>
+        <button v-if="!isAndroid" class="btn" @click="openLogsDir">日志目录</button>
       </div>
     </div>
 

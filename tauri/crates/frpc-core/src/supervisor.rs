@@ -754,6 +754,8 @@ impl Supervisor {
             profile_name,
             ..RunState::default()
         });
+        // 已经停了就不该再提示「待重载」：重载标记只在运行中才有意义
+        self.clear_pending_reload();
         self.append_system_log(LogLevel::Info, "已停止 frpc");
     }
 
@@ -772,7 +774,7 @@ impl Supervisor {
         });
     }
 
-    fn append_log(&self, line: LogLine) {
+    pub fn append_log(&self, line: LogLine) {
         if !self.show_access_logs.load(Ordering::Relaxed)
             && FrpcLogParser::is_access_log(&line.message)
         {

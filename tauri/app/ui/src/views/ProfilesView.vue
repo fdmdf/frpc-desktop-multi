@@ -97,11 +97,20 @@ const runningThis = computed(
   () => draft.value && store.runningId === draft.value.id,
 );
 
+// 从主页「编辑配置」跳过来时，editingProfileId 已经设好了 —— 组件刚挂载，
+// 普通 watch 不会触发，必须 immediate；但要等 store.init() 拉完档案，
+// 否则会把「找不到档案」当成新建配置。
+let openedFor: string | null = null;
 watch(
-  () => store.editingProfileId,
-  (id) => {
-    if (id) openEditor(store.profiles.find((p) => p.id === id) ?? null);
+  () => [store.editingProfileId, store.ready] as const,
+  ([id, ready]) => {
+    if (!ready || !id) return;
+    const profile = store.profiles.find((p) => p.id === id);
+    if (!profile || openedFor === id) return;
+    openedFor = id;
+    openEditor(profile);
   },
+  { immediate: true },
 );
 
 function openEditor(profile: ServerProfile | null) {
@@ -132,6 +141,7 @@ function openEditor(profile: ServerProfile | null) {
 function closeEditor() {
   draft.value = null;
   store.editingProfileId = null;
+  openedFor = null;
 }
 
 function toggleTlsAdvanced() {
@@ -259,6 +269,14 @@ function saveProxy() {
       name: proxyNameFor(d.name || "proxy", port),
       remotePort: port,
     })) as ProxyConfig[];
+    // 批量生成也要查重：否则会和已有规则撞名，只能等保存时后端校验才报出来
+    const conflicts = created.map((c) => c.name).filter((n) => taken.includes(n));
+    if (conflicts.length) {
+      proxyBatchError.value = `以下代理名已存在：${conflicts.slice(0, 3).join("、")}${
+        conflicts.length > 3 ? " 等" : ""
+      }`;
+      return;
+    }
     applyProxySave(created);
     return;
   }
@@ -299,22 +317,40 @@ function addVisitor() {
     enabled: true,
   };
   visitorEditingIndex.value = null;
+  visitorError.value = "";
   visitorDialog.value = true;
 }
 
 function editVisitor(index: number) {
   visitorDraft.value = JSON.parse(JSON.stringify(draft.value!.config.visitors[index]));
   visitorEditingIndex.value = index;
+  visitorError.value = "";
   visitorDialog.value = true;
 }
+
+const visitorError = ref("");
 
 function saveVisitor() {
   const v = visitorDraft.value;
   if (!v || !draft.value) return;
-  if (!v.name.trim()) return;
+  visitorError.value = "";
+  const name = v.name.trim();
+  // 与代理对话框对齐：名称必填且不能重名（此前只静默 return，点了保存像没反应）
+  if (!name) {
+    visitorError.value = "访问者名称不能为空";
+    return;
+  }
+  const taken = draft.value.config.visitors
+    .filter((_, i) => i !== visitorEditingIndex.value)
+    .map((x) => x.name);
+  if (taken.includes(name)) {
+    visitorError.value = `访问者名「${name}」与其他访问者重复`;
+    return;
+  }
   const list = [...draft.value.config.visitors];
-  if (visitorEditingIndex.value == null) list.push(v);
-  else list[visitorEditingIndex.value] = v;
+  const saved = { ...JSON.parse(JSON.stringify(v)), name };
+  if (visitorEditingIndex.value == null) list.push(saved);
+  else list[visitorEditingIndex.value] = saved;
   draft.value.config.visitors = list;
   visitorDialog.value = false;
 }
@@ -372,6 +408,24 @@ async function defaultPath(name: string): Promise<string> {
   const dir = await api.getDataDir();
   const sep = dir.includes("\\") ? "\\" : "/";
   return `${dir.replace(/[\\/]+$/, "")}${sep}${name.replace(/[\\/]/g, "-")}`;
+}
+
+/// 档案卡上的启停：只有「这份正在运行」或「全部都没运行」两种情况下可操作，
+/// 别的配置在跑时先提示，避免多处同时抢同一个 frpc 进程。
+async function toggleProfile(p: ServerProfile) {
+  if (store.runningId === p.id) {
+    await store.stop();
+    return;
+  }
+  if (store.runningId) {
+    message.value = `「${store.runState.profileName || "当前配置"}」正在运行，请先停止再启动「${p.name}」`;
+    return;
+  }
+  try {
+    await store.start(p.id);
+  } catch (e) {
+    message.value = String(e).replace(/^Error:\s*/, "");
+  }
 }
 
 async function removeProfile(p: ServerProfile) {
@@ -1137,6 +1191,7 @@ async function clearAll() {
             </div>
           </div>
         </template>
+        <p v-if="visitorError" class="error-text" style="margin: 0">{{ visitorError }}</p>
         <div class="modal-actions">
           <button class="btn text-btn" @click="visitorDialog = false">取消</button>
           <button class="btn filled" @click="saveVisitor">保存</button>
@@ -1228,6 +1283,18 @@ async function clearAll() {
             }}
           </div>
         </div>
+        <button
+          class="icon-btn"
+          :title="store.runningId === profile.id ? '停止' : '启动'"
+          @click="toggleProfile(profile)"
+        >
+          <svg v-if="store.runningId === profile.id" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 6h12v12H6z" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </button>
         <button class="icon-btn" title="编辑" @click="openEditor(profile)">
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />

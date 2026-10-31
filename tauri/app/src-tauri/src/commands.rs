@@ -42,6 +42,15 @@ pub fn save_profile(
 #[tauri::command]
 pub fn delete_profile(id: String, state: tauri::State<'_, AppState>) {
     state.delete_profile(&id);
+    // 联动清理：删掉的可能正是「待重载」或「默认」那份，否则界面会一直挂着旧状态
+    if state.supervisor.pending_reload().borrow().as_deref() == Some(id.as_str()) {
+        state.supervisor.clear_pending_reload();
+    }
+    let mut settings = state.settings();
+    if settings.default_profile_id.as_deref() == Some(id.as_str()) {
+        settings.default_profile_id = None;
+        state.save_settings(settings);
+    }
 }
 
 #[tauri::command]
@@ -337,13 +346,18 @@ pub fn open_url_inner(url: &str) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "android")))]
     {
         std::process::Command::new("xdg-open")
             .arg(url)
             .spawn()
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+    #[cfg(target_os = "android")]
+    {
+        // 没有 xdg-open；外部浏览器需要 Intent（前端改为复制地址，用户自行粘贴）
+        Err("当前平台不支持直接唤起浏览器".into())
     }
 }
 
@@ -364,7 +378,14 @@ pub fn open_path_inner(path: &str) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-    #[cfg(all(unix, not(target_os = "macos")))]
+    // Android 属于 unix 但没有 xdg-open，也没有可唤起的文件管理器：明确报错，
+    // 前端在 Android 上直接隐藏这类按钮
+    #[cfg(target_os = "android")]
+    {
+        let _ = path;
+        Err("当前平台不支持打开系统文件管理器".into())
+    }
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "android")))]
     {
         std::process::Command::new("xdg-open")
             .arg(path)

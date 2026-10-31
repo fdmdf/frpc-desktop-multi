@@ -17,6 +17,7 @@ use tauri::{
 #[cfg(desktop)]
 use tauri_plugin_single_instance::init as single_instance;
 
+use frpc_core::store::ServerProfile;
 use state::{AppPaths, AppState, EngineManager};
 
 /// 桌面 / 移动统一入口（main.rs / mobile_entry_point 调用）。
@@ -76,15 +77,22 @@ pub fn run() {
                 let settings = state.settings();
                 if settings.auto_start_on_launch {
                     if let Some(default_id) = settings.default_profile_id.clone() {
-                        let mgr = EngineManager { state: &state };
-                        if let Ok(engine) = mgr.ensure_ready() {
-                            *state.engine_path.write().unwrap() = engine;
-                            if let Some(profile) = state.find_profile(&default_id) {
-                                state.supervisor.start(frpc_core::supervisor::ProfileRef {
-                                    id: profile.id,
-                                    name: profile.name,
-                                    config: profile.config,
-                                });
+                        if let Some(profile) = state.find_profile(&default_id) {
+                            #[cfg(desktop)]
+                            if let Err(reason) = start_profile(&state, profile) {
+                                log_engine_error(&state, reason);
+                            }
+                            #[cfg(not(desktop))]
+                            {
+                                let mgr = EngineManager { state: &state };
+                                if let Ok(engine) = mgr.ensure_ready() {
+                                    *state.engine_path.write().unwrap() = engine;
+                                    state.supervisor.start(frpc_core::supervisor::ProfileRef {
+                                        id: profile.id,
+                                        name: profile.name,
+                                        config: profile.config,
+                                    });
+                                }
                             }
                         }
                     }
@@ -135,6 +143,41 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// 启动一份档案（桌面托盘 / 开机自动启动共用）：先做启动前校验，再确保引擎就绪。
+#[cfg(desktop)]
+fn start_profile(state: &tauri::State<'_, AppState>, profile: ServerProfile) -> Result<(), String> {
+    use frpc_core::supervisor::ProfileRef;
+    if let Some(reason) = state.supervisor.check_before_start(&profile.config) {
+        return Err(reason);
+    }
+    let engine = (EngineManager { state })
+        .ensure_ready()
+        .map_err(|e| e.to_string())?;
+    *state
+        .engine_path
+        .write()
+        .map_err(|_| "engine path 锁".to_string())? = engine;
+    state.mark_used(&profile.id);
+    state.supervisor.start(ProfileRef {
+        id: profile.id,
+        name: profile.name,
+        config: profile.config,
+    });
+    Ok(())
+}
+
+/// 托盘/自启场景下启动失败：写一条应用日志，避免用户完全看不到原因。
+fn log_engine_error(state: &tauri::State<'_, AppState>, reason: String) {
+    use frpc_core::admin::now_epoch_ms;
+    use frpc_core::logs::{LogLevel, LogLine};
+    state.supervisor.append_log(LogLine {
+        time_ms: now_epoch_ms(),
+        level: LogLevel::Error,
+        tag: "app".into(),
+        message: format!("启动失败：{reason}"),
+    });
 }
 
 #[cfg(desktop)]
@@ -190,13 +233,8 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                         .and_then(|id| state.find_profile(id))
                         .or_else(|| state.profiles.read().ok().and_then(|g| g.first().cloned()));
                     if let Some(p) = profile {
-                        if let Ok(engine) = (EngineManager { state: &state }).ensure_ready() {
-                            *state.engine_path.write().unwrap() = engine;
-                            state.supervisor.start(frpc_core::supervisor::ProfileRef {
-                                id: p.id,
-                                name: p.name,
-                                config: p.config,
-                            });
+                        if let Err(reason) = start_profile(&state, p) {
+                            log_engine_error(&state, reason);
                         }
                     }
                 }
@@ -205,11 +243,29 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 let st = state.supervisor.state().borrow().clone();
                 if let Some(id) = st.profile_id {
                     if let Some(p) = state.find_profile(&id) {
-                        state.supervisor.stop();
-                        state.supervisor.start(frpc_core::supervisor::ProfileRef {
-                            id: p.id,
-                            name: p.name,
-                            config: p.config,
+                        let handle = app.app_handle().clone();
+                        tauri::async_runtime::spawn(async move {
+                            let s = handle.state::<AppState>();
+                            s.supervisor.stop();
+                            // 等真正停下再启动：上次进程还没退出时，admin 端口仍被占用，
+                            // 立刻 start 会直接进入 ERROR（旧实现就是 stop 后马上 start）
+                            let deadline =
+                                tokio::time::Instant::now() + std::time::Duration::from_secs(8);
+                            while tokio::time::Instant::now() < deadline {
+                                let phase = s.supervisor.state().borrow().phase;
+                                if !matches!(
+                                    phase,
+                                    frpc_core::supervisor::Phase::Stopping
+                                        | frpc_core::supervisor::Phase::Starting
+                                        | frpc_core::supervisor::Phase::Running
+                                ) {
+                                    break;
+                                }
+                                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                            }
+                            if let Err(reason) = start_profile(&s, p) {
+                                log_engine_error(&s, reason);
+                            }
                         });
                     }
                 }
