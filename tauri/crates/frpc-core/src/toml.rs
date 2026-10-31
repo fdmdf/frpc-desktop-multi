@@ -14,7 +14,9 @@
 
 use std::collections::BTreeMap;
 
-use toml_edit::{value, Array, ArrayOfTables, DocumentMut, InlineTable, Item, Table, TableLike, Value};
+use toml_edit::{
+    value, Array, ArrayOfTables, DocumentMut, InlineTable, Item, Table, TableLike, Value,
+};
 
 use crate::model::*;
 
@@ -56,9 +58,11 @@ fn tint(t: &dyn TableLike, k: &str) -> Result<Option<i32>, TomlError> {
 }
 
 fn tstrs(t: &dyn TableLike, k: &str) -> Option<Vec<String>> {
-    t.get(k)
-        .and_then(Item::as_array)
-        .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+    t.get(k).and_then(Item::as_array).map(|a| {
+        a.iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect()
+    })
 }
 
 impl FrpcToml {
@@ -75,7 +79,11 @@ impl FrpcToml {
                 }
             }),
             metadatas: config.metadatas.as_ref().filter(|m| !m.is_empty()).cloned(),
-            proxies: config.proxies.iter().map(|p| p.sanitized_for_type()).collect(),
+            proxies: config
+                .proxies
+                .iter()
+                .map(|p| p.sanitized_for_type())
+                .collect(),
             visitors: config
                 .visitors
                 .iter()
@@ -323,8 +331,14 @@ fn transport_table(tr: &TransportConfig) -> Table {
     t.insert("protocol", value(tr.protocol.clone()));
     t.insert("tcpMux", value(tr.tcp_mux));
     t.insert("poolCount", value(i64::from(tr.pool_count)));
-    t.insert("dialServerTimeout", value(i64::from(tr.dial_server_timeout)));
-    t.insert("dialServerKeepalive", value(i64::from(tr.dial_server_keepalive)));
+    t.insert(
+        "dialServerTimeout",
+        value(i64::from(tr.dial_server_timeout)),
+    );
+    t.insert(
+        "dialServerKeepalive",
+        value(i64::from(tr.dial_server_keepalive)),
+    );
     if let Some(v) = &tr.connect_server_local_ip {
         t.insert("connectServerLocalIP", value(v.clone()));
     }
@@ -477,7 +491,10 @@ fn visitor_table(v: &VisitorConfig) -> Table {
 }
 
 fn opt_trim(v: &Option<String>) -> Option<String> {
-    v.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
+    v.as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
 }
 
 fn str_array(items: &[String]) -> Item {
@@ -508,7 +525,10 @@ mod tests {
             ..FrpcConfig::default()
         };
         let toml = FrpcToml::encode(&config);
-        assert!(!toml.contains("remotePort"), "留空时不应写出 remotePort：\n{toml}");
+        assert!(
+            !toml.contains("remotePort"),
+            "留空时不应写出 remotePort：\n{toml}"
+        );
     }
 
     #[test]
@@ -641,9 +661,18 @@ mod tests {
             ..FrpcConfig::default()
         };
         let toml = FrpcToml::encode(&config);
-        assert!(!toml.contains("webServer"), "webServer section should be omitted");
-        assert!(!toml.contains("transport"), "transport section should be omitted");
-        assert!(!toml.contains("[[proxies]]"), "no proxies should be emitted");
+        assert!(
+            !toml.contains("webServer"),
+            "webServer section should be omitted"
+        );
+        assert!(
+            !toml.contains("transport"),
+            "transport section should be omitted"
+        );
+        assert!(
+            !toml.contains("[[proxies]]"),
+            "no proxies should be emitted"
+        );
         let decoded = FrpcToml::decode(&toml).expect("decode");
         assert_eq!(
             decoded,
@@ -905,7 +934,11 @@ mod tests {
         assert!(!toml.contains("[auth]"), "{toml}");
         assert!(!toml.contains("method"), "{toml}");
         assert_eq!(
-            FrpcToml::decode(&toml).expect("decode").auth.expect("auth").method,
+            FrpcToml::decode(&toml)
+                .expect("decode")
+                .auth
+                .expect("auth")
+                .method,
             "none"
         );
     }
@@ -932,7 +965,10 @@ mod tests {
         let config = FrpcToml::decode(toml).expect("decode");
         let proxy = config.proxies.first().unwrap();
         assert_eq!(proxy.type_, "sudp");
-        assert_eq!(proxy.remote_port, None, "导入时应清理 sudp 不支持的 remotePort");
+        assert_eq!(
+            proxy.remote_port, None,
+            "导入时应清理 sudp 不支持的 remotePort"
+        );
         let issues = crate::validate::ConfigValidator::validate(&config, |_| false);
         assert!(
             issues

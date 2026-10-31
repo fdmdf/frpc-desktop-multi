@@ -93,7 +93,10 @@ impl ValidationIssue {
 pub struct ConfigValidator;
 
 impl ConfigValidator {
-    pub fn validate(config: &FrpcConfig, port_in_use: impl Fn(i32) -> bool) -> Vec<ValidationIssue> {
+    pub fn validate(
+        config: &FrpcConfig,
+        port_in_use: impl Fn(i32) -> bool,
+    ) -> Vec<ValidationIssue> {
         let mut issues = Vec::new();
         const PORT_MIN: i32 = 1;
         const PORT_MAX: i32 = 65535;
@@ -111,7 +114,13 @@ impl ConfigValidator {
         let auth_method = config
             .auth
             .as_ref()
-            .map(|a| if a.method.trim().is_empty() { "none" } else { a.method.as_str() })
+            .map(|a| {
+                if a.method.trim().is_empty() {
+                    "none"
+                } else {
+                    a.method.as_str()
+                }
+            })
             .unwrap_or("none");
         match auth_method {
             "token" => {
@@ -165,7 +174,10 @@ impl ConfigValidator {
         }
 
         if let Some(t) = &config.transport {
-            if !matches!(t.protocol.as_str(), "tcp" | "kcp" | "quic" | "websocket" | "wss") {
+            if !matches!(
+                t.protocol.as_str(),
+                "tcp" | "kcp" | "quic" | "websocket" | "wss"
+            ) {
                 issues.push(ValidationIssue::new(
                     Severity::Error,
                     Scope::Transport,
@@ -223,19 +235,24 @@ impl ConfigValidator {
                 let cert = tls.cert_file.as_deref().filter(|s| !s.trim().is_empty());
                 let key = tls.key_file.as_deref().filter(|s| !s.trim().is_empty());
                 if cert.is_some() != key.is_some() {
-                    issues.push(ValidationIssue::new(
-                        Severity::Error,
-                        Scope::Transport,
-                        "transport.tls.certFile",
-                        Reason::InvalidValue,
-                    )
-                    .detail("certFile 与 keyFile 必须同时填写"));
+                    issues.push(
+                        ValidationIssue::new(
+                            Severity::Error,
+                            Scope::Transport,
+                            "transport.tls.certFile",
+                            Reason::InvalidValue,
+                        )
+                        .detail("certFile 与 keyFile 必须同时填写"),
+                    );
                 }
             }
         }
 
         if let Some(l) = &config.log {
-            if !matches!(l.level.as_str(), "trace" | "debug" | "info" | "warn" | "error") {
+            if !matches!(
+                l.level.as_str(),
+                "trace" | "debug" | "info" | "warn" | "error"
+            ) {
                 issues.push(ValidationIssue::new(
                     Severity::Error,
                     Scope::Log,
@@ -257,65 +274,88 @@ impl ConfigValidator {
                     Reason::EmptyRequiredField,
                 ));
             } else if !names.insert(proxy.name.clone()) {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.name"),
-                    Reason::DuplicateName,
-                )
-                .entity(&proxy.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.name"),
+                        Reason::DuplicateName,
+                    )
+                    .entity(&proxy.name),
+                );
             }
             let Some(t) = proxy.proxy_type() else {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.type"),
-                    Reason::InvalidValue,
-                )
-                .entity(&proxy.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.type"),
+                        Reason::InvalidValue,
+                    )
+                    .entity(&proxy.name),
+                );
                 continue;
             };
             if t.needs_local_addr() {
-                if proxy.local_ip.as_deref().map(str::trim).unwrap_or("").is_empty() {
-                    issues.push(ValidationIssue::new(
-                        Severity::Error,
-                        Scope::Proxy,
-                        &format!("{prefix}.localIP"),
-                        Reason::EmptyRequiredField,
-                    )
-                    .entity(&proxy.name));
+                if proxy
+                    .local_ip
+                    .as_deref()
+                    .map(str::trim)
+                    .unwrap_or("")
+                    .is_empty()
+                {
+                    issues.push(
+                        ValidationIssue::new(
+                            Severity::Error,
+                            Scope::Proxy,
+                            &format!("{prefix}.localIP"),
+                            Reason::EmptyRequiredField,
+                        )
+                        .entity(&proxy.name),
+                    );
                 }
                 if proxy.local_port.map(|p| (PORT_MIN..=PORT_MAX).contains(&p)) != Some(true) {
-                    issues.push(ValidationIssue::new(
-                        Severity::Error,
-                        Scope::Proxy,
-                        &format!("{prefix}.localPort"),
-                        Reason::PortOutOfRange,
-                    )
-                    .entity(&proxy.name));
+                    issues.push(
+                        ValidationIssue::new(
+                            Severity::Error,
+                            Scope::Proxy,
+                            &format!("{prefix}.localPort"),
+                            Reason::PortOutOfRange,
+                        )
+                        .entity(&proxy.name),
+                    );
                 }
             }
             if t.needs_remote_port()
                 && proxy.remote_port.map(|p| (0..=PORT_MAX).contains(&p)) == Some(false)
             {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.remotePort"),
-                    Reason::PortOutOfRange,
-                )
-                .entity(&proxy.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.remotePort"),
+                        Reason::PortOutOfRange,
+                    )
+                    .entity(&proxy.name),
+                );
             }
             if t.needs_secret_key()
-                && proxy.secret_key.as_deref().map(str::trim).unwrap_or("").is_empty()
+                && proxy
+                    .secret_key
+                    .as_deref()
+                    .map(str::trim)
+                    .unwrap_or("")
+                    .is_empty()
             {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.secretKey"),
-                    Reason::EmptyRequiredField,
-                )
-                .entity(&proxy.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.secretKey"),
+                        Reason::EmptyRequiredField,
+                    )
+                    .entity(&proxy.name),
+                );
             }
             if t.domain_based() {
                 let has_domain = proxy
@@ -323,38 +363,50 @@ impl ConfigValidator {
                     .as_ref()
                     .map(|d| !d.is_empty())
                     .unwrap_or(false)
-                    || proxy.subdomain.as_deref().map(str::trim).unwrap_or("").len() > 0;
+                    || proxy
+                        .subdomain
+                        .as_deref()
+                        .map(str::trim)
+                        .unwrap_or("")
+                        .len()
+                        > 0;
                 if !has_domain {
-                    issues.push(ValidationIssue::new(
-                        Severity::Error,
-                        Scope::Proxy,
-                        &format!("{prefix}.customDomains"),
-                        Reason::DomainOrSubdomainRequired,
-                    )
-                    .entity(&proxy.name));
+                    issues.push(
+                        ValidationIssue::new(
+                            Severity::Error,
+                            Scope::Proxy,
+                            &format!("{prefix}.customDomains"),
+                            Reason::DomainOrSubdomainRequired,
+                        )
+                        .entity(&proxy.name),
+                    );
                 }
             }
             if t == ProxyType::Tcpmux && proxy.multiplexer.as_deref().unwrap_or("").is_empty() {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.multiplexer"),
-                    Reason::EmptyRequiredField,
-                )
-                .entity(&proxy.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.multiplexer"),
+                        Reason::EmptyRequiredField,
+                    )
+                    .entity(&proxy.name),
+                );
             }
             if t == ProxyType::Tcpmux
                 && proxy.multiplexer.as_deref().unwrap_or("").len() > 0
                 && proxy.multiplexer.as_deref() != Some("httpconnect")
             {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.multiplexer"),
-                    Reason::MultiplexerInvalid,
-                )
-                .entity(&proxy.name)
-                .detail("唯一可选值 httpconnect"));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.multiplexer"),
+                        Reason::MultiplexerInvalid,
+                    )
+                    .entity(&proxy.name)
+                    .detail("唯一可选值 httpconnect"),
+                );
             }
             if t.domain_based()
                 && proxy
@@ -363,14 +415,16 @@ impl ConfigValidator {
                     .map(|s| !s.is_empty() && (s.contains('.') || s.contains('*')))
                     .unwrap_or(false)
             {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.subdomain"),
-                    Reason::SubdomainInvalid,
-                )
-                .entity(&proxy.name)
-                .detail("只填一级名字，例如 web01"));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.subdomain"),
+                        Reason::SubdomainInvalid,
+                    )
+                    .entity(&proxy.name)
+                    .detail("只填一级名字，例如 web01"),
+                );
             }
             let bandwidth = proxy
                 .transport
@@ -379,104 +433,151 @@ impl ConfigValidator {
                 .map(str::trim)
                 .unwrap_or("");
             if !bandwidth.is_empty() && !is_bandwidth_limit(bandwidth) {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.transport.bandwidthLimit"),
-                    Reason::BandwidthLimitInvalid,
-                )
-                .entity(&proxy.name)
-                .detail("例如 1MB、512KB"));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.transport.bandwidthLimit"),
+                        Reason::BandwidthLimitInvalid,
+                    )
+                    .entity(&proxy.name)
+                    .detail("例如 1MB、512KB"),
+                );
             }
             if proxy.remote_port.is_some() && !t.needs_remote_port() {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.remotePort"),
-                    Reason::FieldNotSupportedForType,
-                )
-                .entity(&proxy.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.remotePort"),
+                        Reason::FieldNotSupportedForType,
+                    )
+                    .entity(&proxy.name),
+                );
             }
-            if !t.domain_based() && proxy.custom_domains.as_ref().map(|d| !d.is_empty()) == Some(true)
+            if !t.domain_based()
+                && proxy.custom_domains.as_ref().map(|d| !d.is_empty()) == Some(true)
             {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.customDomains"),
-                    Reason::FieldNotSupportedForType,
-                )
-                .entity(&proxy.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.customDomains"),
+                        Reason::FieldNotSupportedForType,
+                    )
+                    .entity(&proxy.name),
+                );
             }
             // 与 Kotlin 行为对齐：上面列表里 "subdomain" 一项因 `present == true`
             // 的类型比较（String 与 Boolean）永远不成立，非 domain 类型带
             // subdomain 实际不会被标记 —— 保留该行为，不擅自"修复"。
             if !t.needs_secret_key()
-                && (proxy.secret_key.as_deref().map(|s| !s.is_empty()).unwrap_or(false)
-                    || proxy.allow_users.as_ref().map(|u| !u.is_empty()).unwrap_or(false))
+                && (proxy
+                    .secret_key
+                    .as_deref()
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false)
+                    || proxy
+                        .allow_users
+                        .as_ref()
+                        .map(|u| !u.is_empty())
+                        .unwrap_or(false))
             {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.secretKey"),
-                    Reason::FieldNotSupportedForType,
-                )
-                .entity(&proxy.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.secretKey"),
+                        Reason::FieldNotSupportedForType,
+                    )
+                    .entity(&proxy.name),
+                );
             }
             if !t.supports_multiplexer() && proxy.multiplexer.as_deref().unwrap_or("").len() > 0 {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Proxy,
-                    &format!("{prefix}.multiplexer"),
-                    Reason::FieldNotSupportedForType,
-                )
-                .entity(&proxy.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Proxy,
+                        &format!("{prefix}.multiplexer"),
+                        Reason::FieldNotSupportedForType,
+                    )
+                    .entity(&proxy.name),
+                );
             }
             if let Some(plugin) = &proxy.plugin {
                 if plugin.type_.trim().is_empty() {
-                    issues.push(ValidationIssue::new(
-                        Severity::Error,
-                        Scope::Proxy,
-                        &format!("{prefix}.plugin.type"),
-                        Reason::EmptyRequiredField,
-                    )
-                    .entity(&proxy.name));
+                    issues.push(
+                        ValidationIssue::new(
+                            Severity::Error,
+                            Scope::Proxy,
+                            &format!("{prefix}.plugin.type"),
+                            Reason::EmptyRequiredField,
+                        )
+                        .entity(&proxy.name),
+                    );
                 } else if plugin.is_https_plugin() && t != ProxyType::Https {
-                    issues.push(ValidationIssue::new(
-                        Severity::Error,
-                        Scope::Proxy,
-                        &format!("{prefix}.plugin"),
-                        Reason::FieldNotSupportedForType,
-                    )
-                    .entity(&proxy.name)
-                    .detail(&format!("{} 只能用于 https 代理", plugin.type_)));
+                    issues.push(
+                        ValidationIssue::new(
+                            Severity::Error,
+                            Scope::Proxy,
+                            &format!("{prefix}.plugin"),
+                            Reason::FieldNotSupportedForType,
+                        )
+                        .entity(&proxy.name)
+                        .detail(&format!("{} 只能用于 https 代理", plugin.type_)),
+                    );
                 }
                 if plugin.is_https_plugin() {
-                    if plugin.local_addr.as_deref().map(str::trim).unwrap_or("").is_empty() {
-                        issues.push(ValidationIssue::new(
-                            Severity::Error,
-                            Scope::Proxy,
-                            &format!("{prefix}.plugin.localAddr"),
-                            Reason::EmptyRequiredField,
-                        )
-                        .entity(&proxy.name));
+                    if plugin
+                        .local_addr
+                        .as_deref()
+                        .map(str::trim)
+                        .unwrap_or("")
+                        .is_empty()
+                    {
+                        issues.push(
+                            ValidationIssue::new(
+                                Severity::Error,
+                                Scope::Proxy,
+                                &format!("{prefix}.plugin.localAddr"),
+                                Reason::EmptyRequiredField,
+                            )
+                            .entity(&proxy.name),
+                        );
                     }
-                    if plugin.crt_path.as_deref().map(str::trim).unwrap_or("").is_empty() {
-                        issues.push(ValidationIssue::new(
-                            Severity::Error,
-                            Scope::Proxy,
-                            &format!("{prefix}.plugin.crtPath"),
-                            Reason::EmptyRequiredField,
-                        )
-                        .entity(&proxy.name));
+                    if plugin
+                        .crt_path
+                        .as_deref()
+                        .map(str::trim)
+                        .unwrap_or("")
+                        .is_empty()
+                    {
+                        issues.push(
+                            ValidationIssue::new(
+                                Severity::Error,
+                                Scope::Proxy,
+                                &format!("{prefix}.plugin.crtPath"),
+                                Reason::EmptyRequiredField,
+                            )
+                            .entity(&proxy.name),
+                        );
                     }
-                    if plugin.key_path.as_deref().map(str::trim).unwrap_or("").is_empty() {
-                        issues.push(ValidationIssue::new(
-                            Severity::Error,
-                            Scope::Proxy,
-                            &format!("{prefix}.plugin.keyPath"),
-                            Reason::EmptyRequiredField,
-                        )
-                        .entity(&proxy.name));
+                    if plugin
+                        .key_path
+                        .as_deref()
+                        .map(str::trim)
+                        .unwrap_or("")
+                        .is_empty()
+                    {
+                        issues.push(
+                            ValidationIssue::new(
+                                Severity::Error,
+                                Scope::Proxy,
+                                &format!("{prefix}.plugin.keyPath"),
+                                Reason::EmptyRequiredField,
+                            )
+                            .entity(&proxy.name),
+                        );
                     }
                 }
             }
@@ -496,42 +597,50 @@ impl ConfigValidator {
                 ));
             }
             if !matches!(visitor.type_.as_str(), "stcp" | "xtcp" | "sudp") {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Visitor,
-                    &format!("{prefix}.type"),
-                    Reason::InvalidValue,
-                )
-                .entity(&visitor.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Visitor,
+                        &format!("{prefix}.type"),
+                        Reason::InvalidValue,
+                    )
+                    .entity(&visitor.name),
+                );
             }
             if visitor.server_name.trim().is_empty() {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Visitor,
-                    &format!("{prefix}.serverName"),
-                    Reason::EmptyRequiredField,
-                )
-                .entity(&visitor.name));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Visitor,
+                        &format!("{prefix}.serverName"),
+                        Reason::EmptyRequiredField,
+                    )
+                    .entity(&visitor.name),
+                );
             }
             if visitor.bind_port == 0 {
-                issues.push(ValidationIssue::new(
-                    Severity::Error,
-                    Scope::Visitor,
-                    &format!("{prefix}.bindPort"),
-                    Reason::BindPortRequired,
-                )
-                .entity(&visitor.name)
-                .detail("不监听请填 -1"));
+                issues.push(
+                    ValidationIssue::new(
+                        Severity::Error,
+                        Scope::Visitor,
+                        &format!("{prefix}.bindPort"),
+                        Reason::BindPortRequired,
+                    )
+                    .entity(&visitor.name)
+                    .detail("不监听请填 -1"),
+                );
             }
             if let Some(fallback) = visitor.fallback_to.as_deref().filter(|s| !s.is_empty()) {
                 if !visitor_names.contains(fallback) {
-                    issues.push(ValidationIssue::new(
-                        Severity::Warning,
-                        Scope::Visitor,
-                        &format!("{prefix}.fallbackTo"),
-                        Reason::FallbackVisitorNotFound,
-                    )
-                    .entity(&visitor.name));
+                    issues.push(
+                        ValidationIssue::new(
+                            Severity::Warning,
+                            Scope::Visitor,
+                            &format!("{prefix}.fallbackTo"),
+                            Reason::FallbackVisitorNotFound,
+                        )
+                        .entity(&visitor.name),
+                    );
                 }
             }
             let user_prefix = visitor
@@ -546,21 +655,29 @@ impl ConfigValidator {
                         visitor.server_user.as_deref(),
                         &visitor.server_name,
                     );
-                    issues.push(ValidationIssue::new(
-                        Severity::Warning,
-                        Scope::Visitor,
-                        &format!("{prefix}.serverName"),
-                        Reason::ServerNamePrefixDoubled,
-                    )
-                    .entity(&visitor.name)
-                    .detail(&format!("当前会查找「{actual}」")));
+                    issues.push(
+                        ValidationIssue::new(
+                            Severity::Warning,
+                            Scope::Visitor,
+                            &format!("{prefix}.serverName"),
+                            Reason::ServerNamePrefixDoubled,
+                        )
+                        .entity(&visitor.name)
+                        .detail(&format!("当前会查找「{actual}」")),
+                    );
                 }
             }
         }
 
         let uses_xtcp = config.proxies.iter().any(|p| p.type_ == "xtcp")
             || config.visitors.iter().any(|v| v.type_ == "xtcp");
-        if uses_xtcp && config.nat_hole_stun_server.as_deref().unwrap_or("").is_empty() {
+        if uses_xtcp
+            && config
+                .nat_hole_stun_server
+                .as_deref()
+                .unwrap_or("")
+                .is_empty()
+        {
             issues.push(ValidationIssue::new(
                 Severity::Warning,
                 Scope::Global,
@@ -678,7 +795,8 @@ impl PortRange {
                             detail: Some(token.to_string()),
                         };
                     };
-                    if !(PORT_MIN..=PORT_MAX).contains(&start) || !(PORT_MIN..=PORT_MAX).contains(&end)
+                    if !(PORT_MIN..=PORT_MAX).contains(&start)
+                        || !(PORT_MIN..=PORT_MAX).contains(&end)
                     {
                         return ParseResult::Failed {
                             reason: PortReason::OutOfRange,
@@ -907,7 +1025,10 @@ mod tests {
             .find(|i| i.reason == Reason::ServerNamePrefixDoubled)
             .expect("应有双前缀警告");
         assert!(
-            hit.detail.as_deref().unwrap_or("").contains("小米14.ThinkBook16+.testx"),
+            hit.detail
+                .as_deref()
+                .unwrap_or("")
+                .contains("小米14.ThinkBook16+.testx"),
             "警告要写出实际查找的名字：{:?}",
             hit.detail
         );
@@ -1013,7 +1134,9 @@ mod tests {
             },
             |_| false,
         );
-        assert!(issues.iter().any(|i| i.reason == Reason::DomainOrSubdomainRequired));
+        assert!(issues
+            .iter()
+            .any(|i| i.reason == Reason::DomainOrSubdomainRequired));
     }
 
     #[test]
@@ -1143,7 +1266,13 @@ mod tests {
             },
             |_| false,
         );
-        assert_eq!(1, issues.iter().filter(|i| i.reason == Reason::PortOutOfRange).count());
+        assert_eq!(
+            1,
+            issues
+                .iter()
+                .filter(|i| i.reason == Reason::PortOutOfRange)
+                .count()
+        );
     }
 
     #[test]
@@ -1158,7 +1287,10 @@ mod tests {
             },
             |_| false,
         );
-        assert!(issues.iter().all(|i| i.scope != Scope::Auth), "auth=none 不应报错：{issues:?}");
+        assert!(
+            issues.iter().all(|i| i.scope != Scope::Auth),
+            "auth=none 不应报错：{issues:?}"
+        );
     }
 
     #[test]
@@ -1173,7 +1305,12 @@ mod tests {
             },
             |_| false,
         );
-        assert!(issues.iter().all(|i| i.field != "transport.dialServerTimeout"), "{issues:?}");
+        assert!(
+            issues
+                .iter()
+                .all(|i| i.field != "transport.dialServerTimeout"),
+            "{issues:?}"
+        );
     }
 
     #[test]
@@ -1189,7 +1326,13 @@ mod tests {
             },
             |_| false,
         );
-        assert_eq!(2, issues.iter().filter(|i| i.reason == Reason::InvalidValue).count());
+        assert_eq!(
+            2,
+            issues
+                .iter()
+                .filter(|i| i.reason == Reason::InvalidValue)
+                .count()
+        );
     }
 
     #[test]
@@ -1297,8 +1440,9 @@ mod tests {
             },
             |_| false,
         );
-        assert!(issues.iter().any(|i| i.field.ends_with(".plugin")
-            && i.reason == Reason::FieldNotSupportedForType));
+        assert!(issues
+            .iter()
+            .any(|i| i.field.ends_with(".plugin") && i.reason == Reason::FieldNotSupportedForType));
     }
 
     // ---------- 对拍 Kotlin ProxyTypeFieldTest（校验器部分） ----------
@@ -1328,7 +1472,14 @@ mod tests {
                 t.id()
             );
         }
-        for t in [ProxyType::Tcpmux, ProxyType::Stcp, ProxyType::Sudp, ProxyType::Xtcp, ProxyType::Http, ProxyType::Https] {
+        for t in [
+            ProxyType::Tcpmux,
+            ProxyType::Stcp,
+            ProxyType::Sudp,
+            ProxyType::Xtcp,
+            ProxyType::Http,
+            ProxyType::Https,
+        ] {
             let issues = ConfigValidator::validate(
                 &FrpcConfig {
                     proxies: vec![ProxyConfig {
@@ -1347,7 +1498,9 @@ mod tests {
                 |_| false,
             );
             assert!(
-                issues.iter().any(|i| i.reason == Reason::FieldNotSupportedForType),
+                issues
+                    .iter()
+                    .any(|i| i.reason == Reason::FieldNotSupportedForType),
                 "{} 带 remotePort 应报 FIELD_NOT_SUPPORTED_FOR_TYPE",
                 t.id()
             );

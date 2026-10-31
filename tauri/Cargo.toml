@@ -16,8 +16,15 @@ serde_json = "1"
 toml_edit = "0.22" # 无损往返：保留注释与未建模字段（旧版 Kotlin 实现会忽略）
 # 异步 / 进程监管（M1 启用）
 tokio = { version = "1", features = ["process", "macros", "rt-multi-thread", "time", "sync"] }
-# HTTP（admin API，M1 启用）
+# HTTP（admin API）
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# 时间解析（日志时间戳 → epoch ms，本地时区语义与 Kotlin 一致）
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# 端口占用探测（bind 探测需要 SO_REUSEADDR）
+socket2 = "0.6"
+regex = "1"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
 # 系统指标（M1 启用，替代 desktopApp 手读 /proc 的平台分支）
 sysinfo = "0.33"
 # 通用

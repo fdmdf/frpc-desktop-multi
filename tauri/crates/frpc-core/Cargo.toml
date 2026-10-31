@@ -13,6 +13,9 @@ thiserror.workspace = true
 tracing.workspace = true
 toml_edit.workspace = true
 tokio.workspace = true
-# M1 启用：admin API 与进程指标
-# reqwest.workspace = true
-# sysinfo.workspace = true
+reqwest.workspace = true
+chrono.workspace = true
+socket2.workspace = true
+regex = "1"
+base64 = { workspace = true }
+uuid = { workspace = true }

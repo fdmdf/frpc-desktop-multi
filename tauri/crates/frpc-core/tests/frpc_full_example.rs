@@ -16,18 +16,34 @@ fn decode_real_frpc_full_example() {
 
     assert_eq!("0.0.0.0", config.server_addr);
     assert_eq!(7000, config.server_port);
-    assert_eq!(Some("12345678"), config.auth.as_ref().map(|a| a.token.as_str()));
+    assert_eq!(
+        Some("12345678"),
+        config.auth.as_ref().map(|a| a.token.as_str())
+    );
     assert_eq!(Some("your_name"), config.user.as_deref());
     assert_eq!(Some(7400), config.web_server.as_ref().map(|w| w.port));
-    assert_eq!(Some("admin"), config.web_server.as_ref().map(|w| w.user.as_str()));
+    assert_eq!(
+        Some("admin"),
+        config.web_server.as_ref().map(|w| w.user.as_str())
+    );
     assert_eq!(Some(1500), config.udp_packet_size);
 
-    let ssh = config.proxies.iter().find(|p| p.name == "ssh").expect("ssh proxy");
+    let ssh = config
+        .proxies
+        .iter()
+        .find(|p| p.name == "ssh")
+        .expect("ssh proxy");
     assert_eq!(
         Some("1MB"),
-        ssh.transport.as_ref().and_then(|t| t.bandwidth_limit.as_deref())
+        ssh.transport
+            .as_ref()
+            .and_then(|t| t.bandwidth_limit.as_deref())
     );
-    let web01 = config.proxies.iter().find(|p| p.name == "web01").expect("web01 proxy");
+    let web01 = config
+        .proxies
+        .iter()
+        .find(|p| p.name == "web01")
+        .expect("web01 proxy");
     assert_eq!(
         Some(&vec!["web01.yourdomain.com".to_string()]),
         web01.custom_domains.as_ref()
@@ -39,7 +55,11 @@ fn decode_real_frpc_full_example() {
         .expect("secret_tcp proxy");
     assert_eq!(Some("abcdefg"), secret_tcp.secret_key.as_deref());
 
-    assert!(config.proxies.len() >= 18, "expected >=18 proxies, got {}", config.proxies.len());
+    assert!(
+        config.proxies.len() >= 18,
+        "expected >=18 proxies, got {}",
+        config.proxies.len()
+    );
     assert!(!config.visitors.is_empty(), "visitors should be parsed");
     let visitor = config
         .visitors

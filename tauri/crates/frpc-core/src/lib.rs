@@ -14,6 +14,8 @@ pub mod admin;
 pub mod logs;
 pub mod metrics;
 pub mod model;
+pub mod net;
+pub mod store;
 pub mod supervisor;
 pub mod toml;
 pub mod validate;

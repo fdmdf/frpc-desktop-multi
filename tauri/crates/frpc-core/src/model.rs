@@ -38,7 +38,11 @@ pub struct FrpcConfig {
     pub user: Option<String>,
     #[serde(default)]
     pub login_fail_exit: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "natHoleStunServer")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "natHoleStunServer"
+    )]
     pub nat_hole_stun_server: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log: Option<LogConfig>,
@@ -49,7 +53,11 @@ pub struct FrpcConfig {
     pub web_server: Option<WebServerConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transport: Option<TransportConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "udpPacketSize")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "udpPacketSize"
+    )]
     pub udp_packet_size: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadatas: Option<BTreeMap<String, String>>,
@@ -94,7 +102,11 @@ pub struct LogConfig {
     pub level: String,
     #[serde(default = "default_log_max_days")]
     pub max_days: i32,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "disablePrintColor")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "disablePrintColor"
+    )]
     pub disable_print_color: Option<bool>,
 }
 
@@ -199,15 +211,31 @@ pub struct TransportConfig {
     pub dial_server_timeout: i32,
     #[serde(default = "default_dial_keepalive", rename = "dialServerKeepalive")]
     pub dial_server_keepalive: i32,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "connectServerLocalIP")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "connectServerLocalIP"
+    )]
     pub connect_server_local_ip: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "proxyURL")]
     pub proxy_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "heartbeatInterval")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "heartbeatInterval"
+    )]
     pub heartbeat_interval: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "heartbeatTimeout")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "heartbeatTimeout"
+    )]
     pub heartbeat_timeout: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "tcpMuxKeepaliveInterval")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "tcpMuxKeepaliveInterval"
+    )]
     pub tcp_mux_keepalive_interval: Option<i32>,
 }
 
@@ -248,15 +276,27 @@ impl Default for TransportConfig {
 pub struct TlsConfig {
     #[serde(default = "default_true")]
     pub enable: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serverName")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serverName"
+    )]
     pub server_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "certFile")]
     pub cert_file: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "keyFile")]
     pub key_file: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "trustedCaFile")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "trustedCaFile"
+    )]
     pub trusted_ca_file: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "disableCustomTLSFirstByte")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "disableCustomTLSFirstByte"
+    )]
     pub disable_custom_tls_first_byte: Option<bool>,
 }
 
@@ -360,27 +400,51 @@ pub struct ProxyConfig {
     pub local_ip: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "localPort")]
     pub local_port: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "remotePort")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "remotePort"
+    )]
     pub remote_port: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subdomain: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "customDomains")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "customDomains"
+    )]
     pub custom_domains: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locations: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpUser")]
     pub http_user: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "httpPassword")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "httpPassword"
+    )]
     pub http_password: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "hostHeaderRewrite")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "hostHeaderRewrite"
+    )]
     pub host_header_rewrite: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "routeByHTTPUser")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "routeByHTTPUser"
+    )]
     pub route_by_http_user: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub multiplexer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "secretKey")]
     pub secret_key: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "allowUsers")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "allowUsers"
+    )]
     pub allow_users: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transport: Option<ProxyTransportConfig>,
@@ -488,15 +552,35 @@ impl ProxyConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyTransportConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "bandwidthLimit")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "bandwidthLimit"
+    )]
     pub bandwidth_limit: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "bandwidthLimitMode")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "bandwidthLimitMode"
+    )]
     pub bandwidth_limit_mode: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "useEncryption")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "useEncryption"
+    )]
     pub use_encryption: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "useCompression")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "useCompression"
+    )]
     pub use_compression: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "proxyProtocolVersion")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "proxyProtocolVersion"
+    )]
     pub proxy_protocol_version: Option<String>,
 }
 
@@ -513,7 +597,11 @@ pub struct ProxyPluginConfig {
     pub crt_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "keyPath")]
     pub key_path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "hostHeaderRewrite")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "hostHeaderRewrite"
+    )]
     pub host_header_rewrite: Option<String>,
 }
 
@@ -524,7 +612,10 @@ impl ProxyPluginConfig {
             local_addr: self.local_addr.as_deref().and_then(some_if_non_blank),
             crt_path: self.crt_path.as_deref().and_then(some_if_non_blank),
             key_path: self.key_path.as_deref().and_then(some_if_non_blank),
-            host_header_rewrite: self.host_header_rewrite.as_deref().and_then(some_if_non_blank),
+            host_header_rewrite: self
+                .host_header_rewrite
+                .as_deref()
+                .and_then(some_if_non_blank),
         }
     }
 
@@ -548,15 +639,31 @@ pub struct VisitorConfig {
     pub bind_addr: String,
     #[serde(default = "default_bind_port", rename = "bindPort")]
     pub bind_port: i32,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "serverUser")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "serverUser"
+    )]
     pub server_user: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enabled: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "fallbackTo")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "fallbackTo"
+    )]
     pub fallback_to: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "fallbackTimeoutMs")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "fallbackTimeoutMs"
+    )]
     pub fallback_timeout_ms: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "keepTunnelOpen")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "keepTunnelOpen"
+    )]
     pub keep_tunnel_open: Option<bool>,
 }
 
@@ -640,7 +747,10 @@ mod tests {
 
         #[test]
         fn matches_frp_semantics() {
-            assert_eq!(target_server_proxy_name(Some("alice"), None, "test"), "alice.test");
+            assert_eq!(
+                target_server_proxy_name(Some("alice"), None, "test"),
+                "alice.test"
+            );
             assert_eq!(
                 target_server_proxy_name(Some("alice"), Some("bob"), "test"),
                 "bob.test"
@@ -724,7 +834,10 @@ mod tests {
             }
             .sanitized_for_type();
             assert_eq!(stcp.fallback_to, None, "stcp 访问者必须剥掉 fallbackTo");
-            assert_eq!(stcp.fallback_timeout_ms, None, "stcp 访问者必须剥掉 fallbackTimeoutMs");
+            assert_eq!(
+                stcp.fallback_timeout_ms, None,
+                "stcp 访问者必须剥掉 fallbackTimeoutMs"
+            );
         }
 
         #[test]
