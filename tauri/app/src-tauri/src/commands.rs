@@ -9,7 +9,7 @@ use frpc_core::supervisor::{ProfileRef, RunState};
 use frpc_core::toml::FrpcToml;
 use frpc_core::validate::ValidationIssue;
 
-use crate::state::{validate_config, AppState, EngineManager};
+use crate::state::{validate_config_live, AppState, EngineManager};
 
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
@@ -32,7 +32,7 @@ pub fn save_profile(
     profile: ServerProfile,
     state: tauri::State<'_, AppState>,
 ) -> Result<ServerProfile, Vec<ValidationIssue>> {
-    let issues = validate_config(&profile.config);
+    let issues = validate_config_live(&state, &profile.config);
     if frpc_core::validate::ConfigValidator::has_error(&issues) {
         return Err(issues);
     }
@@ -61,6 +61,48 @@ pub fn duplicate_profile(
     state
         .duplicate_profile(&id)
         .ok_or_else(|| "档案不存在".into())
+}
+
+/// 主页 / 配置列表里的「启用」开关：只翻转这一条规则的 `enabled`，不做全量校验。
+///
+/// 不走 `save_profile` 是因为：① 校验里的「admin 端口被占用」对运行中的档案必然
+/// 误报（那个端口正被自己的 frpc 占着），用户只是想关一条代理却收到一个看不懂的
+/// 报错；② 关闭一条规则不会引入任何非法字段，没有拦的理由。运行中则登记
+/// 「待重载」，让界面提示需要点「重载配置」而不是显示成保存失败。
+#[tauri::command]
+pub fn set_rule_enabled(
+    profile_id: String,
+    name: String,
+    visitor: bool,
+    enabled: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<ServerProfile, String> {
+    let mut profile = state
+        .find_profile(&profile_id)
+        .ok_or_else(|| "档案不存在".to_string())?;
+    let flag = if enabled { None } else { Some(false) };
+    if visitor {
+        let target = profile
+            .config
+            .visitors
+            .iter_mut()
+            .find(|v| v.name == name)
+            .ok_or_else(|| format!("访问者「{name}」不存在"))?;
+        target.enabled = flag;
+    } else {
+        let target = profile
+            .config
+            .proxies
+            .iter_mut()
+            .find(|p| p.name == name)
+            .ok_or_else(|| format!("代理「{name}」不存在"))?;
+        target.enabled = flag;
+    }
+    let saved = state.upsert_profile(profile);
+    if state.supervisor.is_running() {
+        state.supervisor.mark_pending_reload(&saved.id);
+    }
+    Ok(saved)
 }
 
 #[tauri::command]
@@ -103,8 +145,11 @@ pub fn write_text_file(path: String, content: String) -> Result<String, String> 
 // ---------- 校验 ----------
 
 #[tauri::command]
-pub fn validate_config_cmd(config: FrpcConfig) -> Vec<ValidationIssue> {
-    validate_config(&config)
+pub fn validate_config_cmd(
+    config: FrpcConfig,
+    state: tauri::State<'_, AppState>,
+) -> Vec<ValidationIssue> {
+    validate_config_live(&state, &config)
 }
 
 /// 本机监听端口枚举（配置编辑器的端口参考）。
@@ -303,6 +348,13 @@ pub fn get_settings(state: tauri::State<'_, AppState>) -> SettingsData {
 
 #[tauri::command]
 pub fn set_settings(settings: SettingsData, state: tauri::State<'_, AppState>) {
+    // Android 只认随包内置的 libfrpc.so：自定义引擎路径既不可 exec，界面也已隐藏，
+    // 落盘的遗留值一律清掉，避免旧配置把引擎指到一个不可用的路径。
+    #[cfg(target_os = "android")]
+    let settings = SettingsData {
+        engine_path: String::new(),
+        ..settings
+    };
     state
         .supervisor
         .set_show_access_logs(settings.show_access_logs);

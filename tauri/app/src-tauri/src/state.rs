@@ -255,11 +255,17 @@ pub struct EngineManager<'a> {
 impl EngineManager<'_> {
     /// 引擎文件：设置中的自定义路径优先；Android 用 nativeLibraryDir/libfrpc.so；
     /// 其余平台用 `bin/frpc(.exe)`。
+    ///
+    /// Android 上自定义路径一律忽略：10+ 禁止从可写的应用私有目录 exec，
+    /// 用户即使把 frpc 拷进来也只会得到「权限不足」，设置项本身也不展示。
     pub fn engine_file(&self) -> PathBuf {
-        let custom = self.state.settings().engine_path;
-        let custom = PathBuf::from(custom.trim());
-        if custom.is_file() {
-            return custom;
+        #[cfg(not(target_os = "android"))]
+        {
+            let custom = self.state.settings().engine_path;
+            let custom = PathBuf::from(custom.trim());
+            if custom.is_file() {
+                return custom;
+            }
         }
         if let Some(dir) = &self.state.paths.engine_dir {
             return dir.join(&self.state.paths.engine_file_name);
@@ -271,8 +277,15 @@ impl EngineManager<'_> {
     }
 
     pub fn is_using_custom(&self) -> bool {
-        let custom = self.state.settings().engine_path;
-        !custom.trim().is_empty() && PathBuf::from(custom.trim()).is_file()
+        #[cfg(target_os = "android")]
+        {
+            false
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let custom = self.state.settings().engine_path;
+            !custom.trim().is_empty() && PathBuf::from(custom.trim()).is_file()
+        }
     }
 
     /// 就绪检查：优先解包内置资源（`resources/engine/`），其次自定义路径 / bin 目录。
@@ -299,11 +312,19 @@ impl EngineManager<'_> {
             }
         }
 
-        Err(format!(
+        #[cfg(not(target_os = "android"))]
+        let msg = format!(
             "未找到引擎 {}：可在设置中指定 frpc 路径，或将引擎放入 {}",
             target.display(),
             self.state.paths.bin_dir.display()
-        ))
+        );
+        // Android 的引擎只能来自 jniLibs（APK 内的 libfrpc.so），没有「换个路径」这回事
+        #[cfg(target_os = "android")]
+        let msg = format!(
+            "未找到内置引擎 {}：Android 只使用随安装包内置的 libfrpc.so，请重新安装应用",
+            target.display()
+        );
+        Err(msg)
     }
 
     #[cfg(unix)]
@@ -365,9 +386,24 @@ impl EngineManager<'_> {
     }
 }
 
-pub fn validate_config(config: &FrpcConfig) -> Vec<frpc_core::validate::ValidationIssue> {
+/// 校验配置。端口占用检测要排除「运行中的 frpc 自己占着的 admin 端口」——
+/// 否则运行中编辑并保存档案必然失败：webServer 端口被自己占着，校验报
+/// `PortInUse`，前端只看到一个无从下手的错误。
+pub fn validate_config_live(
+    state: &AppState,
+    config: &FrpcConfig,
+) -> Vec<frpc_core::validate::ValidationIssue> {
+    let own_admin = {
+        let rx = state.supervisor.state();
+        let st = rx.borrow();
+        if st.phase == frpc_core::supervisor::Phase::Running {
+            st.admin_port
+        } else {
+            0
+        }
+    };
     frpc_core::validate::ConfigValidator::validate(config, |port| {
-        frpc_core::net::PortCheck::is_in_use(port)
+        port != own_admin && frpc_core::net::PortCheck::is_in_use(port)
     })
 }
 

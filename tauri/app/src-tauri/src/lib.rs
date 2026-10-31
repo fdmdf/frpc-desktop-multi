@@ -107,6 +107,7 @@ pub fn run() {
             commands::save_profile,
             commands::delete_profile,
             commands::duplicate_profile,
+            commands::set_rule_enabled,
             commands::export_profile_toml,
             commands::import_toml,
             commands::export_bundle,
