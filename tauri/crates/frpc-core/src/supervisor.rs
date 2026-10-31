@@ -940,6 +940,9 @@ mod tests {
             name: "n".into(),
             config: FrpcConfig {
                 server_addr: "1.2.3.4".into(),
+                // 不带 webServer：默认端口 7400 在 CI runner 上可能被别的进程占用，
+                // check_before_start 会直接拒绝启动，让生命周期用例假失败
+                web_server: None,
                 ..FrpcConfig::default()
             },
         });
@@ -1015,6 +1018,9 @@ mod tests {
             name: "测试".into(),
             config: FrpcConfig {
                 server_addr: "1.2.3.4".into(),
+                // 不带 webServer：默认端口 7400 在 CI runner 上可能被别的进程占用，
+                // check_before_start 会直接拒绝启动，让生命周期用例假失败
+                web_server: None,
                 ..FrpcConfig::default()
             },
         });
