@@ -19,6 +19,7 @@ pub mod store;
 pub mod supervisor;
 pub mod toml;
 pub mod validate;
+pub mod version;
 
 /// CI 冒烟探测：核心层可链接、可测试（M0 骨架验证用）。
 pub fn core_ready() -> bool {

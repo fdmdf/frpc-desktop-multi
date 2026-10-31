@@ -318,37 +318,47 @@ impl EngineManager<'_> {
         }
     }
 
-    /// 内置引擎版本（打包资源 `resources/engine/VERSION`，缺失时 unknown）。
+    /// 内置引擎版本。
+    ///
+    /// 链路：打包资源 `resources/engine/VERSION`（桌面）→ 构建期编进二进制的
+    /// `FRPC_ENGINE_VERSION`（Android，引擎在 nativeLibraryDir 没有 VERSION 文件）
+    /// → `unknown`。返回的是去掉 `v` 前缀的裸版本号（界面模板自带上下文）。
     pub fn bundled_version(&self, resource_dir: Option<&std::path::Path>) -> String {
-        let Some(dir) = resource_dir else {
-            return "unknown".into();
-        };
-        std::fs::read_to_string(dir.join("resources/engine/VERSION"))
-            .map(|s| s.trim().to_string())
-            .unwrap_or_else(|_| "unknown".into())
+        if let Some(dir) = resource_dir {
+            if let Ok(text) = std::fs::read_to_string(dir.join("resources/engine/VERSION")) {
+                let v = frpc_core::version::strip_v_prefix(&text);
+                if !v.is_empty() {
+                    return v;
+                }
+            }
+        }
+        if let Some(v) = option_env!("FRPC_ENGINE_VERSION") {
+            let v = frpc_core::version::strip_v_prefix(v);
+            if !v.is_empty() {
+                return v;
+            }
+        }
+        "unknown".into()
     }
 
     /// `frpc -v` 探测版本（Kotlin probeVersion）。
+    ///
+    /// 解析逻辑见 `frpc_core::version`：真实输出只有一行 `0.71.1`，
+    /// 不能按「包含 frp 的行」来找。
     pub fn probe_version(&self) -> String {
         let engine = self.engine_file();
         if !engine.is_file() {
             return String::new();
         }
-        let out = std::process::Command::new(&engine).arg("-v").output();
-        match out {
+        match std::process::Command::new(&engine).arg("-v").output() {
             Ok(o) => {
-                let text = String::from_utf8_lossy(&o.stdout).to_string();
-                let line = text
-                    .lines()
-                    .find(|l| l.contains("frp"))
-                    .unwrap_or("")
-                    .trim();
-                // 只要版本号本身（"frpc version 0.71.1" -> "0.71.1"）
-                line.split_whitespace()
-                    .find(|t| t.contains('.') && t.starts_with(|c: char| c.is_ascii_digit()))
-                    .unwrap_or(line)
-                    .trim_matches(|c: char| c == ',' || c == ';' || c == 'v')
-                    .to_string()
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                let parsed = frpc_core::version::parse_version_output(&stdout);
+                if !parsed.is_empty() {
+                    return parsed;
+                }
+                // 少数构建把版本打到 stderr
+                frpc_core::version::parse_version_output(&String::from_utf8_lossy(&o.stderr))
             }
             Err(_) => String::new(),
         }
