@@ -23,6 +23,7 @@ echo "==> gradle 工程补丁"
 python - "$GEN" "$NDK_HOME" "$APP/ui/node_modules/@tauri-apps/cli/tauri.js" <<'PYEOF'
 import os
 import re
+import shutil
 import sys
 
 gen, ndk_home, cli_js = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -143,6 +144,24 @@ elif cli_js_kotlin not in s4:
 if s4 != orig:
     open(p4, "w", encoding="utf-8", newline="").write(s4)
 print("BuildTask guarded")
+
+# ---- 5) 自适应图标：tauri android init 只复制 mipmap-{mdpi..xxxhdpi} 的 PNG，
+#         mipmap-anydpi-v26（adaptive-icon）与 values/ic_launcher_background.xml 不会复制，
+#         结果 Android 8+ 用满幅 ic_launcher.png 被启动器遮罩裁掉一圈。这里手动补齐。
+icons_android = os.path.join(os.path.dirname(os.path.dirname(gen)), "icons", "android")
+res_dir = os.path.join(gen, "app", "src", "main", "res")
+copied = 0
+for folder in os.listdir(icons_android):
+    src = os.path.join(icons_android, folder)
+    if not os.path.isdir(src):
+        continue
+    dst = os.path.join(res_dir, folder)
+    os.makedirs(dst, exist_ok=True)
+    for name in os.listdir(src):
+        if os.path.isfile(os.path.join(src, name)):
+            shutil.copy2(os.path.join(src, name), os.path.join(dst, name))
+            copied += 1
+print("icons copied into res: %d files (from %s)" % (copied, icons_android))
 PYEOF
 
 echo "==> 写 local.properties（SDK 路径，仅 Windows Git Bash 需要）"
