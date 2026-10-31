@@ -2,8 +2,10 @@
 # 一键重建 Tauri Android 工程（gen/ 不入库，用此脚本从零恢复）：
 #   1. tauri android init 生成工程
 #   2. 注入阿里云 Maven 镜像（国内直连 google() 不通）
-#   3. 复制旧 Android 工程预编译的 libfrpc.so 到 jniLibs（nativeLibraryDir 可执行）
-# 前置：ANDROID_HOME / NDK_HOME 环境变量，rustup android targets（见 README）。
+#   3. gradle 补丁：NDK 版本（从 NDK_HOME 推导）/ 压缩打包 / 引擎声明式源目录 /
+#      BuildTask 的 TAURI_SKIP_RUST_BUILD 守卫（Windows 非管理员符号链接限制）
+# 前置：ANDROID_HOME / NDK_HOME 环境变量，rustup target aarch64-linux-android。
+# 用法：bash scripts/tauri-android-setup.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,120 +19,128 @@ export NDK_HOME="${NDK_HOME:-$ANDROID_HOME/ndk/27.2.12479018}"
 echo "==> tauri android init"
 cd "$APP" && ui/node_modules/.bin/tauri android init
 
-echo "==> 注入阿里云镜像"
-python - "$GEN" <<'EOF'
+echo "==> gradle 工程补丁"
+python - "$GEN" "$NDK_HOME" <<'PYEOF'
+import os
+import re
 import sys
-gen = sys.argv[1]
-mirror = (
-    '        maven("https://maven.aliyun.com/repository/google")\n'
-    '        maven("https://maven.aliyun.com/repository/public")\n'
-    '        maven("https://maven.aliyun.com/repository/gradle-plugin")\n'
-)
-p = f"{gen}/build.gradle.kts"
-s = open(p, encoding="utf-8").read()
-s = s.replace(
-    "buildscript {\n    repositories {\n        google()\n        mavenCentral()\n    }",
-    "buildscript {\n    repositories {\n" + mirror + "        google()\n        mavenCentral()\n    }",
-)
-s = s.replace(
-    "allprojects {\n    repositories {\n        google()\n        mavenCentral()\n    }",
-    "allprojects {\n    repositories {\n" + mirror + "        google()\n        mavenCentral()\n    }",
-)
-open(p, "w", encoding="utf-8", newline="").write(s)
 
-p2 = f"{gen}/buildSrc/build.gradle.kts"
-s2 = open(p2, encoding="utf-8").read()
-s2 = s2.replace(
-    "repositories {\n    google()\n    mavenCentral()\n}",
-    "repositories {\n" + mirror + "    google()\n    mavenCentral()\n}",
-)
-open(p2, "w", encoding="utf-8", newline="").write(s2)
-print("mirrors injected")
-EOF
+gen, ndk_home = sys.argv[1], sys.argv[2]
+ndk_ver = os.path.basename(ndk_home.rstrip("/\\")) or "27.2.12479018"
 
-echo "==> 复制 libfrpc.so 到 jniLibs"
-for abi in arm64-v8a x86_64; do
-  if [ -f "$OLD_JNI/$abi/libfrpc.so" ]; then
-    mkdir -p "$GEN/app/src/main/jniLibs/$abi"
-    cp "$OLD_JNI/$abi/libfrpc.so" "$GEN/app/src/main/jniLibs/$abi/"
-  fi
-done
-ls -la "$GEN/app/src/main/jniLibs/"*/ || true
-
-echo "==> 写 local.properties（SDK 路径）"
-ANDROID_HOME_WIN=$(cygpath -w "$ANDROID_HOME" | sed 's/\\/\\\\/g')
-printf 'sdk.dir=%s\n' "$ANDROID_HOME_WIN" > "$GEN/local.properties"
-
-echo "==> gradle 工程补丁（init 重新生成后必须重打）"
-python - "$GEN" <<'PYEOF'
-import sys
-gen = sys.argv[1]
-
-# 1) app/build.gradle.kts：NDK 版本 / 压缩打包 / 引擎源目录
-p = f"{gen}/app/build.gradle.kts"
+# ---- 1) app/build.gradle.kts：NDK 版本 / 压缩打包 / 引擎声明式源目录 ----
+p = os.path.join(gen, "app", "build.gradle.kts")
 s = open(p, encoding="utf-8").read()
 if "ndkVersion" not in s:
-    s = s.replace("        minSdk = 24",
-                  '        ndkVersion = "27.2.12479018"\n        minSdk = 24', 1)
+    s = s.replace(
+        "        minSdk = 24",
+        '        ndkVersion = "%s"\n        minSdk = 24' % ndk_ver,
+        1,
+    )
 if "useLegacyPackaging" not in s:
-    import re
     s = re.sub(
         r"            packaging \{\n(                jniLibs\.keepDebugSymbols\.add\([^)]*\)\n)+",
         "            packaging {\n"
-        "                // native 库压缩存储（17.4MB 引擎 → ~6.2MB，与旧版 androidApp 一致）\n"
+        "                // native 库压缩存储（17.4MB 引擎 -> ~6.2MB，与旧版 androidApp 一致）\n"
         "                jniLibs.useLegacyPackaging = true\n",
-        s, 1)
+        s,
+        1,
+    )
 if "androidApp/src/main/jniLibs" not in s:
-    s = s.replace("    defaultConfig {",
-                  "    sourceSets {\n"
-                  "        getByName("main") {\n"
-                  "            // frpc 引擎复用旧工程预编译产物（仓库根 = rootDir 上溯 5 级）\n"
-                  "            jniLibs.srcDir(\n"
-                  "                File(rootDir.parentFile.parentFile.parentFile.parentFile.parentFile,\n"
-                  "                     "androidApp/src/main/jniLibs")\n"
-                  "            )\n"
-                  "        }\n"
-                  "    }\n\n    defaultConfig {", 1)
+    srcdir_block = (
+        "    sourceSets {\n"
+        '        getByName("main") {\n'
+        "            // frpc 引擎复用旧工程预编译产物（仓库根 = rootDir 上溯 5 级）\n"
+        "            jniLibs.srcDir(\n"
+        "                File(\n"
+        "                    rootDir.parentFile.parentFile.parentFile.parentFile.parentFile,\n"
+        '                    "androidApp/src/main/jniLibs",\n'
+        "                ),\n"
+        "            )\n"
+        "        }\n"
+        "    }\n\n    defaultConfig {"
+    )
+    s = s.replace("    defaultConfig {", srcdir_block, 1)
 open(p, "w", encoding="utf-8", newline="").write(s)
-print("app/build.gradle.kts patched")
+print("app/build.gradle.kts patched (ndk %s)" % ndk_ver)
 
-# 2) BuildTask：TAURI_SKIP_RUST_BUILD 守卫（Windows 非管理员符号链接限制）
-p2 = f"{gen}/buildSrc/src/main/java/io/github/fdmdf/frpc/kotlin/BuildTask.kt"
+# ---- 2) buildSrc 镜像 ----
+p2 = os.path.join(gen, "buildSrc", "build.gradle.kts")
 s2 = open(p2, encoding="utf-8").read()
-old = """    @TaskAction
-    fun assemble() {"""
-new = """    @TaskAction
-    fun assemble() {
-        // 预构建模式：cargo 产物已由外部放置到 jniLibs，跳过 tauri CLI
-        if (System.getenv("TAURI_SKIP_RUST_BUILD") != null) {
-            println("BuildTask: skipped (TAURI_SKIP_RUST_BUILD set)")
-            return
-        }"""
-if "TAURI_SKIP_RUST_BUILD" not in s2:
-    assert old in s2
-    s2 = s2.replace(old, new, 1)
+mirror = (
+    '    maven("https://maven.aliyun.com/repository/google")\n'
+    '    maven("https://maven.aliyun.com/repository/public")\n'
+    '    maven("https://maven.aliyun.com/repository/gradle-plugin")\n'
+)
+if "aliyun" not in s2:
+    s2 = s2.replace(
+        "repositories {\n    google()\n    mavenCentral()\n}",
+        "repositories {\n" + mirror + "    google()\n    mavenCentral()\n}",
+        1,
+    )
     open(p2, "w", encoding="utf-8", newline="").write(s2)
+print("buildSrc mirrors injected")
+
+# ---- 3) 根 build.gradle.kts 镜像 ----
+p3 = os.path.join(gen, "build.gradle.kts")
+s3 = open(p3, encoding="utf-8").read()
+if "aliyun" not in s3:
+    m6 = mirror.replace("    maven(", "        maven(")
+    s3 = s3.replace(
+        "buildscript {\n    repositories {\n        google()\n        mavenCentral()\n    }",
+        "buildscript {\n    repositories {\n" + m6 + "        google()\n        mavenCentral()\n    }",
+        1,
+    )
+    s3 = s3.replace(
+        "allprojects {\n    repositories {\n        google()\n        mavenCentral()\n    }",
+        "allprojects {\n    repositories {\n" + m6 + "        google()\n        mavenCentral()\n    }",
+        1,
+    )
+    open(p3, "w", encoding="utf-8", newline="").write(s3)
+print("root mirrors injected")
+
+# ---- 4) BuildTask：TAURI_SKIP_RUST_BUILD 守卫 ----
+p4 = os.path.join(
+    gen, "buildSrc", "src", "main", "java",
+    "io", "github", "fdmdf", "frpc", "kotlin", "BuildTask.kt",
+)
+s4 = open(p4, encoding="utf-8").read()
+anchor = "    @TaskAction\n    fun assemble() {"
+guard = (
+    "    @TaskAction\n"
+    "    fun assemble() {\n"
+    "        // 预构建模式：cargo 产物已由外部放置到 jniLibs，跳过 tauri CLI\n"
+    "        if (System.getenv(\"TAURI_SKIP_RUST_BUILD\") != null) {\n"
+    "            println(\"BuildTask: skipped (TAURI_SKIP_RUST_BUILD set)\")\n"
+    "            return\n"
+    "        }"
+)
+if "TAURI_SKIP_RUST_BUILD" not in s4:
+    assert anchor in s4, "BuildTask anchor not found"
+    s4 = s4.replace(anchor, guard, 1)
+    open(p4, "w", encoding="utf-8", newline="").write(s4)
 print("BuildTask guarded")
 PYEOF
 
-echo "==> 写 local.properties（SDK 路径）"
-ANDROID_HOME_WIN=$(cygpath -w "$ANDROID_HOME" | sed 's/\\/\\\\/g')
-printf 'sdk.dir=%s\n' "$ANDROID_HOME_WIN" > "$GEN/local.properties"
+echo "==> 写 local.properties（SDK 路径，仅 Windows Git Bash 需要）"
+if command -v cygpath >/dev/null 2>&1; then
+  ANDROID_HOME_WIN=$(cygpath -w "$ANDROID_HOME" | sed 's/\\/\\\\/g')
+  printf 'sdk.dir=%s\n' "$ANDROID_HOME_WIN" > "$GEN/local.properties"
+else
+  echo "   (非 Windows：跳过，gradle 直接使用 ANDROID_HOME)"
+fi
 
-echo "==> 完成。完整构建流程（Windows 非管理员绕过符号链接限制）："
+echo "==> 完成。构建流程："
 cat <<'NOTE'
-  # 1) 先跑一次 tauri CLI 让它编译 Rust（到符号链接报错即停下，Rust 产物已就绪）：
-  #    注意：这一步会把 jniLibs 里手工放的文件清掉！
-  #    tauri android build --apk --target aarch64
-  # 2) 手工放置两个动态库（jniLibs 已被 CLI 清空，需重新复制）：
-  #    cp tauri/target/aarch64-linux-android/release/libfrpc_app_lib.so \
-  #       tauri/app/src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
-  #    cp androidApp/src/main/jniLibs/arm64-v8a/libfrpc.so \
-  #       tauri/app/src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
-  # 3) 直接驱动 gradle（TAURI_SKIP_RUST_BUILD=1 跳过 CLI 回调；若全局
-  #    ~/.gradle/gradle.properties 有过期代理，用空 -D 参数覆盖为直连）：
-  #    TAURI_SKIP_RUST_BUILD=1 ./gradlew :app:assembleArm64Release \
-  #      -Dhttp.proxyHost= -Dhttp.proxyPort= -Dhttps.proxyHost= -Dhttps.proxyPort=
-  # 4) zipalign + apksigner 签名（密钥见 src-tauri/android/README.md）。
-  # 提示：开启 Windows 开发者模式后可直接 tauri android build，无需以上绕过。
+  # 桌面（Linux/macOS 或开启 Windows 开发者模式）：直接
+  #   tauri android build --apk --target aarch64
+  #
+  # Windows 非管理员（符号链接不可用）绕过：
+  #   1) tauri android build --apk --target aarch64   # 跑到符号链接报错，cargo 产物已就绪
+  #   2) cp tauri/target/aarch64-linux-android/release/libfrpc_app_lib.so \
+  #        tauri/app/src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
+  #      （引擎 libfrpc.so 走声明式源目录，无需复制）
+  #   3) TAURI_SKIP_RUST_BUILD=1 ./gradlew :app:assembleArm64Release \
+  #        -Dhttp.proxyHost= -Dhttp.proxyPort= -Dhttps.proxyHost= -Dhttps.proxyPort=
+  #   4) zipalign + apksigner 签名（见 src-tauri/android/README.md）
 NOTE
