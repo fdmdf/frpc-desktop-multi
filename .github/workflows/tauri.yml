@@ -192,6 +192,11 @@ jobs:
           fi
 
       - name: Sign APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
           BT="$ANDROID_HOME/build-tools/34.0.0"
@@ -207,15 +212,40 @@ jobs:
             -name '*-release-unsigned.apk' -print -quit)"
           echo "unsigned apk: $UNSIGNED"
           test -f "$UNSIGNED"
+
+          # 签名密钥必须**跨构建固定**，否则每个版本签名不同，覆盖安装报
+          # INSTALL_FAILED_UPDATE_INCOMPATIBLE。历史实现每次 keytool -genkeypair
+          # 现生成一把临时的，就是「每次安装都提示签名不对」的根因。
+          # 优先用 secret（换成自己的密钥时），否则用仓库内的固定密钥。
           KS="$RUNNER_TEMP/release.keystore"
-          keytool -genkeypair -v -keystore "$KS" -alias frpc -keyalg RSA -keysize 2048 \
-            -validity 10950 -storepass frpc-desktop-multi -keypass frpc-desktop-multi \
-            -dname "CN=frpc-desktop-multi, O=fdmdf, C=CN"
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KS"
+            KS_PASS="${ANDROID_KEYSTORE_PASSWORD:-frpc-desktop-multi}"
+            KEY_PASS="${ANDROID_KEY_PASSWORD:-$KS_PASS}"
+            KEY_ALIAS="${ANDROID_KEY_ALIAS:-frpc}"
+            echo "signing key: secret ANDROID_KEYSTORE_BASE64"
+          else
+            KS="tauri/android-signing/release.keystore"
+            test -f "$KS"
+            KS_PASS="frpc-desktop-multi"
+            KEY_PASS="frpc-desktop-multi"
+            KEY_ALIAS="frpc"
+            echo "signing key: committed tauri/android-signing/release.keystore"
+          fi
+
           "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
-          "$BT/apksigner" sign --ks "$KS" --ks-pass pass:frpc-desktop-multi \
-            --key-pass pass:frpc-desktop-multi --ks-key-alias frpc \
+          "$BT/apksigner" sign --ks "$KS" --ks-pass "pass:$KS_PASS" \
+            --key-pass "pass:$KEY_PASS" --ks-key-alias "$KEY_ALIAS" \
             --out "$APK" "$RUNNER_TEMP/aligned.apk"
-          "$BT/apksigner" verify "$APK"
+          "$BT/apksigner" verify --print-certs "$APK" | tee "$RUNNER_TEMP/certs.txt"
+
+          # 把证书指纹写进 job summary：出问题时一眼看出签名有没有被换掉
+          {
+            echo "### APK 签名证书"
+            echo '```'
+            grep -E "Signer #1 certificate (DN|SHA-256)" "$RUNNER_TEMP/certs.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

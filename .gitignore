@@ -16,12 +16,16 @@ tauri/engines/android/jniLibs/*/libfrpc.so
 Thumbs.db
 desktop.ini
 
-# ---- 签名与密钥（绝不入库）----
+# ---- 签名与密钥（默认不入库）----
 *.jks
 *.keystore
 *.p12
 keystore-password.txt
 keystore.b64
+# 唯一例外：Android 发布签名密钥。必须入库，否则每次 CI 随机生成密钥，
+# 用户覆盖安装会报「签名不一致」，只能卸载重装。说明见
+# tauri/android-signing/README.md（可在 CI 里用 secrets 覆盖）。
+!tauri/android-signing/release.keystore
 
 # ---- 构建输出 ----
 dist/
