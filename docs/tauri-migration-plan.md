@@ -43,8 +43,10 @@ M0 需要把基线实测落档（各平台安装包体积、内存、启动时�
 
 - 新代码全部位于 **`tauri/` 子目录**，与 Kotlin 代码在同一分支并存，便于逐文件对照移植。
 - **冻结规则**：迁移期间 `dev` 上 Kotlin 代码只修致命 bug，避免双头修改。
-- **收敛**：M5 验收通过后 `tauri-rewrite` 合回 `main`；Kotlin 版本归档保留（不删除）。
-- CI：新增 Tauri 构建流水线（桌面三平台 + Android APK），旧流水线保留至收敛后下线。
+- **收敛**：M5 验收通过后 `tauri-rewrite` 合回 `main`；Kotlin 版本从主干移除，
+  归档为 `archive/kotlin-legacy` 分支（git 历史亦可回溯）。
+- CI：新增 Tauri 构建流水线（桌面三平台 + Android APK）；旧流水线 `ci.yml` /
+  `release.yml` 已随 Kotlin 代码一并下线。
 
 ```
 tauri/

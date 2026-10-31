@@ -33,16 +33,17 @@ if [ ! -f "$OUT_DIR/frps.exe" ] && [ ! -f "$OUT_DIR/frps" ]; then
       -o "$OUT_DIR/frps$exe" ./cmd/frps )
 fi
 
-# 引擎：优先 desktopApp/engine（build-frpc.sh 产物）
-if [ ! -f "$REPO_ROOT/desktopApp/engine/frpc.exe" ] && [ ! -f "$REPO_ROOT/desktopApp/engine/frpc" ]; then
+# 引擎：优先 tauri/app/src-tauri/resources/engine（build-frpc.sh 产物）
+ENGINE_DIR="$REPO_ROOT/tauri/app/src-tauri/resources/engine"
+if [ ! -f "$ENGINE_DIR/frpc.exe" ] && [ ! -f "$ENGINE_DIR/frpc" ]; then
   echo "==> 引擎缺失，构建 frpc"
   bash "$REPO_ROOT/scripts/build-frpc.sh" desktop
 fi
 
 echo "==> 运行 Rust 核心 e2e（verify × 8 + 真实隧道）"
 export FRPC_E2E=1
-export FRPC_BIN="$REPO_ROOT/desktopApp/engine/frpc.exe"
-[ -f "$FRPC_BIN" ] || export FRPC_BIN="$REPO_ROOT/desktopApp/engine/frpc"
+export FRPC_BIN="$ENGINE_DIR/frpc.exe"
+[ -f "$FRPC_BIN" ] || export FRPC_BIN="$ENGINE_DIR/frpc"
 export FRPS_BIN="$(ls "$OUT_DIR"/frps* | head -1)"
 
 cargo test --manifest-path "$REPO_ROOT/tauri/Cargo.toml" -p frpc-core \

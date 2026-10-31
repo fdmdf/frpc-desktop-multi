@@ -20,9 +20,9 @@ SRC_PARENT="$WORK_ROOT/src"
 SRC_DIR="$SRC_PARENT/github.com/fatedier/frp@${FRP_VERSION}"
 ZIP_FILE="$WORK_ROOT/frp-${FRP_VERSION}.zip"
 
-DESKTOP_ENGINE_DIR="$REPO_ROOT/desktopApp/engine"
-JNILIBS="$REPO_ROOT/androidApp/src/main/jniLibs"
-ASSETS="$REPO_ROOT/androidApp/src/main/assets/frpc"
+# 旧 Kotlin 版（1.3.x）已归档：引擎产物直接落到 Tauri 工程自己的目录
+DESKTOP_ENGINE_DIR="$REPO_ROOT/tauri/app/src-tauri/resources/engine"
+JNILIBS="$REPO_ROOT/tauri/engines/android/jniLibs"
 
 unzip_to() {
   local py="python3"
@@ -117,8 +117,8 @@ build_desktop() {
 }
 
 build_android() {
-  mkdir -p "$ASSETS"
-  echo "$FRP_VERSION" > "$ASSETS/VERSION"
+  mkdir -p "$JNILIBS"
+  echo "$FRP_VERSION" > "$JNILIBS/VERSION"
   build_frpc android arm64 "$JNILIBS/arm64-v8a/libfrpc.so"
 
   if [ "${SKIP_X86_64:-1}" != "1" ]; then

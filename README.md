@@ -1,18 +1,19 @@
 <div align="center">
-  <img src="docs/assets/icon.svg" width="96" height="96" alt="Frpc-Android-Multi" />
-  <h1>Frpc-Android-Multi</h1>
+  <img src="docs/assets/icon.svg" width="96" height="96" alt="frpc-desktop-multi" />
+  <h1>frpc-desktop-multi</h1>
   <p><b>frp 内网穿透的可视化客户端</b> · Windows / Linux / macOS / Android<br>配置、启停、日志、监控，全在一个界面里</p>
 
   <p>
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
     <img src="https://img.shields.io/badge/frpc-v0.71.1-orange" alt="frp" />
-    <img src="https://img.shields.io/badge/Kotlin-2.4.21-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin" />
-    <img src="https://img.shields.io/badge/Compose-Desktop%20%26%20Android-4285F4?logo=jetpackcompose&logoColor=white" alt="Compose" />
+    <img src="https://img.shields.io/badge/Rust-1.85%2B-DEA584?logo=rust&logoColor=white" alt="Rust" />
+    <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri" />
+    <img src="https://img.shields.io/badge/Vue-3-42B883?logo=vuedotjs&logoColor=white" alt="Vue" />
   </p>
 
   <p>
     <a href="https://github.com/fdmdf/frpc-desktop-multi/releases/latest"><img src="https://img.shields.io/github/v/release/fdmdf/frpc-desktop-multi?label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
-    <a href="https://github.com/fdmdf/frpc-desktop-multi/actions/workflows/ci.yml"><img src="https://github.com/fdmdf/frpc-desktop-multi/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <a href="https://github.com/fdmdf/frpc-desktop-multi/actions/workflows/tauri.yml"><img src="https://github.com/fdmdf/frpc-desktop-multi/actions/workflows/tauri.yml/badge.svg" alt="CI" /></a>
   </p>
 </div>
 
@@ -26,7 +27,10 @@
 - **资源与日志**：CPU / 内存 / 线程 / 运行时长实时采样；日志分级过滤、搜索、导出
 - **开箱即用**：内置 frpc 引擎，各平台原生编译，用户不需要装 Java、Go 或手动下载二进制
 - **双语界面**：简体中文 / English，应用内切换，也可跟随系统
-- **两端一致**：桌面端与 Android 共用同一个 Kotlin Multiplatform 核心模块，配置模型、`frpc.toml` 编解码、校验规则只有一份实现
+- **一份代码两端跑**：Rust 核心层（`frpc-core`）+ Vue 3 界面，桌面与 Android 共用同一份实现；安装包只有旧版的 1/10
+
+> v1.4.0 起由 Tauri 2 + Rust 重写，替代原先的 Kotlin Multiplatform / Compose 实现。
+> 旧实现已归档在 `archive/kotlin-legacy` 分支，不再随新版本发布。
 
 ## 界面
 
@@ -50,16 +54,15 @@
 
 ## 下载
 
-| 平台 | 文件 | 说明 |
+| 平台 | 文件 | 大小 |
 |---|---|---|
-| Windows x64 | `Frpc-Android-Multi-<ver>-windows-x64-setup.exe` | 双击安装，自带 JRE，含开始菜单快捷方式 |
-| Windows x64 | `Frpc-Android-Multi-<ver>-windows-x64.zip` | 便携版，解压即用 |
-| Linux x64 | `Frpc-Android-Multi-<ver>-linux-x64.tar.gz` / `.deb` | 解压运行 `bin/Frpc-Android-Multi`，或 `dpkg -i` |
-| macOS arm64 | `Frpc-Android-Multi-<ver>-macos-arm64.dmg` | Apple Silicon；未签名，首次需右键 → 打开 |
-| macOS x64 | `Frpc-Android-Multi-<ver>-macos-x64.dmg` | Intel；未签名，首次需右键 → 打开 |
-| Android arm64 | `Frpc-Android-Multi-<ver>-android-arm64.apk` | Android 8.0+，允许未知来源安装 |
+| Windows x64 | `frpc-desktop-multi_<ver>_x64-setup.exe` | 7.1 MB |
+| Windows x64 | `frpc-desktop-multi_<ver>_x64_en-US.msi` | 9.5 MB |
+| Linux x64 | `frpc-desktop-multi_<ver>_amd64.deb` / `.AppImage` | 10 MB / 84 MB |
+| macOS arm64 | `frpc-desktop-multi_<ver>_aarch64.dmg` | 8.7 MB |
+| Android arm64 | `frpc-desktop-multi-<ver>-arm64.apk` | 10.5 MB |
 
-macOS 的 `.tar.gz` 是同一个 `.app` 的压缩包（不便挂载 DMG 时用）。Android APK 由仓库签名密钥签名，签名未生效时工作流会直接终止，不会发出装不上的产物。
+macOS 产物未签名，首次启动需在「系统设置 → 隐私与安全性」允许。Android APK 由 CI 用临时密钥签名，签名失败时工作流会直接终止，不会发出装不上的产物。
 
 ## 快速开始
 
@@ -82,14 +85,23 @@ macOS 的 `.tar.gz` 是同一个 `.app` 的压缩包（不便挂载 DMG 时用�
 
 ## 从源码构建
 
-需要 **JDK 17**、**Go 1.21+**（编译 frpc 引擎），打包 APK 另需 Android SDK。
+需要 **Rust 1.85+**、**Node 20+**、**Go 1.21+**（编译 frpc 引擎）；打 APK 另需 Android SDK + NDK 27.2。
 
 ```bash
-bash scripts/build-frpc.sh            # 编译引擎：桌面端 + Android（源码缓存在 .build/）
-./gradlew :desktopApp:run             # 跑桌面端
-./gradlew :androidApp:assembleDebug   # 打调试 APK
-./gradlew :shared:jvmTest :androidApp:testDebugUnitTest   # 单元测试
-bash scripts/e2e/e2e-protocols.sh     # 八协议端到端测试（真跑 frps + frpc）
+bash scripts/build-frpc.sh desktop        # 编译引擎 -> tauri/app/src-tauri/resources/engine
+cargo test --manifest-path tauri/Cargo.toml -p frpc-core    # 核心层单测（88 项）
+cd tauri/app/ui && npm ci && npm run build                  # 前端产物
+cd tauri/app && ui/node_modules/.bin/tauri build            # 桌面安装包
+bash scripts/tauri-e2e.sh                 # 八协议端到端（真跑 frps + frpc）
+```
+
+Android：
+
+```bash
+bash scripts/build-frpc.sh android                    # -> tauri/engines/android/jniLibs
+export ANDROID_HOME=... NDK_HOME=...
+bash scripts/tauri-android-setup.sh                   # 生成 gen/android 并打 gradle 补丁
+cd tauri/app && ui/node_modules/.bin/tauri android build --apk --target aarch64
 ```
 
 端到端测试会用应用自己的编码器把档案导出成 `frpc.toml`，经 `frpc verify` 校验后真实建隧道，逐个协议验证 tcp / udp / http / https / stcp / xtcp / tcpmux / sudp 的连通性。
@@ -97,18 +109,22 @@ bash scripts/e2e/e2e-protocols.sh     # 八协议端到端测试（真跑 frps +
 ## 项目结构
 
 ```
-shared/       Kotlin Multiplatform：配置模型、TOML 编解码、校验、admin API 客户端、进程采集
-desktopApp/   Compose Desktop 客户端
-androidApp/   Jetpack Compose 客户端（前台服务 + 开机自启）
-scripts/      引擎编译、八协议端到端测试
-docs/wiki/    使用文档
+tauri/
+  crates/frpc-core/   Rust 核心层：模型 / TOML / 校验 / admin API / 日志 / 指标 / 端口 / 存储 / 监管
+  app/src-tauri/      Tauri 桌面端外壳与命令桥
+  app/ui/             Vue 3 界面（桌面与 Android 共用）
+  engines/android/    Android 引擎产物（jniLibs，由 build-frpc.sh 生成，不入库）
+scripts/              引擎编译、Android 工程初始化、端到端测试
+docs/wiki/            使用文档
+.github/workflows/tauri.yml   CI：核心层测试 + 三平台桌面包 + Android APK
 ```
 
 ## 已知限制
 
 - 健康检查（`healthCheck`）、`loadBalancer`、`includes`、代理注解等高级字段未建模，导入 TOML 时会被忽略；`plugin` 已支持 https 的 `https2http` / `tls2raw`，其它插件类型导入后原样保留但不可编辑
-- Android 仅提供 `arm64-v8a`；`x86_64` 可自行用 `SKIP_X86_64=0` 编译
+- Android 目前只打 `arm64-v8a`
 - macOS 产物未签名 / 未公证
+- Android 端前台服务保活（后台持续运行）尚未实现
 - 运行中的配置不可编辑，需先停止服务（避免"改了没生效"的误解）
 - xtcp 依赖 UDP 打洞：系统代理 / 虚拟网卡（TUN）、对称型 NAT、模拟器网络都可能让它建不上隧道。日志出现 `establishing nat hole connection successful` 仍不通时，先关掉系统代理或换网络再试
 

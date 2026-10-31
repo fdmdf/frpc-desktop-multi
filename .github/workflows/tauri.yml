@@ -96,10 +96,11 @@ jobs:
             tail -n 10 /tmp/eng.log | while IFS= read -r line; do echo "::error::$line"; done
             exit "${CODE:-1}"
           fi
-          mkdir -p tauri/app/src-tauri/resources/engine || { echo "::error::mkdir resources/engine failed"; exit 1; }
-          cp desktopApp/engine/frpc* tauri/app/src-tauri/resources/engine/ || { echo "::error::cp frpc* failed"; ls -la desktopApp/engine >&2 || true; exit 1; }
-          cp desktopApp/engine/VERSION tauri/app/src-tauri/resources/engine/ || { echo "::error::cp VERSION failed"; exit 1; }
-          ls -la tauri/app/src-tauri/resources/engine/
+          # build-frpc.sh 现在直接输出到 tauri/app/src-tauri/resources/engine，这里只校验
+          ls -la tauri/app/src-tauri/resources/engine/ \
+            || { echo "::error::resources/engine 未生成"; exit 1; }
+          test -f tauri/app/src-tauri/resources/engine/VERSION \
+            || { echo "::error::resources/engine/VERSION 缺失"; exit 1; }
 
       - name: Build UI (vue-tsc + vite)
         run: npm --prefix tauri/app/ui ci --no-audit --no-fund && npm --prefix tauri/app/ui run build

@@ -1,18 +1,8 @@
-# ---- Gradle / Kotlin ----
-.gradle/
-.kotlin/
-build/
-*/build/
-!gradle/wrapper/gradle-wrapper.jar
-local.properties
-captures/
-.externalNativeBuild/
-.cxx/
+# ---- 构建缓存 ----
+.build/
 
 # ---- 运行时产物：引擎二进制由 scripts/build-frpc.sh 编译后打入，不入库 ----
-desktopApp/engine/
-androidApp/src/main/jniLibs/*/libfrpc.so
-androidApp/src/main/assets/frpc/VERSION
+tauri/engines/android/jniLibs/*/libfrpc.so
 
 # ---- IDE ----
 .idea/
@@ -48,13 +38,7 @@ dist/
 .workbuddy/memory/
 .workbuddy/tmp*
 
-# 构建/测试缓存
-.build/
-
-# 图标生成器的中间产物（入库的是 icon.ico / icon.png / tray/）
-desktopApp/src/main/resources/icon/
-
-# ---- Tauri / Rust（tauri-rewrite 分支）----
+# ---- Tauri / Rust ----
 tauri/target/
 tauri/app/src-tauri/target/
 tauri/app/src-tauri/gen/schemas/
