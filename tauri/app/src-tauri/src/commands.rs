@@ -110,11 +110,20 @@ pub fn list_listening_ports() -> Vec<frpc_core::net::ListeningPort> {
 pub fn get_engine_info(state: tauri::State<'_, AppState>) -> EngineInfo {
     let mgr = EngineManager { state: &state };
     let engine_file = mgr.engine_file();
+    // Android 没有 resources/engine/VERSION（引擎在 nativeLibraryDir），
+    // 打包版本缺失时退回 `frpc -v` 探测，避免界面上一直显示 unknown。
+    let mut version = mgr.bundled_version(state.resource_dir.as_deref());
+    if version == "unknown" {
+        let probed = mgr.probe_version();
+        if !probed.is_empty() {
+            version = probed;
+        }
+    }
     EngineInfo {
         path: engine_file.display().to_string(),
         exists: engine_file.is_file(),
         using_custom: mgr.is_using_custom(),
-        bundled_version: mgr.bundled_version(state.resource_dir.as_deref()),
+        bundled_version: version,
     }
 }
 

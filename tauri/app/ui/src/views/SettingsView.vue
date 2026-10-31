@@ -159,7 +159,9 @@ async function browseEngine() {
 
     <div class="section-card">
       <h3 class="card-title">关于</h3>
-      <p style="margin: 0">frpc-desktop-multi 0.1.0</p>
+      <p style="margin: 0">
+        frpc-desktop-multi {{ store.appVersion ? "v" + store.appVersion : "" }}
+      </p>
       <p class="muted small" style="margin: 0">
         内置引擎 frp {{ engineInfo?.bundledVersion ?? "unknown" }} · 配置文件 {{ dataDir }}
       </p>

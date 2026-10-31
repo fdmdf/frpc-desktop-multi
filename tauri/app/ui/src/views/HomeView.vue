@@ -164,7 +164,7 @@ const uptime = computed(() =>
         <h2 class="page-title">运行状态</h2>
         <p class="page-sub">frpc 引擎 {{ store.engineVersion }}</p>
       </div>
-      <div v-if="store.profiles.length > 1" class="field" style="width: 280px">
+      <div v-if="store.profiles.length > 1" class="field fixed-field">
         <span class="field-label">当前配置</span>
         <select :value="currentProfile?.id" @change="onProfileSwitch">
           <option v-for="p in store.profiles" :key="p.id" :value="p.id">{{ p.name }}</option>

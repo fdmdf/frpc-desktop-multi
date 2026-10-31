@@ -2,6 +2,7 @@
 import { onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useEngineStore } from "./stores/engine";
+import logo from "./assets/logo.svg";
 
 const route = useRoute();
 const store = useEngineStore();
@@ -29,8 +30,6 @@ const tabs = [
 ] as const;
 
 const icons: Record<string, string> = {
-  router:
-    "M20 2H4v20h16V2zm-2 2v3.75l-2 1.5V4h2zM9 4h5v5.25l-2.5 1.87L9 9.25V4zM7 4v5.25L5.5 8.13 4 9.5V4h3zM4 20v-8l5.5-4.12L11 9v11H4zm9 0V9l2.5 1.88L20 6.75V20h-7z",
   home: "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z",
   dashboard: "M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z",
   article:
@@ -44,9 +43,15 @@ const icons: Record<string, string> = {
 
 <template>
   <div class="shell">
+    <!-- 移动端顶栏（窄屏才显示）：桌面端用侧栏标题 -->
+    <header class="topbar">
+      <img class="brand-logo" :src="logo" alt="" />
+      <span class="topbar-title">frpc-desktop-multi</span>
+      <span v-if="store.appVersion" class="topbar-ver">v{{ store.appVersion }}</span>
+    </header>
     <aside class="sidebar">
       <div class="brand">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path :d="icons.router" /></svg>
+        <img class="brand-logo" :src="logo" alt="" />
         <span>frpc-desktop-multi</span>
       </div>
       <RouterLink
@@ -59,7 +64,10 @@ const icons: Record<string, string> = {
         <svg viewBox="0 0 24 24" fill="currentColor"><path :d="icons[t.icon]" /></svg>
         <span>{{ t.label }}</span>
       </RouterLink>
-      <div class="sidebar-foot">引擎 frp {{ store.engineVersion }}</div>
+      <div class="sidebar-foot">
+        引擎 frp {{ store.engineVersion }}
+        <span v-if="store.appVersion"> · v{{ store.appVersion }}</span>
+      </div>
     </aside>
     <main class="content">
       <RouterView />

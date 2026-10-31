@@ -71,7 +71,7 @@ async function openLogsDir() {
         </p>
       </div>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <div class="field" style="width: 240px">
+        <div class="field fixed-field">
           <input v-model="query" placeholder="搜索" />
         </div>
         <button class="btn filled" @click="save">保存</button>

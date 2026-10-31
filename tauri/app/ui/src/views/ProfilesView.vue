@@ -425,7 +425,7 @@ async function clearAll() {
       </div>
     </div>
 
-    <div class="page" style="max-width: 960px">
+    <div class="page page-narrow">
       <p v-if="saveError" class="section-card error-text" style="margin: 0">{{ saveError }}</p>
 
       <div v-if="runningThis" class="section-card">

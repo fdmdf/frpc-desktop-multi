@@ -83,6 +83,20 @@ body {
   flex: none;
 }
 
+/* 品牌 Logo（与打包图标同一个 svg：蓝底白拱门+箭头） */
+.brand-logo {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 5px;
+  display: block;
+}
+
+/* 移动端顶栏：桌面端隐藏（标题在侧栏里） */
+.topbar {
+  display: none;
+}
+
 .sidebar .nav-item {
   display: flex;
   align-items: center;
@@ -146,6 +160,16 @@ body {
   margin: 4px 0 0;
   color: var(--text-2);
   font-size: 14px;
+}
+
+/* 内容区更窄的页面（配置列表）；窄屏下由 @media 统一放开 */
+.page-narrow {
+  max-width: 960px;
+}
+
+/* 固定宽度的下拉/输入（桌面端保持固定，窄屏整行显示） */
+.fixed-field {
+  width: 280px;
 }
 
 /* ---------- SectionCard（Components.kt） ---------- */
@@ -541,4 +565,135 @@ body {
   align-items: center;
   gap: 8px;
   padding: 2px 0;
+}
+
+/* ---------------- 窄屏（手机 / Android）适配 ----------------
+   桌面端是「224px 侧栏 + 内容」两栏，直接套到手机上会把内容挤成一条，
+   所以窄屏改为「顶栏 + 内容 + 底部导航栏」的移动端骨架。 */
+@media (max-width: 720px) {
+  .shell {
+    flex-direction: column;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    flex: none;
+  }
+
+  .topbar-title {
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .topbar-ver {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  /* 侧栏变底部导航栏 */
+  .sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    flex-direction: row;
+    gap: 0;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-right: none;
+    border-top: 0.5px solid var(--border);
+    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.06);
+    z-index: 20;
+  }
+
+  .sidebar .brand,
+  .sidebar-foot {
+    display: none;
+  }
+
+  .sidebar .nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 2px;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .sidebar .nav-item svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .sidebar .nav-item span {
+    font-size: 11px;
+  }
+
+  .content {
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 68px;
+  }
+
+  .page {
+    padding: 12px;
+    max-width: none;
+    gap: 12px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  .section-card {
+    padding: 14px;
+  }
+
+  .stat-row {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .stat-tile {
+    min-width: 40%;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+
+  .modal {
+    width: auto;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 64px);
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .log-list {
+    height: calc(100vh - 210px);
+    min-height: 240px;
+  }
+
+  /* 页面里有不少「行内 display:flex」的工具行（按钮组、字段组），
+     窄屏下统一允许换行，避免内容被挤出屏幕右侧。 */
+  .page [style*="display: flex"],
+  .page [style*="display:flex"],
+  .modal [style*="display: flex"],
+  .modal [style*="display:flex"] {
+    flex-wrap: wrap;
+  }
+
+  /* 固定宽度的选择器（当前配置 / 日志筛选）窄屏改为整行 */
+  .fixed-field {
+    width: 100%;
+  }
 }

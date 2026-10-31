@@ -195,6 +195,12 @@ jobs:
         run: |
           set -euo pipefail
           BT="$ANDROID_HOME/build-tools/34.0.0"
+          # 文件名跟着 tag 走（v1.4.1 -> frpc-desktop-multi-1.4.1-arm64.apk），
+          # 手动触发时退回 tauri.conf.json 的 version
+          VER="${GITHUB_REF_NAME#v}"
+          [ "$VER" != "$GITHUB_REF_NAME" ] || VER="$(python -c 'import json;print(json.load(open("tauri/app/src-tauri/tauri.conf.json"))["version"])')"
+          APK="frpc-desktop-multi-${VER}-arm64.apk"
+          echo "apk name: $APK"
           # CLI 打的是 universal flavor（产物目录随 flavor 变化），这里按实际产物定位，
           # 不再写死 arm64 目录
           UNSIGNED="$(find tauri/app/src-tauri/gen/android/app/build/outputs/apk \
@@ -208,18 +214,18 @@ jobs:
           "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
           "$BT/apksigner" sign --ks "$KS" --ks-pass pass:frpc-desktop-multi \
             --key-pass pass:frpc-desktop-multi --ks-key-alias frpc \
-            --out "frpc-desktop-multi-1.4.0-arm64.apk" "$RUNNER_TEMP/aligned.apk"
-          "$BT/apksigner" verify "frpc-desktop-multi-1.4.0-arm64.apk"
+            --out "$APK" "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify "$APK"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: frpc-desktop-multi-1.4.0-arm64.apk
+          path: frpc-desktop-multi-*-arm64.apk
           retention-days: 14
 
       - name: Attach APK to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: frpc-desktop-multi-1.4.0-arm64.apk
+          files: frpc-desktop-multi-*-arm64.apk

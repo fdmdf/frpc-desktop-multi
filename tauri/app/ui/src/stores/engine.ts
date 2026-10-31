@@ -2,6 +2,7 @@
 import { defineStore } from "pinia";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { api as A } from "../api";
 import type {
   ActiveRuleCounts,
@@ -19,6 +20,8 @@ export const useEngineStore = defineStore("engine", {
   state: () => ({
     ready: false,
     engineVersion: "",
+    /// 应用版本（tauri.conf.json 的 version，与仓库 tag 对齐）
+    appVersion: "",
     editingProfileId: null as string | null,
     runState: {
       phase: "IDLE",
@@ -57,6 +60,11 @@ export const useEngineStore = defineStore("engine", {
   actions: {
     async init() {
       if (this.ready) return;
+      try {
+        this.appVersion = await getVersion();
+      } catch {
+        this.appVersion = "";
+      }
       this.runState = await A.getEngineState();
       this.profiles = await A.listProfiles();
       this.settings = await A.getSettings();

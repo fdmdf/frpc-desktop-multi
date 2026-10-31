@@ -42,6 +42,24 @@
 - macOS dmg 未做开发者签名，首次启动需在「系统设置 → 隐私与安全性」中允许。
 - 冷启动与稳态内存基线仍在复测，结论回填 `docs/tauri-baseline.md`。
 
+## [1.4.1] - 2026-10-31
+
+### 修复
+
+- **Android 排版**：窄屏（≤720px）不再是「224dp 侧栏 + 被挤扁的内容」，改为
+  移动端骨架——顶栏显示应用名与 Logo、底部 5 项导航栏、内容整屏可用；
+  统计块两列换行、双列表单改为单列、行内按钮组允许换行。
+- **Android 桌面图标**：自适应图标原来用满幅图标 + 白底，Android 8+ 会把图标裁成
+  "白圈里套小方块"。改为品牌蓝底 + 居中白色标识（占安全区 62%），与桌面端观感一致。
+  新增 `scripts/gen-icons.sh` 固化这一流程（`tauri icon` 之后再修前景/背景）。
+- **首页图标**：侧栏/顶栏原来用的是 Material 的 router 图标，换成与应用图标同一个
+  Logo（`ui/src/assets/logo.svg`）。
+- **版本号**：设置 → 关于里写死的 `0.1.0` 改为读取 `tauri.conf.json` 的
+  version（`@tauri-apps/api` 的 `getVersion()`），始终与仓库 tag 对齐。
+- **Android 引擎版本**：Android 没有 `resources/engine/VERSION`，引擎版本一直显示
+  unknown；现在打包版本缺失时回退用 `frpc -v` 探测。
+- 页面标题（`<title>`）由旧名 `Frpc-Android-Multi` 改为 `frpc-desktop-multi`。
+
 ## [未发布]
 
 ### 界面

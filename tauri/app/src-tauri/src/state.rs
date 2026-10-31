@@ -338,10 +338,12 @@ impl EngineManager<'_> {
         match out {
             Ok(o) => {
                 let text = String::from_utf8_lossy(&o.stdout).to_string();
-                text.lines()
-                    .find(|l| l.contains("frp"))
-                    .unwrap_or("")
-                    .trim()
+                let line = text.lines().find(|l| l.contains("frp")).unwrap_or("").trim();
+                // 只要版本号本身（"frpc version 0.71.1" -> "0.71.1"）
+                line.split_whitespace()
+                    .find(|t| t.contains('.') && t.starts_with(|c: char| c.is_ascii_digit()))
+                    .unwrap_or(line)
+                    .trim_matches(|c: char| c == ',' || c == ';' || c == 'v')
                     .to_string()
             }
             Err(_) => String::new(),
