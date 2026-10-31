@@ -31,7 +31,14 @@ jobs:
         with:
           workspaces: tauri
       - name: Format check
-        run: cargo fmt --manifest-path tauri/Cargo.toml -- --check
+        run: |
+          cargo fmt --all --manifest-path tauri/Cargo.toml -- --check 2>&1 | tee /tmp/fmt.log || CODE=$?
+          if [ "${CODE:-0}" -ne 0 ]; then
+            rustfmt --version
+            tail -c 1500 /tmp/fmt.log | tr '\n' '\001' | sed 's/\x01/%0A/g' >&2
+            echo "::error::rustfmt diff detected (see above)"
+            exit "${CODE:-1}"
+          fi
       - name: Test frpc-core
         run: cargo test --manifest-path tauri/Cargo.toml -p frpc-core
 
@@ -80,8 +87,13 @@ jobs:
         env:
           TARGETS: ${{ matrix.targets }}
         run: |
-          set -euo pipefail
-          bash scripts/build-frpc.sh desktop
+          set -o pipefail
+          bash scripts/build-frpc.sh desktop 2>&1 | tee /tmp/eng.log || CODE=$?
+          if [ "${CODE:-0}" -ne 0 ]; then
+            tail -c 1500 /tmp/eng.log | tr '\n' '\001' | sed 's/\x01/%0A/g' >&2
+            echo "::error::engine build failed (see above)"
+            exit "${CODE:-1}"
+          fi
           mkdir -p tauri/app/src-tauri/resources/engine
           cp desktopApp/engine/frpc* tauri/app/src-tauri/resources/engine/
           cp desktopApp/engine/VERSION tauri/app/src-tauri/resources/engine/
@@ -167,7 +179,14 @@ jobs:
       # Linux 上符号链接可用，CLI 全流程直通
       - name: Tauri android build (apk)
         working-directory: tauri/app
-        run: ui/node_modules/.bin/tauri android build --apk --target aarch64
+        run: |
+          set -o pipefail
+          ui/node_modules/.bin/tauri android build --apk --target aarch64 2>&1 | tee /tmp/apk.log || CODE=$?
+          if [ "${CODE:-0}" -ne 0 ]; then
+            tail -c 1500 /tmp/apk.log | tr '\n' '\001' | sed 's/\x01/%0A/g' >&2
+            echo "::error::android build failed (see above)"
+            exit "${CODE:-1}"
+          fi
 
       - name: Sign APK
         run: |

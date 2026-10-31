@@ -36,11 +36,22 @@ fetch_source() {
     return
   fi
   mkdir -p "$SRC_PARENT"
-  echo "==> 通过模块代理拉取 frp $FRP_VERSION"
-  curl -sSL --max-time 600 -o "$ZIP_FILE" \
-    "https://goproxy.cn/github.com/fatedier/frp/@v/${FRP_VERSION}.zip"
-  unzip_to "$ZIP_FILE" "$SRC_PARENT"
-  [ -f "$SRC_DIR/go.mod" ] || { echo "源码解包失败：$SRC_DIR" >&2; exit 1; }
+  # 多源按序尝试（goproxy.cn 国内快；proxy.golang.org 供 CI 机房兜底）
+  local proxies="https://goproxy.cn https://proxy.golang.org"
+  local px
+  for px in $proxies; do
+    echo "==> 通过 $px 拉取 frp $FRP_VERSION"
+    if curl -sSL --max-time 600 -o "$ZIP_FILE" \
+        "$px/github.com/fatedier/frp/@v/${FRP_VERSION}.zip" \
+      && unzip_to "$ZIP_FILE" "$SRC_PARENT" \
+      && [ -f "$SRC_DIR/go.mod" ]; then
+      return
+    fi
+    echo "==> $px 拉取/解包失败，尝试下一个源" >&2
+    rm -rf "$SRC_DIR"
+  done
+  echo "源码拉取失败（所有源均不可用）" >&2
+  exit 1
 }
 
 prepare_web_assets() {
