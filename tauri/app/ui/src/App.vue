@@ -2,6 +2,7 @@
 import { computed, onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
+import { api } from "./api";
 import { useEngineStore } from "./stores/engine";
 import logo from "./assets/logo.svg";
 
@@ -9,9 +10,34 @@ const route = useRoute();
 const store = useEngineStore();
 const { t } = useI18n();
 
+// 前台保活只在 Android 有意义：桌面端没有「进程被系统回收」这回事
+const isAndroid = /Android/i.test(navigator.userAgent || "");
+
 onMounted(async () => {
   await store.init();
 });
+
+/// Android 后台保活：隧道在跑就挂一条常驻通知。
+///
+/// Tauri 版的 frpc 是应用进程的子进程，父进程被系统回收时隧道直接断掉。
+/// 挂上前台服务后，系统会把它当成用户可见的工作，不再按「后台空闲」清理；
+/// 停止 / 启动失败时把通知收掉，避免留下「假运行」的常驻通知。
+watch(
+  () => [store.runState.phase, store.runState.profileName] as const,
+  ([phase, name]) => {
+    if (!isAndroid) return;
+    if (phase === "RUNNING") {
+      void api
+        .setKeepalive(true, t("keepalive.title"), t("keepalive.body", { name: name || "—" }))
+        .catch(() => {
+          /* 保活失败不影响隧道本身，忽略 */
+        });
+    } else if (phase === "IDLE" || phase === "ERROR") {
+      void api.setKeepalive(false, "", "").catch(() => {});
+    }
+  },
+  { immediate: true },
+);
 
 watch(
   () => store.settings?.theme,

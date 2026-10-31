@@ -9,7 +9,6 @@ import { useEngineStore } from "../stores/engine";
 const store = useEngineStore();
 const router = useRouter();
 const { t } = useI18n();
-// Android 上无法用 xdg-open 唤起浏览器，面板改成复制地址让用户自己粘贴
 const isAndroid = /Android/i.test(navigator.userAgent || "");
 const now = ref(Date.now());
 let timer: number | undefined;
@@ -231,10 +230,8 @@ async function toggleRun() {
 const panelUrl = computed(() => `http://127.0.0.1:${store.runState.adminPort}/static/`);
 
 function openPanel() {
-  if (isAndroid) {
-    void copyRemote(panelUrl.value);
-    return;
-  }
+  // Android 现在也能唤起浏览器了（open_url 走 Intent.ACTION_VIEW），
+  // 不再需要「复制地址让用户自己粘贴」那套降级
   void api.openUrl(panelUrl.value);
 }
 
@@ -299,7 +296,7 @@ const uptime = computed(() =>
         style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap"
       >
         <button class="btn text-btn" @click="openPanel">
-          {{ isAndroid ? $t("home.copyPanel") : $t("home.openPanel") }}
+          {{ $t("home.openPanel") }}
         </button>
         <span class="muted small">http://127.0.0.1:{{ store.runState.adminPort }}/static/</span>
         <span v-if="!store.adminReachable" class="error-text small">

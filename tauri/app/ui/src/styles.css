@@ -568,6 +568,59 @@ body {
   font-size: 12px;
 }
 
+.break-all {
+  word-break: break-all;
+}
+
+/* ---------- 关于卡片 ---------- */
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.about-logo {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 10px;
+}
+
+.about-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* 键值对：窄屏自动堆成单列，值允许长路径折行 */
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 16px;
+}
+
+.about-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.about-key {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.about-val {
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.about-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* 曲线（MonitorScreen Sparkline） */
 .spark {
   width: 100%;

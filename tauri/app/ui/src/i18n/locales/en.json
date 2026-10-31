@@ -43,7 +43,6 @@
     "unknownReason": "unknown reason",
     "loginFailed": "Failed to connect to frps: {reason}. frpc keeps retrying; usually the token does not match or the server address/port is wrong. See the Logs page for details.",
     "openPanel": "Open frp dashboard (browser login required)",
-    "copyPanel": "Copy frp dashboard URL",
     "adminUnreachable": "· Status API unreachable (if several frpc instances run on this machine, check whether port {port} is taken)",
     "noProfile": "No profile yet: create one under Profiles, or import an existing frpc.toml",
     "start": "Start",
@@ -165,10 +164,28 @@
     "openRunDir": "Open runtime folder",
     "androidDataHint": "Android cannot launch a system file manager; data lives in the app's private directory",
     "about": "About",
-    "aboutEngine": "Bundled engine frp {version} · config folder {dir}",
     "chooseEngineTitle": "Select the frpc executable",
     "allFiles": "All files",
-    "androidEngineOnly": "Android always uses the bundled engine (libfrpc.so); custom paths are not supported."
+    "androidEngineOnly": "Android always uses the bundled engine (libfrpc.so); custom paths are not supported.",
+    "keepAliveTitle": "Background keep-alive",
+    "keepAliveHint": "While a tunnel is running a persistent notification keeps the app in the foreground state, so the system does not reclaim the process (and kill the tunnel) when you switch away.",
+    "keepAliveBatteryHint": "Some OEM ROMs (Xiaomi / Huawei / OPPO…) also need background activity allowed, otherwise their battery saver may still kill the process.",
+    "keepAliveBattery": "Allow background running",
+    "keepAliveOk": "Already exempt from battery optimization",
+    "keepAliveRequested": "System settings opened — choose \"Don't restrict\" or \"Allow background activity\"",
+    "keepAliveFailed": "Could not open system settings: {err}",
+    "aboutTagline": "Multi-profile GUI for frp: manage several tunnels at once, engine bundled in the app.",
+    "aboutDevBuild": "dev build",
+    "aboutEngineLabel": "Bundled engine",
+    "aboutStack": "Stack",
+    "aboutDataLabel": "Data directory",
+    "aboutPlatform": "Platform",
+    "aboutRepo": "Repository",
+    "aboutIssues": "Report an issue",
+    "aboutReleases": "Changelog",
+    "aboutCopyDiag": "Copy diagnostics",
+    "aboutCopied": "Diagnostics copied",
+    "aboutCopyFailed": "Copy failed, please select the text manually"
   },
   "profiles": {
     "title": "Server profiles",
@@ -460,5 +477,9 @@
     "XTCP_LISTENER_CLOSED": "The local xtcp listener was closed: usually cleanup after the hole punching above failed or the app stopped; no action needed",
     "TOKEN_MISMATCH": "The token does not match the server's auth.token: check the token in the config (watch leading/trailing spaces)",
     "LOGIN_IO_TIMEOUT": "Cannot reach frps: check the server address/port and firewall, and whether a system proxy is intercepting the connection"
+  },
+  "keepalive": {
+    "title": "frpc tunnel running",
+    "body": "{name} · tap to open the app"
   }
 }

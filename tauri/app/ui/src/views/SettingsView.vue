@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { api, type SettingsData } from "../api";
+import logo from "../assets/logo.svg";
+import { errorText } from "../format";
 import { applyLocale, localeSetting, type LocaleSetting } from "../i18n";
 import { useEngineStore } from "../stores/engine";
 
@@ -12,9 +14,25 @@ const settings = computed(() => store.settings);
 const engineInfo = computed(() => store.engineInfo);
 const dataDir = ref("");
 const engineMessage = ref("");
+const batteryMessage = ref("");
+const aboutMessage = ref("");
 const showEngineAdvanced = ref(false);
 // 托盘是桌面专属：Android 上没有托盘，这个开关开了也不会生效，直接不展示
 const isAndroid = /Android/i.test(navigator.userAgent || "");
+const repoUrl = "https://github.com/fdmdf/frpc-desktop-multi";
+
+/// 关于页要显示「运行在什么平台上」，UA 里的版本号比 navigator.platform 有信息量
+const platformLabel = computed(() => {
+  const ua = navigator.userAgent || "";
+  if (/Android/i.test(ua)) {
+    const m = ua.match(/Android\s([\d.]+)/);
+    return m ? `Android ${m[1]}` : "Android";
+  }
+  if (/Windows/i.test(ua)) return "Windows";
+  if (/Mac OS X|Macintosh/i.test(ua)) return "macOS";
+  if (/Linux/i.test(ua)) return "Linux";
+  return navigator.platform || "—";
+});
 
 onMounted(async () => {
   if (!store.settings) store.settings = await api.getSettings();
@@ -57,6 +75,46 @@ async function browseEngine() {
   if (typeof picked === "string" && picked) {
     update({ enginePath: picked });
     engineMessage.value = "";
+  }
+}
+
+/// 关于页外链：Android 走 Intent.ACTION_VIEW，桌面走系统默认浏览器
+async function openLink(url: string) {
+  try {
+    await api.openUrl(url);
+    aboutMessage.value = "";
+  } catch (err) {
+    aboutMessage.value = errorText(err);
+  }
+}
+
+/// 复制诊断信息：反馈问题时这几个数字基本能定位一半原因
+async function copyDiagnostics() {
+  const lines = [
+    `frpc-desktop-multi ${store.appVersion ? "v" + store.appVersion : "(dev)"}`,
+    `${t("settings.aboutPlatform")}: ${platformLabel.value}`,
+    `frp: ${engineInfo.value?.bundledVersion ?? "unknown"}`,
+    `engine: ${engineInfo.value?.path ?? "-"}`,
+    `data: ${dataDir.value}`,
+  ];
+  try {
+    if (!navigator.clipboard) throw new Error(t("home.clipboardUnavailable"));
+    await navigator.clipboard.writeText(lines.join("\n"));
+    aboutMessage.value = t("settings.aboutCopied");
+  } catch {
+    aboutMessage.value = t("settings.aboutCopyFailed");
+  }
+}
+
+/// 申请电池优化白名单：true = 本来就在白名单，false = 已跳到系统页面等用户确认
+async function askBatteryExemption() {
+  try {
+    const already = await api.requestBatteryExemption();
+    batteryMessage.value = already
+      ? t("settings.keepAliveOk")
+      : t("settings.keepAliveRequested");
+  } catch (err) {
+    batteryMessage.value = t("settings.keepAliveFailed", { err: errorText(err) });
   }
 }
 </script>
@@ -122,6 +180,19 @@ async function browseEngine() {
           />
           <span class="track"></span><span class="thumb"></span>
         </label>
+      </div>
+    </div>
+
+    <!-- Android 专属：前台服务保活。隧道是应用进程的子进程，父亲的命就是儿子的命 -->
+    <div v-if="isAndroid" class="section-card">
+      <h3 class="card-title">{{ $t("settings.keepAliveTitle") }}</h3>
+      <p class="muted small" style="margin: 0">{{ $t("settings.keepAliveHint") }}</p>
+      <p class="muted small" style="margin: 0">{{ $t("settings.keepAliveBatteryHint") }}</p>
+      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+        <button class="btn filled small" @click="askBatteryExemption">
+          {{ $t("settings.keepAliveBattery") }}
+        </button>
+        <span v-if="batteryMessage" class="muted small">{{ batteryMessage }}</span>
       </div>
     </div>
 
@@ -193,12 +264,44 @@ async function browseEngine() {
 
     <div class="section-card">
       <h3 class="card-title">{{ $t("settings.about") }}</h3>
-      <p style="margin: 0">
-        frpc-desktop-multi {{ store.appVersion ? "v" + store.appVersion : "" }}
-      </p>
-      <p class="muted small" style="margin: 0">
-        {{ $t("settings.aboutEngine", { version: engineInfo?.bundledVersion ?? "unknown", dir: dataDir }) }}
-      </p>
+      <div class="about-head">
+        <img class="about-logo" :src="logo" alt="" />
+        <div style="min-width: 0">
+          <div class="about-name">frpc-desktop-multi</div>
+          <div class="muted small">
+            {{ store.appVersion ? "v" + store.appVersion : $t("settings.aboutDevBuild") }} ·
+            {{ platformLabel }}
+          </div>
+        </div>
+      </div>
+      <p class="muted small" style="margin: 0">{{ $t("settings.aboutTagline") }}</p>
+
+      <div class="about-grid">
+        <div class="about-item">
+          <span class="about-key">{{ $t("settings.aboutEngineLabel") }}</span>
+          <span class="about-val">frp {{ engineInfo?.bundledVersion ?? "unknown" }}</span>
+        </div>
+        <div class="about-item">
+          <span class="about-key">{{ $t("settings.aboutStack") }}</span>
+          <span class="about-val">Tauri 2 · Rust · Vue 3</span>
+        </div>
+        <div class="about-item">
+          <span class="about-key">{{ $t("settings.aboutDataLabel") }}</span>
+          <span class="about-val mono break-all">{{ dataDir || "—" }}</span>
+        </div>
+      </div>
+
+      <div class="about-links">
+        <button class="btn small" @click="openLink(repoUrl)">{{ $t("settings.aboutRepo") }}</button>
+        <button class="btn small" @click="openLink(repoUrl + '/issues')">{{ $t("settings.aboutIssues") }}</button>
+        <button class="btn small" @click="openLink(repoUrl + '/releases')">
+          {{ $t("settings.aboutReleases") }}
+        </button>
+        <button class="btn text-btn small" @click="copyDiagnostics">
+          {{ $t("settings.aboutCopyDiag") }}
+        </button>
+      </div>
+      <p v-if="aboutMessage" class="muted small" style="margin: 0">{{ aboutMessage }}</p>
     </div>
     <div style="height: 8px"></div>
   </div>

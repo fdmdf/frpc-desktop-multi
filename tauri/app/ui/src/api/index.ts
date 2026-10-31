@@ -251,4 +251,9 @@ export const api = {
   getDataDir: () => invoke<string>("get_data_dir"),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   openPath: (path: string) => invoke<void>("open_path", { path }),
+  /// Android 前台保活通知（桌面端为空实现）；文案在前端拼好，便于跟随界面语言
+  setKeepalive: (enabled: boolean, title: string, text: string) =>
+    invoke<void>("set_keepalive", { enabled, title, text }),
+  /// Android 电池优化白名单；返回 true 表示本来就在白名单
+  requestBatteryExemption: () => invoke<boolean>("request_battery_exemption"),
 };

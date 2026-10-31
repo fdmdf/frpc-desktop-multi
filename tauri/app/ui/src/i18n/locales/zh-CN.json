@@ -43,7 +43,6 @@
     "unknownReason": "未知原因",
     "loginFailed": "连接 frps 失败：{reason}。frpc 会持续重试；常见原因是 token 不一致或服务器地址/端口不对，详情见日志页。",
     "openPanel": "打开 frp 面板（浏览器需登录）",
-    "copyPanel": "复制 frp 面板地址",
     "adminUnreachable": "· 状态接口暂不可达（同机多个 frpc 时，检查端口 {port} 是否被占用）",
     "noProfile": "还没有配置：先在「配置」里新建一份，或导入现成的 frpc.toml",
     "start": "启动",
@@ -165,10 +164,28 @@
     "openRunDir": "打开运行目录",
     "androidDataHint": "Android 上无法唤起系统文件管理器，数据位于应用私有目录",
     "about": "关于",
-    "aboutEngine": "内置引擎 frp {version} · 配置文件 {dir}",
     "chooseEngineTitle": "选择 frpc 可执行文件",
     "allFiles": "全部文件",
-    "androidEngineOnly": "Android 只使用安装包内置的引擎（libfrpc.so），不支持自定义路径。"
+    "androidEngineOnly": "Android 只使用安装包内置的引擎（libfrpc.so），不支持自定义路径。",
+    "keepAliveTitle": "后台保活",
+    "keepAliveHint": "隧道运行时在通知栏挂一条常驻通知，系统会把应用当作正在工作，不会因为切到后台就回收进程、断开连接。",
+    "keepAliveBatteryHint": "部分机型（小米 / 华为 / OPPO 等）还需要允许后台活动，否则省电策略仍可能清掉进程。",
+    "keepAliveBattery": "允许后台运行",
+    "keepAliveOk": "已在电池优化白名单里",
+    "keepAliveRequested": "已打开系统设置，请选择「不限制」或「允许后台运行」",
+    "keepAliveFailed": "打开系统设置失败：{err}",
+    "aboutTagline": "frp 客户端的多配置图形界面：多套隧道并行管理，引擎随包内置。",
+    "aboutDevBuild": "开发版",
+    "aboutEngineLabel": "内置引擎",
+    "aboutStack": "技术栈",
+    "aboutDataLabel": "数据目录",
+    "aboutPlatform": "运行平台",
+    "aboutRepo": "开源仓库",
+    "aboutIssues": "问题反馈",
+    "aboutReleases": "更新日志",
+    "aboutCopyDiag": "复制诊断信息",
+    "aboutCopied": "诊断信息已复制",
+    "aboutCopyFailed": "复制失败，请手动选择文本"
   },
   "profiles": {
     "title": "服务器配置",
@@ -460,5 +477,9 @@
     "XTCP_LISTENER_CLOSED": "xtcp 本地监听已关闭：通常是上面的打洞失败或应用停止引起的收尾动作，不需要单独处理",
     "TOKEN_MISMATCH": "Token 与服务端 auth.token 不一致：检查配置文件里的认证 Token（注意首尾空格）",
     "LOGIN_IO_TIMEOUT": "连不上 frps：检查服务器地址/端口、防火墙，以及本机是否被系统代理拦住了连接"
+  },
+  "keepalive": {
+    "title": "frpc 隧道运行中",
+    "body": "{name} · 点按返回应用"
   }
 }
