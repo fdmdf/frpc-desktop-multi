@@ -1,8 +1,8 @@
 # Tauri Android 端（M4）
 
-> 2026-10-31 更新：APK 构建流水线已在本机**实跑打通**（`scripts/tauri-android-setup.sh` +
+> 2026-11-01 更新：APK 构建流水线已在本机**实跑打通**（`scripts/tauri-android-setup.sh` +
 > `tauri android build --apk`），V1 APK 直接复用 Rust 核心层监管器跑引擎；
-> 前台服务（后台存活）为阶段 2，见文末。
+> 前台服务（后台存活）已落地，见「后台保活」一节。
 
 ## 架构
 
@@ -13,6 +13,10 @@
   （`lib.rs::android_native_lib_dir`），数据目录用 `app_data_dir`（`state.rs::AppPaths::android`）。
 - **桌面专属功能**（托盘 / 单实例 / 开机自启插件）已用 `#[cfg(desktop)]` 门控，
   Android 构建不编译。
+- **后台保活**：`FrpcKeepAliveService.kt`（`service` 包）在隧道运行时挂一条常驻通知，
+  前端在 `engine-state` 变为 RUNNING 时通过 `set_keepalive` 命令触发
+  （Rust → JNI → `startForegroundService`），停止 / 失败时收掉通知。
+  没有它的话，应用切后台被系统回收时 frpc 子进程会跟着死 —— 隧道静默断开。
 - **系统栏避让**：`MainActivity.kt`（本目录，由 setup 脚本复制进 `gen/android`）在
   `enableEdgeToEdge()` 之后按系统栏 / 刘海高度给 `android.R.id.content` 补 padding。
   Android 15 起强制 edge-to-edge，不补的话顶部标题会被状态栏压住、底部导航被手势条
@@ -63,8 +67,10 @@ Tauri 生成的默认配置用"现代打包"（native 库不压缩、页对齐�
 
 ## 签名（release APK 必须签名才能安装）
 
-密钥在 `src-tauri/android-signing/release.keystore`（不入库；密码与别名见下方命令，
-正式分发前请换成自己的密钥）：
+密钥固定为仓库内的 `tauri/android-signing/release.keystore`（**入库**，说明见
+[`tauri/android-signing/README.md`](../../../android-signing/README.md)）。必须是同一把：
+Android 只允许同签名的 APK 覆盖安装，每次构建换密钥就会报「签名不一致」，
+用户只能卸载重装。
 
 ```bash
 BT="$ANDROID_HOME/build-tools/36.0.0"
@@ -74,23 +80,35 @@ BT="$ANDROID_HOME/build-tools/36.0.0"
   --ks-pass pass:frpc-desktop-multi --key-pass pass:frpc-desktop-multi \
   --ks-key-alias frpc \
   --out frpc-desktop-multi-0.1.0-arm64.apk app-release-aligned.apk
+"$BT/apksigner" verify --print-certs frpc-desktop-multi-0.1.0-arm64.apk
 ```
 
-## 阶段 2：前台服务（后台存活）
+## 后台保活（前台服务）
 
-V1 APK 的 frpc 跑在应用进程里，**应用被系统回收时隧道会断**——与 Kotlin 版
-"前台服务保活" 的行为差异。阶段 2 计划（源码已备好）：
+frpc 是 `Command::spawn` 出来的子进程，父进程（应用进程）被系统回收时子进程跟着死。
+Android 的进程回收按「有没有前台组件」排序：只有一个 Activity 时，切后台几分钟就可能
+被 LMK 干掉；挂上前台服务 + 常驻通知后，就变成用户可见的工作，不再按空闲清理。
 
-- 复用 `androidApp/src/main/java/com/frpc/android/service/` 六个文件
-  （`FrpcSupervisor.kt` / `FrpcService.kt` / `FrpcBinaryManager.kt` / `BootReceiver.kt` /
-  `Notifications.kt` / `LogModels.kt`，约 800 行，逻辑已在线上验证），
-  包成 Tauri Android 插件（参考 `FrpcTauriPlugin.kt` 参考实现 + `AndroidManifest-snippet.xml`）。
-- Rust 侧 `#[cfg(target_os = "android")]` 把 start/stop/reload 分流到插件命令。
+- `FrpcKeepAliveService.kt`：`startForeground` + `START_STICKY`，通知 `IMPORTANCE_LOW`
+  （不响、不弹）；小图标用生成脚本产出的「纯白字形 + alpha」前景图
+  （`res/drawable/ic_stat_frpc.png`），彩色图标会被系统渲染成白方块。
+- 触发链：前端 `App.vue` 监听 `engine-state` → `set_keepalive(enabled, title, body)`
+  → `android::keepalive_start/stop`（JNI）→ `startForegroundService`。
+  文案在前端拼，跟随界面语言。
+- `MainActivity` 在 Android 13+ 申请 `POST_NOTIFICATIONS`：不申请的话前台服务通知
+  会被静默丢弃（服务在跑但用户看不到）。
+- 设置页「允许后台运行」调 `FrpcHost.requestIgnoreBatteryOptimizations()` 拉系统的
+  电池优化白名单弹窗；国产 ROM 还需要在「应用启动管理」里允许后台活动，这是 ROM 侧
+  行为，应用无法代劳。
+
+仍然做不到的：用户主动「强行停止」、部分 ROM 划掉后台即冻结。这两类只能靠白名单 +
+厂商自启管理，任何应用都绕不过去。
 
 ## 真机验证清单（对应迁移方案 M4 验收）
 
 - [ ] `libfrpc.so` 在 arm64 真机可执行、隧道建立
-- [ ] 前台服务通知合规（阶段 2 后：Android 8+ channel）
-- [ ] 切后台 / 杀进程后隧道存活（阶段 2 后）
-- [ ] 开机自启（BootReceiver + `RECEIVE_BOOT_COMPLETED`，阶段 2）
+- [ ] 前台服务通知合规（Android 8+ channel、13+ 通知权限）
+- [ ] 切后台后隧道存活（前台服务在，通知常驻）
+- [x] 覆盖安装不报签名不一致（固定密钥后）
+- [ ] 开机自启（未实现：需要 BootReceiver + 持久化的「启动即连」）
 - [ ] 低版本系统 WebView（Chrome 内核 < 90）页面渲染冒烟

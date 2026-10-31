@@ -408,8 +408,42 @@ pub fn open_url_inner(url: &str) -> Result<(), String> {
     }
     #[cfg(target_os = "android")]
     {
-        // 没有 xdg-open；外部浏览器需要 Intent（前端改为复制地址，用户自行粘贴）
-        Err("当前平台不支持直接唤起浏览器".into())
+        // Android 没有 xdg-open，走 Intent.ACTION_VIEW（Kotlin 侧的 FrpcHost::openUrl）
+        crate::android::open_url(url)
+    }
+}
+
+/// Android：开关隧道运行期的前台保活通知。
+///
+/// 文案由前端传（i18n 在前端），Rust 只负责转成 JNI 调用；桌面端没有这个概念，
+/// 直接返回成功，前端不需要为平台写分支。
+#[tauri::command]
+pub fn set_keepalive(enabled: bool, title: String, text: String) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        if enabled {
+            crate::android::keepalive_start(&title, &text)
+        } else {
+            crate::android::keepalive_stop()
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (enabled, title, text);
+        Ok(())
+    }
+}
+
+/// Android：把应用加入电池优化白名单；返回 true 表示原本已在白名单。
+#[tauri::command]
+pub fn request_battery_exemption() -> Result<bool, String> {
+    #[cfg(target_os = "android")]
+    {
+        crate::android::request_battery_exemption()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        Ok(true)
     }
 }
 

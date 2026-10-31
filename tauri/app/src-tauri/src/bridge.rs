@@ -56,7 +56,14 @@ fn spawn_broadcast<T, F>(
 pub fn start(app: AppHandle, state: &AppState) {
     let sup = &state.supervisor;
 
-    spawn_watch(app.clone(), sup.state(), "engine-state", |s| {
+    // 引擎状态除了推给前端，还要让托盘菜单跟着变（运行中 / 已停止 / 启动失败），
+    // 否则托盘菜单永远停在启动时那一刻的样子。
+    let tray_handle = app.clone();
+    spawn_watch(app.clone(), sup.state(), "engine-state", move |s| {
+        #[cfg(desktop)]
+        crate::tray::refresh(&tray_handle, s);
+        #[cfg(not(desktop))]
+        let _ = &tray_handle;
         serde_json::to_value(s).ok()
     });
     spawn_watch(app.clone(), sup.pending_reload(), "pending-reload", |v| {

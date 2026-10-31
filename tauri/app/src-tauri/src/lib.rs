@@ -3,20 +3,19 @@
 //! 分层约定：业务逻辑一律放 `frpc-core`（可独立测试），
 //! 本 crate 只做 Tauri IPC 胶水（invoke 参数校验、event 推送、插件装配）。
 
+#[cfg(target_os = "android")]
+mod android;
 mod bridge;
 mod commands;
 mod state;
+#[cfg(desktop)]
+mod tray;
 
 use tauri::Manager;
 #[cfg(desktop)]
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
-    WindowEvent,
-};
-#[cfg(desktop)]
 use tauri_plugin_single_instance::init as single_instance;
 
+#[cfg(desktop)]
 use frpc_core::store::ServerProfile;
 use state::{AppPaths, AppState, EngineManager};
 
@@ -69,7 +68,7 @@ pub fn run() {
 
             // 托盘 + 关闭行为（桌面专属；Android 无托盘概念）
             #[cfg(desktop)]
-            setup_tray(app)?;
+            tray::setup(app)?;
 
             // 设置了「启动即连」时自动启动默认档案
             {
@@ -141,6 +140,8 @@ pub fn run() {
             commands::get_data_dir,
             commands::open_url,
             commands::open_path,
+            commands::set_keepalive,
+            commands::request_battery_exemption,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -148,7 +149,10 @@ pub fn run() {
 
 /// 启动一份档案（桌面托盘 / 开机自动启动共用）：先做启动前校验，再确保引擎就绪。
 #[cfg(desktop)]
-fn start_profile(state: &tauri::State<'_, AppState>, profile: ServerProfile) -> Result<(), String> {
+pub(crate) fn start_profile(
+    state: &tauri::State<'_, AppState>,
+    profile: ServerProfile,
+) -> Result<(), String> {
     use frpc_core::supervisor::ProfileRef;
     if let Some(reason) = state.supervisor.check_before_start(&profile.config) {
         return Err(reason);
@@ -170,7 +174,7 @@ fn start_profile(state: &tauri::State<'_, AppState>, profile: ServerProfile) -> 
 }
 
 /// 托盘/自启场景下启动失败：写一条应用日志，避免用户完全看不到原因。
-fn log_engine_error(state: &tauri::State<'_, AppState>, reason: String) {
+pub(crate) fn log_engine_error(state: &tauri::State<'_, AppState>, reason: String) {
     use frpc_core::admin::now_epoch_ms;
     use frpc_core::logs::{LogLevel, LogLine};
     state.supervisor.append_log(LogLine {
@@ -179,155 +183,6 @@ fn log_engine_error(state: &tauri::State<'_, AppState>, reason: String) {
         tag: "app".into(),
         message: format!("启动失败：{reason}"),
     });
-}
-
-#[cfg(desktop)]
-fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    // 菜单项与旧版自绘托盘菜单对齐
-    let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
-    let toggle = MenuItem::with_id(app, "toggle", "启动 / 停止（默认配置）", true, None::<&str>)?;
-    let restart = MenuItem::with_id(app, "restart", "重启", true, None::<&str>)?;
-    let status_page = MenuItem::with_id(app, "status", "打开 frp 面板", true, None::<&str>)?;
-    let logs_dir = MenuItem::with_id(app, "logsdir", "打开日志目录", true, None::<&str>)?;
-    let data_dir = MenuItem::with_id(app, "datadir", "打开数据目录", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(
-        app,
-        &[
-            &show,
-            &toggle,
-            &restart,
-            &status_page,
-            &logs_dir,
-            &data_dir,
-            &quit,
-        ],
-    )?;
-    let mut tray = TrayIconBuilder::with_id("main-tray")
-        .menu(&menu)
-        .show_menu_on_left_click(false)
-        .tooltip("frpc-desktop-multi");
-    if let Some(icon) = app.default_window_icon().cloned() {
-        tray = tray.icon(icon);
-    }
-    tray.on_menu_event(|app, event| {
-        let state = app.state::<AppState>();
-        match event.id.as_ref() {
-            "show" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-            }
-            "toggle" => {
-                let phase = state.supervisor.state().borrow().phase;
-                if matches!(
-                    phase,
-                    frpc_core::supervisor::Phase::Running | frpc_core::supervisor::Phase::Starting
-                ) {
-                    state.supervisor.stop();
-                } else {
-                    let settings = state.settings();
-                    let profile = settings
-                        .default_profile_id
-                        .as_deref()
-                        .and_then(|id| state.find_profile(id))
-                        .or_else(|| state.profiles.read().ok().and_then(|g| g.first().cloned()));
-                    if let Some(p) = profile {
-                        if let Err(reason) = start_profile(&state, p) {
-                            log_engine_error(&state, reason);
-                        }
-                    }
-                }
-            }
-            "restart" => {
-                let st = state.supervisor.state().borrow().clone();
-                if let Some(id) = st.profile_id {
-                    if let Some(p) = state.find_profile(&id) {
-                        let handle = app.app_handle().clone();
-                        tauri::async_runtime::spawn(async move {
-                            let s = handle.state::<AppState>();
-                            s.supervisor.stop();
-                            // 等真正停下再启动：上次进程还没退出时，admin 端口仍被占用，
-                            // 立刻 start 会直接进入 ERROR（旧实现就是 stop 后马上 start）
-                            let deadline =
-                                tokio::time::Instant::now() + std::time::Duration::from_secs(8);
-                            while tokio::time::Instant::now() < deadline {
-                                let phase = s.supervisor.state().borrow().phase;
-                                if !matches!(
-                                    phase,
-                                    frpc_core::supervisor::Phase::Stopping
-                                        | frpc_core::supervisor::Phase::Starting
-                                        | frpc_core::supervisor::Phase::Running
-                                ) {
-                                    break;
-                                }
-                                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-                            }
-                            if let Err(reason) = start_profile(&s, p) {
-                                log_engine_error(&s, reason);
-                            }
-                        });
-                    }
-                }
-            }
-            "status" => {
-                let port = state.supervisor.state().borrow().admin_port;
-                if port > 0 {
-                    let _ = commands::open_url(format!("http://127.0.0.1:{port}/static/"));
-                }
-            }
-            "logsdir" => {
-                let _ = commands::open_path(state.paths.logs_dir.display().to_string());
-            }
-            "datadir" => {
-                let _ = commands::open_path(state.paths.home.display().to_string());
-            }
-            "quit" => {
-                let supervisor = &state.supervisor;
-                tauri::async_runtime::block_on(supervisor.stop_blocking());
-                app.exit(0);
-            }
-            _ => {}
-        }
-    })
-    .on_tray_icon_event(|tray, event| {
-        // 仅左键单击唤起窗口；右键保留给菜单 —— 否则抢焦点导致菜单一闪而过
-        if let tauri::tray::TrayIconEvent::Click {
-            button: tauri::tray::MouseButton::Left,
-            button_state: tauri::tray::MouseButtonState::Up,
-            ..
-        } = event
-        {
-            let app = tray.app_handle();
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
-        }
-    })
-    .build(app)?;
-
-    // 关闭到托盘（settings.closeToTray，默认 true）
-    let app_handle = app.handle().clone();
-    if let Some(window) = app.get_webview_window("main") {
-        window.on_window_event(move |event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                let close_to_tray = app_handle.state::<AppState>().settings().close_to_tray;
-                if close_to_tray {
-                    api.prevent_close();
-                    if let Some(w) = app_handle.get_webview_window("main") {
-                        let _ = w.hide();
-                    }
-                } else {
-                    let supervisor = &app_handle.state::<AppState>().supervisor;
-                    tauri::async_runtime::block_on(supervisor.stop_blocking());
-                    app_handle.exit(0);
-                }
-            }
-        });
-    }
-    Ok(())
 }
 
 /// Android：通过 JNI 从 ApplicationInfo 取 `nativeLibraryDir`

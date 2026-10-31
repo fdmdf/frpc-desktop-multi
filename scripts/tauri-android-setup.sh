@@ -163,15 +163,60 @@ for folder in os.listdir(icons_android):
             copied += 1
 print("icons copied into res: %d files (from %s)" % (copied, icons_android))
 
-# ---- 6) MainActivity：补系统栏内边距（Android 15 强制 edge-to-edge，否则标题被状态栏压住）
-#        模板只调 enableEdgeToEdge()，WebView 会画到状态栏/手势条底下；
-#        WebView 的 env(safe-area-inset-*) 不可靠，改在原生侧补 padding。
-activity_dir = os.path.join(gen, "app", "src", "main", "java", "io", "github", "fdmdf", "frpc")
-activity_src = os.path.join(os.path.dirname(os.path.dirname(gen)), "android", "MainActivity.kt")
-activity_dst = os.path.join(activity_dir, "MainActivity.kt")
-os.makedirs(activity_dir, exist_ok=True)
-shutil.copy2(activity_src, activity_dst)
-print("MainActivity.kt installed (edge-to-edge insets padding)")
+# ---- 6) 手写 Kotlin：本目录 android/*.kt 全量复制进 gen 工程
+#        Kotlin 只按 package 声明归类，不看目录层级，所以 FrpcKeepAliveService.kt 里的
+#        package ...service 也可以和 MainActivity.kt 放在同一个源码目录下编译。
+#        其中 MainActivity.kt 还负责按系统栏/刘海补 padding —— Android 15 起强制
+#        edge-to-edge，模板只调 enableEdgeToEdge() 会让标题被状态栏压住，
+#        而 WebView 的 env(safe-area-inset-*) 在多数设备恒为 0，不能靠 CSS。
+src_kt_dir = os.path.join(os.path.dirname(os.path.dirname(gen)), "android")
+app_java = os.path.join(gen, "app", "src", "main", "java", "io", "github", "fdmdf", "frpc")
+os.makedirs(app_java, exist_ok=True)
+kt_files = sorted(f for f in os.listdir(src_kt_dir) if f.endswith(".kt"))
+for name in kt_files:
+    shutil.copy2(os.path.join(src_kt_dir, name), os.path.join(app_java, name))
+print("kotlin installed: %s" % ", ".join(kt_files))
+
+# ---- 7) AndroidManifest：前台服务 + 权限（后台保活）
+#        不写清单的话 Service 类在、但系统不让启动（SecurityException / 通知不显示）。
+manifest = os.path.join(gen, "app", "src", "main", "AndroidManifest.xml")
+m = open(manifest, encoding="utf-8").read()
+if "frpc:keepalive" not in m:
+    perms = (
+        "    <!-- frpc:keepalive begin: 前台服务保活（见 src-tauri/android/README.md） -->\n"
+        '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n'
+        '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />\n'
+        '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+        '    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n'
+        "    <!-- frpc:keepalive end -->\n"
+    )
+    idx = m.find("<application")
+    assert idx > 0, "AndroidManifest 里找不到 <application>"
+    m = m[:idx] + perms + m[idx:]
+
+    svc = (
+        "        <!-- frpc:keepalive begin -->\n"
+        "        <service\n"
+        '            android:name="io.github.fdmdf.frpc.service.FrpcKeepAliveService"\n'
+        '            android:exported="false"\n'
+        '            android:foregroundServiceType="dataSync" />\n'
+        "        <!-- frpc:keepalive end -->\n"
+    )
+    close = m.rfind("</application>")
+    assert close > 0, "AndroidManifest 里找不到 </application>"
+    m = m[:close] + svc + m[close:]
+    open(manifest, "w", encoding="utf-8", newline="\n").write(m)
+    print("AndroidManifest patched: FrpcKeepAliveService + 4 permissions")
+
+# ---- 8) 通知栏小图标：必须「纯白字形 + alpha」，彩色启动器图标会被系统渲染成白方块
+stat_src = os.path.join(
+    os.path.dirname(os.path.dirname(gen)),
+    "icons", "android", "mipmap-xxxhdpi", "ic_launcher_foreground.png",
+)
+stat_dir = os.path.join(res_dir, "drawable")
+os.makedirs(stat_dir, exist_ok=True)
+shutil.copy2(stat_src, os.path.join(stat_dir, "ic_stat_frpc.png"))
+print("notification icon -> res/drawable/ic_stat_frpc.png")
 PYEOF
 
 echo "==> 写 local.properties（SDK 路径，仅 Windows Git Bash 需要）"

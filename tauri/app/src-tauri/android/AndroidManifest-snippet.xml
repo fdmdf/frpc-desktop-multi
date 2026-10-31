@@ -1,26 +1,20 @@
-<!-- 合并进 gen/android/app/src/main/AndroidManifest.xml（与 androidApp 清单一致的最小集） -->
+<!--
+  `scripts/tauri-android-setup.sh` 第 7 步会把下面两块合并进
+  gen/android/app/src/main/AndroidManifest.xml（gen/ 不入库）。这里留一份对照，
+  方便审查实际生效的清单。
 
-<!-- 前台服务与网络 -->
+  不要写 `.service.FrpcService` / `.service.BootReceiver` 这类旧类名 —— 那是 Kotlin 版
+  遗留的 service 层，Tauri 版没有这些类，清单里留着会让系统在启动时崩。
+-->
+
+<!-- ① 权限（插在 <application> 之前） -->
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-<!-- 开机自启 -->
-<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-<application>
-    <service
-        android:name=".service.FrpcService"
-        android:exported="false"
-        android:foregroundServiceType="dataSync" />
-
-    <receiver
-        android:name=".service.BootReceiver"
-        android:enabled="true"
-        android:exported="false">
-        <intent-filter>
-            <action android:name="android.intent.action.BOOT_COMPLETED" />
-        </intent-filter>
-    </receiver>
-</application>
+<!-- ② 前台保活服务（插在 </application> 之前） -->
+<service
+    android:name="io.github.fdmdf.frpc.service.FrpcKeepAliveService"
+    android:exported="false"
+    android:foregroundServiceType="dataSync" />
