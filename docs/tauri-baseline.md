@@ -55,7 +55,7 @@
 | Linux deb | 93.7 MB | 待 CI 实测 | ≤15 MB | CI 矩阵已配置 |
 | Android APK | 7.6 MB | 待 M4 | ≤10 MB | 插件源码已交付 |
 | 冷启动 (Windows) | 1684 ms | 待实测 | ≤1000 ms | — |
-| 稳态内存 (Windows) | 待实测 | 待实测 | ≤150 MB | — |
+| 稳态内存 (Windows) | 待实测 | **≈30 MB**（绿色版启动即主页空闲 5s 抽样） | ≤150 MB | 初测远优于目标；待监控页常开复测 |
 | 八协议 e2e | 全绿 | **全绿**（`scripts/tauri-e2e.sh`：verify ×8 + 真实隧道回环） | 全绿 | ✓ |
 
 > M0 实测（2026-10-31，本机 Windows x64，`tauri build` release + LTO，7m27s）：
