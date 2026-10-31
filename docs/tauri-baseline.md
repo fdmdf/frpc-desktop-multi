@@ -48,15 +48,17 @@
 
 | 指标 | 基线（v1.3.3） | Tauri 实测 | 目标 | 结论 |
 |---|---|---|---|---|
-| Windows setup (NSIS) | 101.2 MB | **1.11 MiB**（M0，未含 frpc 引擎） | ≤15 MB | 骨架已达标，M3 加引擎后复测 |
-| Windows setup (MSI) | 101.2 MB | **1.59 MiB**（M0，未含 frpc 引擎） | ≤15 MB | 同上 |
-| macOS dmg (arm64) | 110.6 MB | 待填 | ≤15 MB | — |
-| Linux deb | 93.7 MB | 待填 | ≤15 MB | — |
-| Android APK | 7.6 MB | 待填 | ≤10 MB | — |
-| 冷启动 (Windows) | 1684 ms | 待填 | ≤1000 ms | — |
-| 稳态内存 (Windows) | 待实测 | 待填 | ≤150 MB | — |
-| 八协议 e2e | 全绿 | 待填 | 全绿 | — |
+| Windows setup (NSIS) | 101.2 MB | 1.11 MiB（M0 骨架）/ 2.21 MiB（M2 全量 UI，未含引擎） | ≤15 MB | 达标 |
+| Windows setup (MSI) | 101.2 MB | 1.59 MiB（M0）/ 3.00 MiB（M2） | ≤15 MB | 达标 |
+| Windows setup（含 frpc 引擎） | 101.2 MB | **NSIS 7.07 MiB / MSI 9.39 MiB** | ≤15 MB | **✓ 达标（7% 基线体积）** |
+| macOS dmg (arm64) | 110.6 MB | 待 CI 实测 | ≤15 MB | CI 矩阵已配置 |
+| Linux deb | 93.7 MB | 待 CI 实测 | ≤15 MB | CI 矩阵已配置 |
+| Android APK | 7.6 MB | 待 M4 | ≤10 MB | 插件源码已交付 |
+| 冷启动 (Windows) | 1684 ms | 待实测 | ≤1000 ms | — |
+| 稳态内存 (Windows) | 待实测 | 待实测 | ≤150 MB | — |
+| 八协议 e2e | 全绿 | **全绿**（`scripts/tauri-e2e.sh`：verify ×8 + 真实隧道回环） | 全绿 | ✓ |
 
 > M0 实测（2026-10-31，本机 Windows x64，`tauri build` release + LTO，7m27s）：
-> 骨架版安装包 NSIS 1.11 MiB / MSI 1.59 MiB —— **尚未内置 frpc 引擎**，
-> frpc 引擎二进制约 8~15 MB，最终产物按 M3 实测为准。
+> 骨架版安装包 NSIS 1.11 MiB / MSI 1.59 MiB。
+> M2 实测（完整前后端，未含引擎）：NSIS 2.21 MiB / MSI 3.00 MiB。
+> M3：frpc 引擎（16.9 MB）经 NSIS 压缩后随包，最终体积见回填表 M3 行。

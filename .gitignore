@@ -58,4 +58,5 @@ desktopApp/src/main/resources/icon/
 tauri/target/
 tauri/app/src-tauri/target/
 tauri/app/src-tauri/gen/schemas/
+tauri/app/src-tauri/resources/engine/
 tauri/app/ui/node_modules/

@@ -40,10 +40,13 @@ jobs:
         include:
           - os: windows-latest
             name: windows-x64
+            targets: windows
           - os: ubuntu-24.04
             name: linux-x64
+            targets: linux
           - os: macos-14
             name: macos-arm64
+            targets: darwin
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +66,22 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev build-essential
+
+      # 构建 frpc 引擎并放入 Tauri 资源目录（随包分发，与 Kotlin 版同源同版本）
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: false
+      - name: Build frpc engine
+        env:
+          TARGETS: ${{ matrix.targets }}
+        run: |
+          set -euo pipefail
+          bash scripts/build-frpc.sh desktop
+          mkdir -p tauri/app/src-tauri/resources/engine
+          cp desktopApp/engine/frpc* tauri/app/src-tauri/resources/engine/
+          cp desktopApp/engine/VERSION tauri/app/src-tauri/resources/engine/
+          ls -la tauri/app/src-tauri/resources/engine/
 
       - name: Build UI (vue-tsc + vite)
         run: npm --prefix tauri/app/ui ci --no-audit --no-fund && npm --prefix tauri/app/ui run build

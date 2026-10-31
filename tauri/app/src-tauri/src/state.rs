@@ -239,27 +239,45 @@ impl EngineManager<'_> {
         !custom.trim().is_empty() && PathBuf::from(custom.trim()).is_file()
     }
 
-    /// 就绪检查：引擎文件存在且可执行。
+    /// 就绪检查：优先解包内置资源（`resources/engine/`），其次自定义路径 / bin 目录。
     pub fn ensure_ready(&self) -> Result<PathBuf, String> {
-        let f = self.engine_file();
-        if f.is_file() {
+        let target = self.engine_file();
+
+        // 1) 目标已有可执行引擎
+        if target.is_file() {
             #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let meta = std::fs::metadata(&f).map_err(|e| e.to_string())?;
-                if meta.permissions().mode() & 0o111 == 0 {
-                    let mut perm = meta.permissions();
-                    perm.set_mode(perm.mode() | 0o111);
-                    std::fs::set_permissions(&f, perm).map_err(|e| e.to_string())?;
-                }
+            self.ensure_executable(&target);
+            return Ok(target);
+        }
+
+        // 2) 打包资源解包（Kotlin ensureReady 的资源拷贝逻辑）
+        if let Some(res_dir) = &self.state.resource_dir {
+            let bundled = res_dir.join("resources/engine").join(&self.state.paths.engine_file_name);
+            if bundled.is_file() {
+                std::fs::copy(&bundled, &target)
+                    .map_err(|e| format!("解包内置引擎失败：{e}"))?;
+                #[cfg(unix)]
+                self.ensure_executable(&target);
+                return Ok(target);
             }
-            Ok(f)
-        } else {
-            Err(format!(
-                "未找到引擎 {}：可在设置中指定 frpc 路径，或将引擎放入 {}",
-                f.display(),
-                self.state.paths.bin_dir.display()
-            ))
+        }
+
+        Err(format!(
+            "未找到引擎 {}：可在设置中指定 frpc 路径，或将引擎放入 {}",
+            target.display(),
+            self.state.paths.bin_dir.display()
+        ))
+    }
+
+    #[cfg(unix)]
+    fn ensure_executable(&self, path: &std::path::Path) {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(path) {
+            if meta.permissions().mode() & 0o111 == 0 {
+                let mut perm = meta.permissions();
+                perm.set_mode(perm.mode() | 0o111);
+                let _ = std::fs::set_permissions(path, perm);
+            }
         }
     }
 
