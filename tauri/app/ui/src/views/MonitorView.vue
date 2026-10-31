@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { formatDuration, formatMemoryKb, formatPercent, snapshotAll } from "../format";
 import { useEngineStore } from "../stores/engine";
 
 const store = useEngineStore();
+const { t } = useI18n();
 
 const cpuHistory = computed(() =>
   store.metricsHistory.map((m) => m.cpu).filter((v): v is number => v != null),
@@ -23,11 +25,11 @@ onUnmounted(() => window.clearInterval(timer));
 const phaseText = computed(() => {
   const s = store.runState;
   return {
-    RUNNING: "frpc 正在运行",
-    IDLE: "frpc 未运行",
-    STARTING: "正在启动",
-    STOPPING: "正在停止",
-    ERROR: s.error ?? "运行异常",
+    RUNNING: t("monitor.phaseRunning"),
+    IDLE: t("monitor.phaseIdle"),
+    STARTING: t("monitor.phaseStarting"),
+    STOPPING: t("monitor.phaseStopping"),
+    ERROR: s.error ?? t("monitor.phaseError"),
   }[s.phase];
 });
 
@@ -70,27 +72,27 @@ const currentProfile = computed(() =>
 
 <template>
   <div class="page">
-    <h2 class="page-title">监控</h2>
+    <h2 class="page-title">{{ $t("monitor.title") }}</h2>
 
     <div class="section-card">
-      <h3 class="card-title">进程</h3>
+      <h3 class="card-title">{{ $t("monitor.process") }}</h3>
       <div class="stat-row">
         <div class="stat-tile">
-          <div class="label">PID</div>
+          <div class="label">{{ $t("monitor.pid") }}</div>
           <div class="value">{{ store.runState.pid ?? "--" }}</div>
         </div>
         <div class="stat-tile">
-          <div class="label">线程数</div>
+          <div class="label">{{ $t("monitor.threads") }}</div>
           <div class="value">{{ store.metrics?.threads ?? "--" }}</div>
         </div>
         <div class="stat-tile">
-          <div class="label">运行时长</div>
+          <div class="label">{{ $t("monitor.uptime") }}</div>
           <div class="value">
             {{ store.runState.startedAtMs ? formatDuration(now - store.runState.startedAtMs) : "--" }}
           </div>
         </div>
         <div class="stat-tile">
-          <div class="label">自动重启</div>
+          <div class="label">{{ $t("monitor.restarts") }}</div>
           <div class="value">{{ store.runState.restartCount }}</div>
         </div>
       </div>
@@ -99,13 +101,17 @@ const currentProfile = computed(() =>
     </div>
 
     <div class="section-card">
-      <h3 class="card-title">CPU（%）</h3>
+      <h3 class="card-title">{{ $t("monitor.cpuTitle") }}</h3>
       <p class="muted" style="margin: 0">
-        当前 {{ formatPercent(store.metrics?.cpuPercent) }} · 峰值
-        {{ cpuHistory.length ? formatPercent(Math.max(...cpuHistory)) : "--" }}
+        {{
+          $t("monitor.currentPeak", {
+            current: formatPercent(store.metrics?.cpuPercent),
+            peak: cpuHistory.length ? formatPercent(Math.max(...cpuHistory)) : "--",
+          })
+        }}
       </p>
       <p v-if="cpuHistory.length < 2" class="muted small" style="margin: 0">
-        采样中…（每 2 秒采一次，凑够 2 个点才画曲线）
+        {{ $t("monitor.sampling") }}
       </p>
       <svg class="spark" :viewBox="`0 0 600 120`" preserveAspectRatio="none">
         <line x1="0" y1="0" x2="600" y2="0" stroke="var(--border)" stroke-width="1" />
@@ -116,12 +122,16 @@ const currentProfile = computed(() =>
     </div>
 
     <div class="section-card">
-      <h3 class="card-title">内存（MB）</h3>
+      <h3 class="card-title">{{ $t("monitor.memTitle") }}</h3>
       <p class="muted" style="margin: 0">
-        当前 {{ formatMemoryKb(store.metrics?.rssKb) }} · 峰值
-        {{ memHistory.length ? formatMemoryKb(Math.max(...memHistory) * 1024) : "--" }}
+        {{
+          $t("monitor.currentPeak", {
+            current: formatMemoryKb(store.metrics?.rssKb),
+            peak: memHistory.length ? formatMemoryKb(Math.max(...memHistory) * 1024) : "--",
+          })
+        }}
       </p>
-      <p v-if="memHistory.length < 2" class="muted small" style="margin: 0">采样中…（每 2 秒采一次）</p>
+      <p v-if="memHistory.length < 2" class="muted small" style="margin: 0">{{ $t("monitor.samplingShort") }}</p>
       <svg class="spark" :viewBox="`0 0 600 120`" preserveAspectRatio="none">
         <line x1="0" y1="0" x2="600" y2="0" stroke="var(--border)" stroke-width="1" />
         <line x1="0" y1="60" x2="600" y2="60" stroke="var(--border)" stroke-width="1" />
@@ -131,13 +141,13 @@ const currentProfile = computed(() =>
     </div>
 
     <div class="section-card">
-      <h3 class="card-title">代理状态</h3>
+      <h3 class="card-title">{{ $t("monitor.proxyStatus") }}</h3>
       <p
         v-if="!statusRows.length && !Object.keys(store.proxyStates).length"
         class="muted"
         style="margin: 0"
       >
-        暂无数据：启动 frpc 并开启状态监控后这里会显示实时状态
+        {{ $t("monitor.noData") }}
       </p>
       <div v-for="item in statusRows" :key="item.name" class="proxy-row" style="justify-content: space-between">
         <div style="flex: 1; min-width: 0">
@@ -146,7 +156,7 @@ const currentProfile = computed(() =>
           <div v-if="item.err" class="error-text small">{{ item.err }}</div>
         </div>
         <span class="status-chip" :class="item.status === 'running' ? 'chip-running' : 'chip-idle'">
-          {{ item.status === "running" ? "在线" : item.status }}
+          {{ item.status === "running" ? $t("state.online") : item.status }}
         </span>
       </div>
       <div v-if="!statusRows.length">
@@ -156,14 +166,14 @@ const currentProfile = computed(() =>
             class="status-chip"
             :class="logState.phase === 'RUNNING' ? 'chip-running' : logState.phase === 'PENDING' ? 'chip-starting' : 'chip-error'"
           >
-            {{ logState.phase === "RUNNING" ? "在线（日志）" : logState.phase === "PENDING" ? "启动中" : "错误" }}
+            {{ logState.phase === "RUNNING" ? $t("state.onlineByLog") : logState.phase === "PENDING" ? $t("state.starting") : $t("state.error") }}
           </span>
         </div>
       </div>
     </div>
 
     <div v-if="currentProfile?.config.visitors.length" class="section-card">
-      <h3 class="card-title">访问者状态</h3>
+      <h3 class="card-title">{{ $t("monitor.visitorStatus") }}</h3>
       <div
         v-for="visitor in currentProfile.config.visitors"
         :key="visitor.name"
@@ -173,9 +183,13 @@ const currentProfile = computed(() =>
         <div style="flex: 1; min-width: 0">
           <div style="font-weight: 500">{{ visitor.name }}</div>
           <div class="muted small">
-            {{ visitor.type.toUpperCase() }} · 本地
-            {{ visitor.bindPort < 0 ? "不监听端口" : `${visitor.bindAddr}:${visitor.bindPort}` }}
-            · 访问 {{ visitor.serverName }}
+            {{ visitor.type.toUpperCase() }} ·
+            {{
+              visitor.bindPort < 0
+                ? $t("home.noBindPort")
+                : $t("home.local", { addr: `${visitor.bindAddr}:${visitor.bindPort}` })
+            }}
+            · {{ $t("home.accessTo", { name: visitor.serverName }) }}
           </div>
         </div>
         <span
@@ -190,12 +204,12 @@ const currentProfile = computed(() =>
         >
           {{
             visitor.enabled === false
-              ? "已禁用"
+              ? $t("state.disabled")
               : store.runState.phase !== "RUNNING"
-                ? "未运行"
+                ? $t("state.notRunning")
                 : store.visitors.includes(visitor.name)
-                  ? "在线"
-                  : "启动中"
+                  ? $t("state.online")
+                  : $t("state.starting")
           }}
         </span>
       </div>

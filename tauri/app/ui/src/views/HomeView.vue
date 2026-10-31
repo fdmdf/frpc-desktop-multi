@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { api } from "../api";
 import { formatDateTime, formatDuration, formatMemoryKb, formatPercent, snapshotAll, snapshotItem, targetServerProxyName } from "../format";
 import { useEngineStore } from "../stores/engine";
 
 const store = useEngineStore();
 const router = useRouter();
+const { t } = useI18n();
 // Android 上无法用 xdg-open 唤起浏览器，面板改成复制地址让用户自己粘贴
 const isAndroid = /Android/i.test(navigator.userAgent || "");
 const now = ref(Date.now());
@@ -33,34 +35,35 @@ interface Chip {
 }
 function statusChip(): Chip {
   const s = store.runState.phase;
-  if (s === "RUNNING" && store.serverConnected === false) return { label: "未连上服务器", cls: "chip-error" };
-  if (s === "RUNNING") return { label: "运行中", cls: "chip-running" };
-  if (s === "STARTING") return { label: "启动中", cls: "chip-starting" };
-  if (s === "STOPPING") return { label: "停止中", cls: "chip-starting" };
-  if (s === "ERROR") return { label: "异常", cls: "chip-error" };
-  return { label: "未运行", cls: "chip-idle" };
+  if (s === "RUNNING" && store.serverConnected === false)
+    return { label: t("state.noServer"), cls: "chip-error" };
+  if (s === "RUNNING") return { label: t("state.running"), cls: "chip-running" };
+  if (s === "STARTING") return { label: t("state.starting"), cls: "chip-starting" };
+  if (s === "STOPPING") return { label: t("state.stopping"), cls: "chip-starting" };
+  if (s === "ERROR") return { label: t("state.error"), cls: "chip-error" };
+  return { label: t("state.notRunning"), cls: "chip-idle" };
 }
 
 function proxyChip(proxy: (typeof proxies.value)[number], adminItem?: { status?: string } | undefined): Chip {
   const logState = store.proxyStates[proxy.name];
-  if (proxy.enabled === false) return { label: "已禁用", cls: "chip-idle" };
-  if (adminItem?.status === "running") return { label: "在线", cls: "chip-running" };
-  if (adminItem?.status === "error") return { label: "错误", cls: "chip-error" };
+  if (proxy.enabled === false) return { label: t("state.disabled"), cls: "chip-idle" };
+  if (adminItem?.status === "running") return { label: t("state.online"), cls: "chip-running" };
+  if (adminItem?.status === "error") return { label: t("state.error"), cls: "chip-error" };
   if (adminItem) return { label: adminItem.status ?? "", cls: "chip-idle" };
-  if (logState?.phase === "RUNNING") return { label: "在线", cls: "chip-running" };
-  if (logState?.phase === "ERROR") return { label: "错误", cls: "chip-error" };
-  if (logState?.phase === "PENDING") return { label: "启动中", cls: "chip-starting" };
-  if (running.value) return { label: "未知", cls: "chip-idle" };
-  return { label: "未运行", cls: "chip-idle" };
+  if (logState?.phase === "RUNNING") return { label: t("state.online"), cls: "chip-running" };
+  if (logState?.phase === "ERROR") return { label: t("state.error"), cls: "chip-error" };
+  if (logState?.phase === "PENDING") return { label: t("state.starting"), cls: "chip-starting" };
+  if (running.value) return { label: t("common.unknown"), cls: "chip-idle" };
+  return { label: t("state.notRunning"), cls: "chip-idle" };
 }
 
 function remoteOf(proxy: (typeof proxies.value)[number], adminItem?: { remoteAddr?: string; err?: string } | undefined): string {
   if (adminItem?.remoteAddr) return adminItem.remoteAddr;
   const domain = proxy.customDomains?.[0] || proxy.subdomain;
-  if (proxy.remotePort != null && proxy.remotePort !== 0) return `远程 :${proxy.remotePort}`;
-  if (proxy.remotePort === 0) return "远程端口随机";
+  if (proxy.remotePort != null && proxy.remotePort !== 0) return t("home.remotePort", { port: proxy.remotePort });
+  if (proxy.remotePort === 0) return t("home.remoteRandom");
   if (domain) return domain;
-  return "私密代理（由访问者接入）";
+  return t("home.privateProxy");
 }
 
 const onlineSummary = computed(() => {
@@ -101,11 +104,11 @@ function visitorAddr(visitor: (typeof visitors.value)[number]): string | null {
 async function copyRemote(text: string | null) {
   if (!text) return;
   try {
-    if (!navigator.clipboard) throw new Error("剪贴板不可用");
+    if (!navigator.clipboard) throw new Error(t("home.clipboardUnavailable"));
     await navigator.clipboard.writeText(text);
-    toast(`已复制 ${text}`);
+    toast(t("home.copied", { text }));
   } catch {
-    toast(`复制失败，可手动复制：${text}`);
+    toast(t("home.copyFailed", { text }));
   }
 }
 
@@ -220,11 +223,11 @@ const uptime = computed(() =>
   <div class="page">
     <div style="display: flex; align-items: center; justify-content: space-between">
       <div>
-        <h2 class="page-title">运行状态</h2>
-        <p class="page-sub">frpc 引擎 {{ store.engineVersion }}</p>
+        <h2 class="page-title">{{ $t("home.title") }}</h2>
+        <p class="page-sub">{{ $t("home.subtitle", { version: store.engineVersion }) }}</p>
       </div>
       <div v-if="store.profiles.length > 1" class="field fixed-field">
-        <span class="field-label">当前配置</span>
+        <span class="field-label">{{ $t("home.currentProfile") }}</span>
         <select :value="currentProfile?.id" @change="onProfileSwitch">
           <option v-for="p in store.profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
@@ -242,10 +245,10 @@ const uptime = computed(() =>
       <p v-if="store.runState.pid || store.runState.startedAtMs || store.runState.restartCount > 0" class="muted" style="margin: 0">
         <template v-if="store.runState.pid">PID {{ store.runState.pid }}</template>
         <template v-if="store.runState.startedAtMs">
-          {{ store.runState.pid ? " · " : "" }}启动于 {{ formatDateTime(store.runState.startedAtMs) }}
+          {{ store.runState.pid ? " · " : "" }}{{ $t("home.startedAt", { time: formatDateTime(store.runState.startedAtMs) }) }}
         </template>
         <template v-if="store.runState.restartCount > 0">
-          · 已自动重启 {{ store.runState.restartCount }} 次
+          · {{ $t("home.restarts", { n: store.runState.restartCount }) }}
         </template>
       </p>
       <p v-if="store.runState.error" class="error-text" style="margin: 0">{{ store.runState.error }}</p>
@@ -254,23 +257,26 @@ const uptime = computed(() =>
         class="error-text"
         style="margin: 0"
       >
-        连接 frps 失败：{{ store.loginError || "未知原因" }}。frpc 会持续重试；常见原因是 token
-        不一致或服务器地址/端口不对，详情见日志页。
+        {{
+          $t("home.loginFailed", {
+            reason: store.loginError || $t("home.unknownReason"),
+          })
+        }}
       </p>
       <div
         v-if="running && store.runState.adminEnabled && store.runState.adminPort > 0"
         style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap"
       >
         <button class="btn text-btn" @click="openPanel">
-          {{ isAndroid ? "复制 frp 面板地址" : "打开 frp 面板（浏览器需登录）" }}
+          {{ isAndroid ? $t("home.copyPanel") : $t("home.openPanel") }}
         </button>
         <span class="muted small">http://127.0.0.1:{{ store.runState.adminPort }}/static/</span>
         <span v-if="!store.adminReachable" class="error-text small">
-          · 状态接口暂不可达（同机多个 frpc 时，检查端口 {{ store.runState.adminPort }} 是否被占用）
+          {{ $t("home.adminUnreachable", { port: store.runState.adminPort }) }}
         </span>
       </div>
       <p v-if="!currentProfile" class="muted" style="margin: 0">
-        还没有配置：先在「配置」里新建一份，或导入现成的 frpc.toml
+        {{ $t("home.noProfile") }}
       </p>
       <div style="display: flex; gap: 12px">
         <button
@@ -279,10 +285,10 @@ const uptime = computed(() =>
           :disabled="!currentProfile || store.runState.phase === 'STARTING' || store.runState.phase === 'STOPPING'"
           @click="toggleRun"
         >
-          {{ running ? "停止" : "启动" }}
+          {{ running ? $t("home.stop") : $t("home.start") }}
         </button>
-        <button class="btn" :disabled="!running" @click="store.reload()">重载配置</button>
-        <button class="btn" :disabled="!currentProfile" @click="editProfile">编辑配置</button>
+        <button class="btn" :disabled="!running" @click="store.reload()">{{ $t("home.reload") }}</button>
+        <button class="btn" :disabled="!currentProfile" @click="editProfile">{{ $t("home.editConfig") }}</button>
       </div>
     </div>
 
@@ -290,28 +296,28 @@ const uptime = computed(() =>
       v-if="running && store.pendingReload && store.pendingReload === store.runState.profileId"
       class="section-card"
     >
-      <h3 class="card-title">配置尚未生效</h3>
-      <p class="error-text" style="margin: 0">配置已保存但还没有重载，frpc 仍在使用旧配置。</p>
-      <button class="btn filled" style="justify-content: center" @click="store.reload()">重载配置</button>
+      <h3 class="card-title">{{ $t("home.pendingTitle") }}</h3>
+      <p class="error-text" style="margin: 0">{{ $t("home.pendingBody") }}</p>
+      <button class="btn filled" style="justify-content: center" @click="store.reload()">{{ $t("home.reload") }}</button>
     </div>
 
     <div class="section-card">
-      <h3 class="card-title">概览</h3>
+      <h3 class="card-title">{{ $t("home.overview") }}</h3>
       <div class="stat-row">
         <div class="stat-tile">
-          <div class="label">CPU</div>
+          <div class="label">{{ $t("home.cpu") }}</div>
           <div class="value">{{ formatPercent(store.metrics?.cpuPercent) }}</div>
         </div>
         <div class="stat-tile">
-          <div class="label">内存</div>
+          <div class="label">{{ $t("home.memory") }}</div>
           <div class="value">{{ formatMemoryKb(store.metrics?.rssKb) }}</div>
         </div>
         <div class="stat-tile">
-          <div class="label">运行时长</div>
+          <div class="label">{{ $t("home.uptime") }}</div>
           <div class="value">{{ store.runState.startedAtMs ? uptime : "--" }}</div>
         </div>
         <div class="stat-tile">
-          <div class="label">在线代理</div>
+          <div class="label">{{ $t("home.onlineProxies") }}</div>
           <div class="value">{{ onlineSummary }}</div>
         </div>
       </div>
@@ -319,10 +325,10 @@ const uptime = computed(() =>
       <p class="muted small" style="margin: 0">
         {{
           !running
-            ? "启动后显示 CPU / 内存 / 运行时长与在线代理数"
+            ? $t("home.hintIdle")
             : store.runState.adminEnabled
-              ? "代理状态与真实端口来自状态接口（webServer），每 4 秒刷新；访问者状态来自日志"
-              : "未开启状态接口：代理与访问者状态都按日志推断，可能拿不到真实远端端口"
+              ? $t("home.hintAdmin")
+              : $t("home.hintLog")
         }}
       </p>
     </div>
@@ -330,12 +336,12 @@ const uptime = computed(() =>
     <template v-if="proxies.length">
       <div style="display: flex; align-items: center; justify-content: space-between">
         <h3 class="page-title" style="font-size: 16px; color: var(--brand); margin: 4px 0 0">
-          代理规则（{{ proxies.length }}）<span
+          {{ $t("home.proxiesTitle", { n: proxies.length }) }}<span
             v-if="proxies.length !== enabledProxies.length"
             class="muted small"
             style="font-weight: 400"
           >
-            · {{ enabledProxies.length }} 条启用，{{ proxies.length - enabledProxies.length }} 条禁用
+            {{ $t("home.proxyCounts", { enabled: enabledProxies.length, disabled: proxies.length - enabledProxies.length }) }}
           </span>
         </h3>
         <span v-if="!isAndroid && toastMsg" class="muted small">{{ toastMsg }}</span>
@@ -346,7 +352,7 @@ const uptime = computed(() =>
           <div style="flex: 1; min-width: 0">
             <div style="font-size: 15px; font-weight: 500">{{ proxy.name }}</div>
             <div class="muted">
-              {{ proxy.type.toUpperCase() }} · 本地 {{ proxy.localIP || "127.0.0.1" }}:{{ proxy.localPort ?? "?" }} →
+              {{ proxy.type.toUpperCase() }} · {{ $t("home.local", { addr: `${proxy.localIP || "127.0.0.1"}:${proxy.localPort ?? "?"}` }) }} →
               {{ remoteOf(proxy, snapshotItem(store.status, proxy.name)) }}
             </div>
             <div
@@ -358,7 +364,7 @@ const uptime = computed(() =>
           </div>
           <button
             class="icon-btn"
-            title="复制访问地址"
+            :title="$t('home.copyAddr')"
             :disabled="!copyableAddr(proxy)"
             @click="copyRemote(copyableAddr(proxy))"
           >
@@ -381,28 +387,31 @@ const uptime = computed(() =>
       </div>
     </template>
     <div v-else class="section-card">
-      <h3 class="card-title">代理规则</h3>
-      <p class="muted" style="margin: 0">这个配置还没有代理规则，去「配置」里添加</p>
+      <h3 class="card-title">{{ $t("home.proxyRules") }}</h3>
+      <p class="muted" style="margin: 0">{{ $t("home.noRules") }}</p>
     </div>
 
     <template v-if="visitors.length">
       <h3 class="page-title" style="font-size: 16px; color: var(--brand); margin: 4px 0 0">
-        访问者（{{ enabledVisitors.length }}）
+        {{ $t("home.visitorsTitle", { n: enabledVisitors.length }) }}
       </h3>
       <div v-for="visitor in visitors" :key="visitor.name" class="section-card">
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
           <div style="flex: 1; min-width: 0">
             <div style="font-size: 15px; font-weight: 500">{{ visitor.name }}</div>
             <div class="muted">
-              {{ visitor.type.toUpperCase() }} · 本地
-              {{ visitor.bindPort < 0 ? "不监听端口" : `${visitor.bindAddr}:${visitor.bindPort}` }}
-              · 访问
-              {{ targetServerProxyName(currentProfile?.config.user, visitor.serverUser, visitor.serverName) }}
+              {{ visitor.type.toUpperCase() }} ·
+              {{
+                visitor.bindPort < 0
+                  ? $t("home.noBindPort")
+                  : $t("home.local", { addr: `${visitor.bindAddr}:${visitor.bindPort}` })
+              }}
+              · {{ $t("home.accessTo", { name: targetServerProxyName(currentProfile?.config.user, visitor.serverUser, visitor.serverName) }) }}
             </div>
           </div>
           <button
             class="icon-btn"
-            title="复制本地监听地址"
+            :title="$t('home.copyBind')"
             :disabled="!visitorAddr(visitor)"
             @click="copyRemote(visitorAddr(visitor))"
           >
@@ -424,12 +433,12 @@ const uptime = computed(() =>
           >
             {{
               visitor.enabled === false
-                ? "已禁用"
+                ? $t("state.disabled")
                 : running && store.visitors.includes(visitor.name)
-                  ? "在线"
+                  ? $t("state.online")
                   : running
-                    ? "启动中"
-                    : "未运行"
+                    ? $t("state.starting")
+                    : $t("state.notRunning")
             }}
           </span>
           <label class="switch">
@@ -451,25 +460,25 @@ const uptime = computed(() =>
 
     <div v-if="switchTargetId" class="modal-mask" @click.self="switchTargetId = ''">
       <div class="modal" style="width: 480px">
-        <h3 class="modal-title">切换配置</h3>
+        <h3 class="modal-title">{{ $t("home.switchTitle") }}</h3>
         <p style="margin: 0">
-          frpc 正在运行「{{ currentProfile?.name }}」。切换到「{{ switchTargetName }}」会停止当前进程并用新配置重新启动，现有连接会中断。
+          {{ $t("home.switchBody", { current: currentProfile?.name ?? "", target: switchTargetName }) }}
         </p>
         <div class="modal-actions">
-          <button class="btn text-btn" @click="switchTargetId = ''">取消</button>
-          <button class="btn text-btn" style="color: var(--brand)" @click="confirmSwitch">切换并重启</button>
+          <button class="btn text-btn" @click="switchTargetId = ''">{{ $t("common.cancel") }}</button>
+          <button class="btn text-btn" style="color: var(--brand)" @click="confirmSwitch">{{ $t("home.switchConfirm") }}</button>
         </div>
       </div>
     </div>
 
     <div v-if="blockedReason" class="modal-mask" @click.self="blockedReason = ''">
       <div class="modal" style="width: 480px">
-        <h3 class="modal-title">无法启动</h3>
+        <h3 class="modal-title">{{ $t("home.cannotStart") }}</h3>
         <p style="margin: 0">{{ blockedReason }}</p>
         <div class="modal-actions">
-          <button class="btn text-btn" @click="blockedReason = ''">知道了</button>
+          <button class="btn text-btn" @click="blockedReason = ''">{{ $t("common.gotIt") }}</button>
           <button class="btn text-btn" style="color: var(--brand)" @click="blockedReason = ''; editProfile()">
-            去配置
+            {{ $t("home.goProfiles") }}
           </button>
         </div>
       </div>

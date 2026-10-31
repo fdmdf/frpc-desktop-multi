@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   api,
   emptyConfig,
@@ -22,6 +23,7 @@ import {
 import { useEngineStore } from "../stores/engine";
 
 const store = useEngineStore();
+const { t } = useI18n();
 
 // ---------- 列表态 ----------
 const query = ref("");
@@ -42,7 +44,7 @@ const visible = computed(() =>
 function newDraft(): ServerProfile {
   return {
     id: crypto.randomUUID(),
-    name: "新配置",
+    name: t("editor.newTitle"),
     config: { ...emptyConfig(), auth: { method: "token", token: "" } },
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -177,9 +179,9 @@ async function save() {
     showErrors.value = true;
     return;
   }
-  const name = draft.value.name.trim() || "未命名配置";
+  const name = draft.value.name.trim() || t("err.untitled");
   if (store.profiles.some((p) => p.name === name && p.id !== draft.value!.id)) {
-    saveError.value = `已存在同名配置「${name}」，请换一个名称`;
+    saveError.value = t("err.duplicateProfile", { name });
     showErrors.value = false;
     return;
   }
@@ -192,7 +194,7 @@ async function save() {
 
 async function doSave(reload: boolean) {
   if (!draft.value) return;
-  draft.value.name = draft.value.name.trim() || "未命名配置";
+  draft.value.name = draft.value.name.trim() || t("err.untitled");
   draft.value.updatedAt = Date.now();
   // 「自定义传输配置」关闭 = 不写 transport 段（全用 frpc 默认值）
   if (!customTransport.value) draft.value.config.transport = null;
@@ -272,20 +274,21 @@ function saveProxy() {
     // 批量生成也要查重：否则会和已有规则撞名，只能等保存时后端校验才报出来
     const conflicts = created.map((c) => c.name).filter((n) => taken.includes(n));
     if (conflicts.length) {
-      proxyBatchError.value = `以下代理名已存在：${conflicts.slice(0, 3).join("、")}${
-        conflicts.length > 3 ? " 等" : ""
-      }`;
+      proxyBatchError.value = t("err.duplicateProxyList", {
+        list: conflicts.slice(0, 3).join(", "),
+        more: conflicts.length > 3 ? t("err.duplicateProxyMore") : "",
+      });
       return;
     }
     applyProxySave(created);
     return;
   }
   if (!d.name.trim()) {
-    proxyBatchError.value = "名称不能为空";
+    proxyBatchError.value = t("err.proxyNameEmpty");
     return;
   }
   if (taken.includes(d.name.trim())) {
-    proxyBatchError.value = `代理名「${d.name.trim()}」与其他规则重复`;
+    proxyBatchError.value = t("err.duplicateProxy", { name: d.name.trim() });
     return;
   }
   applyProxySave([JSON.parse(JSON.stringify({ ...d, name: d.name.trim() }))]);
@@ -337,14 +340,14 @@ function saveVisitor() {
   const name = v.name.trim();
   // 与代理对话框对齐：名称必填且不能重名（此前只静默 return，点了保存像没反应）
   if (!name) {
-    visitorError.value = "访问者名称不能为空";
+    visitorError.value = t("err.visitorNameEmpty");
     return;
   }
   const taken = draft.value.config.visitors
     .filter((_, i) => i !== visitorEditingIndex.value)
     .map((x) => x.name);
   if (taken.includes(name)) {
-    visitorError.value = `访问者名「${name}」与其他访问者重复`;
+    visitorError.value = t("err.duplicateVisitor", { name });
     return;
   }
   const list = [...draft.value.config.visitors];
@@ -362,16 +365,16 @@ async function onImportFile(e: Event) {
   if (!file) return;
   try {
     const profile = await api.importToml(
-      file.name.replace(/\.[^.]+$/, "") || "导入配置",
+      file.name.replace(/\.[^.]+$/, "") || t("profiles.import"),
       await file.text(),
     );
     await store.saveProfile(profile);
     if (store.profiles.length === 1 || !store.settings?.defaultProfileId) {
       await store.saveSettings({ ...store.settings!, defaultProfileId: profile.id });
     }
-    message.value = `已导入「${profile.name}」`;
+    message.value = t("profiles.imported", { name: profile.name });
   } catch (err) {
-    message.value = `导入失败：${err}`;
+    message.value = t("profiles.importFailed", { err });
   }
   (e.target as HTMLInputElement).value = "";
 }
@@ -380,13 +383,13 @@ async function exportToml(p: ServerProfile) {
   const text = await api.exportProfileToml(p.id);
   const path = await defaultPath(`${p.name}.toml`);
   await api.writeTextFile(path, text);
-  message.value = `已导出到 ${path}`;
+  message.value = t("profiles.exportedTo", { path });
 }
 
 async function exportAll() {
   const path = await defaultPath("frpcdash-profiles.json");
   await api.writeTextFile(path, await api.exportBundle());
-  message.value = `已导出 ${store.profiles.length} 份配置到 ${path}`;
+  message.value = t("profiles.exportedAll", { n: store.profiles.length, path });
 }
 
 async function onImportBundle(e: Event) {
@@ -395,11 +398,13 @@ async function onImportBundle(e: Event) {
   try {
     const s = await api.importBundle(await file.text(), false);
     message.value =
-      `已导入：新增 ${s.added} 份、更新 ${s.updated} 份` +
-      (s.skipped.length ? `，跳过 ${s.skipped.length} 条（${s.skipped.join("、")}）` : "");
+      t("profiles.bundleImported", { added: s.added, updated: s.updated }) +
+      (s.skipped.length
+        ? t("profiles.bundleSkipped", { n: s.skipped.length, list: s.skipped.join(", ") })
+        : "");
     await store.refreshProfiles();
   } catch (err) {
-    message.value = `导入失败：${err}`;
+    message.value = t("profiles.importFailed", { err });
   }
   (e.target as HTMLInputElement).value = "";
 }
@@ -418,7 +423,10 @@ async function toggleProfile(p: ServerProfile) {
     return;
   }
   if (store.runningId) {
-    message.value = `「${store.runState.profileName || "当前配置"}」正在运行，请先停止再启动「${p.name}」`;
+    message.value = t("profiles.runningElsewhere", {
+      current: store.runState.profileName || t("profiles.currentProfile"),
+      name: p.name,
+    });
     return;
   }
   try {
@@ -430,7 +438,7 @@ async function toggleProfile(p: ServerProfile) {
 
 async function removeProfile(p: ServerProfile) {
   if (store.runningId === p.id) {
-    message.value = `「${p.name}」正在运行，请先停止再删除`;
+    message.value = t("profiles.runningCannotDelete", { name: p.name });
     return;
   }
   deleteTarget.value = p;
@@ -455,7 +463,7 @@ async function clearAll() {
   for (const p of store.profiles) await api.deleteProfile(p.id);
   await store.refreshProfiles();
   await store.saveSettings({ ...store.settings!, defaultProfileId: null });
-  message.value = "已清空全部配置";
+  message.value = t("profiles.cleared");
 }
 </script>
 
@@ -466,16 +474,16 @@ async function clearAll() {
       style="display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 0.5px solid var(--border)"
     >
       <div style="display: flex; align-items: center; gap: 4px">
-        <button class="icon-btn" title="返回" @click="closeEditor">
+        <button class="icon-btn" :title="$t('editor.back')" @click="closeEditor">
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
           </svg>
         </button>
-        <h2 class="page-title" style="margin: 0">{{ isNew ? "新建配置" : "编辑配置" }}</h2>
+        <h2 class="page-title" style="margin: 0">{{ isNew ? $t("editor.newTitle") : $t("editor.editTitle") }}</h2>
       </div>
       <div style="display: flex; gap: 12px">
-        <button class="btn" @click="closeEditor">取消</button>
-        <button class="btn filled" @click="save">保存</button>
+        <button class="btn" @click="closeEditor">{{ $t("common.cancel") }}</button>
+        <button class="btn filled" @click="save">{{ $t("common.save") }}</button>
       </div>
     </div>
 
@@ -483,61 +491,61 @@ async function clearAll() {
       <p v-if="saveError" class="section-card error-text" style="margin: 0">{{ saveError }}</p>
 
       <div v-if="runningThis" class="section-card">
-        <h3 class="card-title">该配置正在运行</h3>
+        <h3 class="card-title">{{ $t("editor.runningTitle") }}</h3>
         <p class="muted" style="margin: 0">
-          可以直接改并保存，但 frpc 仍在使用旧配置，需要「重载配置」（或停止后重新启动）才会生效。
+          {{ $t("editor.runningBody") }}
         </p>
       </div>
 
       <div v-if="showErrors && errorIssues.length" class="section-card">
-        <h3 class="card-title" style="color: var(--error)">请先修正以下问题</h3>
+        <h3 class="card-title" style="color: var(--error)">{{ $t("editor.fixErrors") }}</h3>
         <p v-for="(it, i) in errorIssues" :key="i" class="error-text" style="margin: 0">
           • {{ validationText(it) }}
         </p>
       </div>
 
       <div v-if="warningIssues.length" class="section-card">
-        <h3 class="card-title" style="color: var(--text-2)">建议改进</h3>
+        <h3 class="card-title" style="color: var(--text-2)">{{ $t("editor.suggestions") }}</h3>
         <p v-for="(it, i) in warningIssues" :key="i" class="muted" style="margin: 0">
           • {{ validationText(it) }}
         </p>
       </div>
 
       <div class="section-card">
-        <h3 class="card-title">服务器</h3>
+        <h3 class="card-title">{{ $t("editor.sectionServer") }}</h3>
         <div class="field">
-          <span class="field-label">配置名称</span>
+          <span class="field-label">{{ $t("editor.name") }}</span>
           <input v-model="draft.name" />
-          <span class="support">只在本机区分多份配置，不会写进 frpc.toml</span>
+          <span class="support">{{ $t("editor.nameSupport") }}</span>
         </div>
         <div class="form-row">
           <div class="field" style="flex: 2">
-            <span class="field-label">服务器地址</span>
+            <span class="field-label">{{ $t("editor.serverAddr") }}</span>
             <input v-model="draft.config.serverAddr" placeholder="frps.example.com" />
-            <span class="support">frps 的地址或域名，不要带 http:// 前缀</span>
+            <span class="support">{{ $t("editor.serverAddrSupport") }}</span>
           </div>
           <div class="field" style="flex: 1">
-            <span class="field-label">服务器端口</span>
+            <span class="field-label">{{ $t("editor.serverPort") }}</span>
             <input v-model.number="draft.config.serverPort" type="number" />
-            <span class="support">tcp/websocket 填 bind_port；kcp/quic 填 kcp_bind_port / quic_bind_port</span>
+            <span class="support">{{ $t("editor.serverPortSupport") }}</span>
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <span class="field-label">代理名前缀（user）</span>
-            <input v-model="draft.config.user" placeholder="留空 = 不加前缀" />
-            <span class="support">代理在 frps 上的最终名 =「前缀.代理名」</span>
+            <span class="field-label">{{ $t("editor.user") }}</span>
+            <input v-model="draft.config.user" :placeholder="$t('editor.userPlaceholder')" />
+            <span class="support">{{ $t("editor.userSupport") }}</span>
           </div>
           <div class="field">
-            <span class="field-label">客户端标识（clientID）</span>
+            <span class="field-label">{{ $t("editor.clientID") }}</span>
             <input v-model="draft.config.clientID" />
-            <span class="support">frps 面板用来区分设备；留空由 frpc 生成</span>
+            <span class="support">{{ $t("editor.clientIDSupport") }}</span>
           </div>
         </div>
         <div class="switch-row">
           <div class="sw-text">
-            <div class="sw-label">首次登录失败就退出</div>
-            <div class="sw-support">关闭（默认）= 一直重连，适合移动网络；开启 = 首次连不上直接退出</div>
+            <div class="sw-label">{{ $t("editor.loginFailExit") }}</div>
+            <div class="sw-support">{{ $t("editor.loginFailExitSupport") }}</div>
           </div>
           <label class="switch">
             <input v-model="draft.config.loginFailExit" type="checkbox" />
@@ -545,31 +553,31 @@ async function clearAll() {
           </label>
         </div>
         <div class="field">
-          <span class="field-label">STUN 服务器</span>
-          <input v-model="draft.config.natHoleStunServer" placeholder="留空 = stun.easyvoip.com:3478" />
-          <span class="support">只有 xtcp 打洞会用到；默认地址在国内常超时，建议换成可连通的</span>
+          <span class="field-label">{{ $t("editor.stunServer") }}</span>
+          <input v-model="draft.config.natHoleStunServer" :placeholder="$t('editor.stunPlaceholder')" />
+          <span class="support">{{ $t("editor.stunSupport") }}</span>
         </div>
       </div>
 
       <div class="section-card">
-        <h3 class="card-title">认证</h3>
+        <h3 class="card-title">{{ $t("editor.sectionAuth") }}</h3>
         <div class="field">
-          <span class="field-label">认证方式</span>
+          <span class="field-label">{{ $t("editor.authMethod") }}</span>
           <select v-model="draft.config.auth!.method">
-            <option value="token">Token（与 frps 的 auth.token 一致）</option>
-            <option value="none">无认证（frps 没开 token）</option>
+            <option value="token">{{ $t("editor.authTokenOption") }}</option>
+            <option value="none">{{ $t("editor.authNoneOption") }}</option>
           </select>
         </div>
         <div v-if="draft.config.auth?.method === 'token'" class="field">
-          <span class="field-label">认证 Token</span>
+          <span class="field-label">{{ $t("editor.authToken") }}</span>
           <input v-model="draft.config.auth!.token" />
-          <span class="support">必须与 frps 的 auth.token 完全一致（注意首尾空格）</span>
+          <span class="support">{{ $t("editor.authTokenSupport") }}</span>
         </div>
         <p v-else class="muted small" style="margin: 0">
-          frps 没开 auth.token 时选「无认证」；填了 token 的服务器选了它会被拒绝登录。
+          {{ $t("editor.authNoneHint") }}
         </p>
         <div class="field">
-          <span class="field-label">多用户令牌（metadatas.token，可选）</span>
+          <span class="field-label">{{ $t("editor.metadatasToken") }}</span>
           <input
             :value="draft.config.metadatas?.token ?? ''"
             @input="
@@ -579,23 +587,23 @@ async function clearAll() {
               }
             "
           />
-          <span class="support">只有 frps 开了 multiuser 插件才需要填；普通服务器留空</span>
+          <span class="support">{{ $t("editor.metadatasTokenSupport") }}</span>
         </div>
         <p
           v-if="draft.config.auth && !['token', 'none'].includes(draft.config.auth.method)"
           class="error-text small"
           style="margin: 0"
         >
-          当前配置的认证方式是「{{ draft.config.auth.method }}」，App 不支持编辑；请导出 frpc.toml 后手动改回 token 或 none，否则 frpc 会因缺少 oidc 参数启动失败。
+          {{ $t("editor.authUnsupported", { method: draft.config.auth.method }) }}
         </p>
       </div>
 
       <div class="section-card">
-        <h3 class="card-title">状态监控</h3>
+        <h3 class="card-title">{{ $t("editor.sectionWebServer") }}</h3>
         <div class="switch-row">
           <div class="sw-text">
-            <div class="sw-label">开启状态接口（webServer）</div>
-            <div class="sw-support">只监听 127.0.0.1；App 靠它读取真实远端端口与在线状态</div>
+            <div class="sw-label">{{ $t("editor.wsEnable") }}</div>
+            <div class="sw-support">{{ $t("editor.wsEnableSupport") }}</div>
           </div>
           <label class="switch">
             <input
@@ -615,42 +623,42 @@ async function clearAll() {
         <template v-if="draft.config.webServer">
           <div class="form-row">
             <div class="field" style="flex: 2">
-              <span class="field-label">监听地址</span>
+              <span class="field-label">{{ $t("editor.wsAddr") }}</span>
               <input v-model="draft.config.webServer.addr" />
             </div>
             <div class="field" style="flex: 1">
-              <span class="field-label">端口</span>
+              <span class="field-label">{{ $t("editor.wsPort") }}</span>
               <input v-model.number="draft.config.webServer.port" type="number" />
-              <span class="support">同一台机器跑多份配置时要各用不同端口</span>
+              <span class="support">{{ $t("editor.wsPortSupport") }}</span>
             </div>
           </div>
           <div class="form-row">
             <div class="field">
-              <span class="field-label">面板用户名</span>
+              <span class="field-label">{{ $t("editor.wsUser") }}</span>
               <input v-model="draft.config.webServer.user" />
             </div>
             <div class="field">
-              <span class="field-label">面板密码</span>
+              <span class="field-label">{{ $t("editor.wsPassword") }}</span>
               <input v-model="draft.config.webServer.password" />
-              <span class="support">浏览器打开状态页时要登录</span>
+              <span class="support">{{ $t("editor.wsPasswordSupport") }}</span>
             </div>
           </div>
         </template>
       </div>
 
       <div class="section-card">
-        <h3 class="card-title">传输</h3>
+        <h3 class="card-title">{{ $t("editor.sectionTransport") }}</h3>
         <div class="form-row">
           <div class="field">
-            <span class="field-label">连接协议</span>
+            <span class="field-label">{{ $t("editor.protocol") }}</span>
             <select v-model="draft.config.transport!.protocol">
               <option v-for="p in ['tcp', 'kcp', 'quic', 'websocket', 'wss']" :key="p" :value="p">{{ p }}</option>
             </select>
           </div>
           <div class="switch-row" style="flex: 1">
             <div class="sw-text">
-              <div class="sw-label">启用 TLS</div>
-              <div class="sw-support">frp ≥ v0.50 默认开启；frps 关了 TLS 时才需要在这里关掉</div>
+              <div class="sw-label">{{ $t("editor.tlsEnable") }}</div>
+              <div class="sw-support">{{ $t("editor.tlsEnableSupport") }}</div>
             </div>
             <label class="switch">
               <input
@@ -669,8 +677,8 @@ async function clearAll() {
           </div>
           <div class="switch-row" style="flex: 1">
             <div class="sw-text">
-              <div class="sw-label">TCP 多路复用</div>
-              <div class="sw-support">必须与 frps 的 tcp_mux 保持一致</div>
+              <div class="sw-label">{{ $t("editor.tcpMux") }}</div>
+              <div class="sw-support">{{ $t("editor.tcpMuxSupport") }}</div>
             </div>
             <label class="switch">
               <input v-model="draft.config.transport!.tcpMux" type="checkbox" />
@@ -679,66 +687,66 @@ async function clearAll() {
           </div>
         </div>
         <div class="field">
-          <span class="field-label">预连接数</span>
+          <span class="field-label">{{ $t("editor.poolCount") }}</span>
           <input v-model.number="draft.config.transport!.poolCount" type="number" />
-          <span class="support">预先与 frps 建好的连接数，用来降低首次访问延迟；frp 默认 1</span>
+          <span class="support">{{ $t("editor.poolCountSupport") }}</span>
         </div>
 
         <button class="btn text-btn" @click="showTransportAdvanced = !showTransportAdvanced">
-          {{ showTransportAdvanced ? "收起高级连接参数" : "高级连接参数（心跳 / 保活 / 绑定地址）" }}
+          {{ showTransportAdvanced ? $t("editor.advancedHide") : $t("editor.advancedShow") }}
         </button>
         <div v-if="showTransportAdvanced" style="display: flex; flex-direction: column; gap: 12px">
           <div class="form-row">
             <div class="field">
-              <span class="field-label">心跳间隔（秒）</span>
+              <span class="field-label">{{ $t("editor.heartbeatInterval") }}</span>
               <input v-model.number="draft.config.transport!.heartbeatInterval" type="number" placeholder="10" />
-              <span class="support">留空用 frpc 默认 10</span>
+              <span class="support">{{ $t("editor.heartbeatIntervalSupport") }}</span>
             </div>
             <div class="field">
-              <span class="field-label">心跳超时（秒）</span>
+              <span class="field-label">{{ $t("editor.heartbeatTimeout") }}</span>
               <input v-model.number="draft.config.transport!.heartbeatTimeout" type="number" placeholder="90" />
-              <span class="support">超过这么久没心跳就判定断线</span>
+              <span class="support">{{ $t("editor.heartbeatTimeoutSupport") }}</span>
             </div>
             <div class="field">
-              <span class="field-label">多路复用保活（秒）</span>
+              <span class="field-label">{{ $t("editor.muxKeepalive") }}</span>
               <input v-model.number="draft.config.transport!.tcpMuxKeepaliveInterval" type="number" placeholder="30" />
-              <span class="support">仅 tcpMux 开启时有效</span>
+              <span class="support">{{ $t("editor.muxKeepaliveSupport") }}</span>
             </div>
           </div>
           <div class="field">
-            <span class="field-label">连接 frps 的本地出口 IP（可选）</span>
+            <span class="field-label">{{ $t("editor.connectServerLocalIP") }}</span>
             <input v-model="draft.config.transport!.connectServerLocalIP" placeholder="192.168.1.10" />
-            <span class="support">多网卡 / 多出口时指定用哪个源地址连 frps；留空由系统选</span>
+            <span class="support">{{ $t("editor.connectServerLocalIPSupport") }}</span>
           </div>
           <div class="field">
-            <span class="field-label">连接代理（proxyURL，可选）</span>
+            <span class="field-label">{{ $t("editor.proxyURL") }}</span>
             <input v-model="draft.config.transport!.proxyURL" placeholder="socks5://127.0.0.1:1080" />
-            <span class="support">仅 protocol = tcp 有效。App 默认会清掉系统 HTTP_PROXY，要走上游代理只能填这里</span>
+            <span class="support">{{ $t("editor.proxyURLSupport") }}</span>
           </div>
         </div>
 
         <hr class="hr" />
         <button class="btn text-btn" @click="toggleTlsAdvanced">
-          {{ showTlsAdvanced ? "收起 TLS 证书" : "TLS 高级（双向认证 / 私有 CA）" }}
+          {{ showTlsAdvanced ? $t("editor.tlsAdvancedHide") : $t("editor.tlsAdvancedShow") }}
         </button>
         <div v-if="showTlsAdvanced" style="display: flex; flex-direction: column; gap: 12px">
           <div class="field">
-            <span class="field-label">客户端证书 certFile</span>
+            <span class="field-label">{{ $t("editor.certFile") }}</span>
             <input v-model="draft.config.transport!.tls!.certFile" placeholder="/etc/frp/client.crt" />
           </div>
           <div class="field">
-            <span class="field-label">客户端私钥 keyFile</span>
+            <span class="field-label">{{ $t("editor.keyFile") }}</span>
             <input v-model="draft.config.transport!.tls!.keyFile" placeholder="/etc/frp/client.key" />
           </div>
           <div class="field">
-            <span class="field-label">CA 证书 trustedCaFile</span>
+            <span class="field-label">{{ $t("editor.trustedCaFile") }}</span>
             <input v-model="draft.config.transport!.tls!.trustedCaFile" placeholder="/etc/frp/ca.crt" />
-            <span class="support">frps 用自签证书时填它的 CA，否则会报证书校验失败</span>
+            <span class="support">{{ $t("editor.trustedCaFileSupport") }}</span>
           </div>
           <div class="switch-row">
             <div class="sw-text">
-              <div class="sw-label">发送自定义 TLS 首字节</div>
-              <div class="sw-support">对应 frp 的 disableCustomTLSFirstByte。默认不发送；只有老版本 frps 要求时才打开</div>
+              <div class="sw-label">{{ $t("editor.customTlsFirstByte") }}</div>
+              <div class="sw-support">{{ $t("editor.customTlsFirstByteSupport") }}</div>
             </div>
             <label class="switch">
               <input
@@ -759,8 +767,8 @@ async function clearAll() {
 
         <div class="switch-row">
           <div class="sw-text">
-            <div class="sw-label">自定义传输配置</div>
-            <div class="sw-support">关闭时保存不写 transport 段，全部用 frpc 默认值</div>
+            <div class="sw-label">{{ $t("editor.customTransport") }}</div>
+            <div class="sw-support">{{ $t("editor.customTransportSupport") }}</div>
           </div>
           <label class="switch">
             <input
@@ -779,29 +787,29 @@ async function clearAll() {
       </div>
 
       <div class="section-card">
-        <h3 class="card-title">日志（frpc 自身）</h3>
+        <h3 class="card-title">{{ $t("editor.sectionLog") }}</h3>
         <div class="field">
-          <span class="field-label">日志文件路径（可选）</span>
-          <input v-model="draft.config.log!.to" placeholder="留空 = 只输出到控制台，由 App 采集展示" />
-          <span class="support">填了路径才会写日志文件；App 的「日志」页始终实时展示控制台输出</span>
+          <span class="field-label">{{ $t("editor.logTo") }}</span>
+          <input v-model="draft.config.log!.to" :placeholder="$t('editor.logToPlaceholder')" />
+          <span class="support">{{ $t("editor.logToSupport") }}</span>
         </div>
         <div class="form-row">
           <div class="field" style="flex: 1">
-            <span class="field-label">日志级别</span>
+            <span class="field-label">{{ $t("editor.logLevel") }}</span>
             <select v-model="draft!.config.log!.level">
               <option v-for="l in ['trace', 'debug', 'info', 'warn', 'error']" :key="l" :value="l">{{ l }}</option>
             </select>
           </div>
           <div class="field" style="flex: 1">
-            <span class="field-label">日志保留天数</span>
+            <span class="field-label">{{ $t("editor.logMaxDays") }}</span>
             <input v-model.number="draft!.config.log!.maxDays" type="number" />
-            <span class="support">只对写入文件的日志有效</span>
+            <span class="support">{{ $t("editor.logMaxDaysSupport") }}</span>
           </div>
         </div>
         <div class="switch-row">
           <div class="sw-text">
-            <div class="sw-label">关闭控制台颜色</div>
-            <div class="sw-support">App 自己给日志着色，关掉可少一堆 ANSI 转义字符</div>
+            <div class="sw-label">{{ $t("editor.disablePrintColor") }}</div>
+            <div class="sw-support">{{ $t("editor.disablePrintColorSupport") }}</div>
           </div>
           <label class="switch">
             <input v-model="draft!.config.log!.disablePrintColor" type="checkbox" />
@@ -809,23 +817,23 @@ async function clearAll() {
           </label>
         </div>
         <p class="muted small" style="margin: 0">
-          日志固定输出到 console，由 App 采集后在「日志」页实时展示（排障时切到 debug）。
+          {{ $t("editor.logConsoleHint") }}
         </p>
       </div>
 
       <div class="section-card">
         <h3 class="card-title">
-          <span>代理规则（{{ draft.config.proxies.length }}）</span>
-          <button class="btn filled small" @click="addProxy">添加代理</button>
+          <span>{{ $t("editor.sectionProxies", { n: draft.config.proxies.length }) }}</span>
+          <button class="btn filled small" @click="addProxy">{{ $t("editor.addProxy") }}</button>
         </h3>
         <p class="muted small" style="margin: 0">
-          把本机服务暴露到 frps：tcp/udp 走端口，http/https/tcpmux 走域名
+          {{ $t("editor.proxiesSupport") }}
         </p>
         <p v-if="!draft.config.proxies.length" class="muted" style="margin: 0">
-          还没有代理规则：点右上角「添加代理」，或到「配置」页导入现成的 frpc.toml
+          {{ $t("editor.noProxies") }}
         </p>
         <div v-if="draft.config.proxies.length > 5" class="field">
-          <span class="field-label">筛选代理（名称 / 类型 / 端口）</span>
+          <span class="field-label">{{ $t("editor.filterProxies") }}</span>
           <input v-model="proxyQuery" />
         </div>
         <div
@@ -861,14 +869,14 @@ async function clearAll() {
             />
             <span class="track"></span><span class="thumb"></span>
           </label>
-          <button class="icon-btn" title="编辑" @click="editProxy(index)">
+          <button class="icon-btn" :title="$t('common.edit')" @click="editProxy(index)">
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
             </svg>
           </button>
           <button
             class="icon-btn"
-            title="删除"
+            :title="$t('common.delete')"
             @click="draft!.config.proxies = draft.config.proxies.filter((_, i) => i !== index)"
           >
             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -880,11 +888,11 @@ async function clearAll() {
 
       <div class="section-card">
         <h3 class="card-title">
-          <span>访问者（{{ draft.config.visitors.length }}）</span>
-          <button class="btn small" @click="addVisitor">添加访问者</button>
+          <span>{{ $t("editor.sectionVisitors", { n: draft.config.visitors.length }) }}</span>
+          <button class="btn small" @click="addVisitor">{{ $t("editor.addVisitor") }}</button>
         </h3>
         <p class="muted small" style="margin: 0">
-          反向用法：本机主动连接别人的 stcp/sudp/xtcp 私密代理，并在本机开一个端口给本地程序用
+          {{ $t("editor.visitorsSupport") }}
         </p>
         <div v-for="(visitor, index) in draft.config.visitors" :key="index" class="proxy-row">
           <div style="flex: 1; min-width: 0">
@@ -910,14 +918,14 @@ async function clearAll() {
             />
             <span class="track"></span><span class="thumb"></span>
           </label>
-          <button class="icon-btn" title="编辑" @click="editVisitor(index)">
+          <button class="icon-btn" :title="$t('common.edit')" @click="editVisitor(index)">
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
             </svg>
           </button>
           <button
             class="icon-btn"
-            title="删除"
+            :title="$t('common.delete')"
             @click="draft!.config.visitors = draft.config.visitors.filter((_, i) => i !== index)"
           >
             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -933,21 +941,21 @@ async function clearAll() {
     <!-- 代理编辑对话框 -->
     <div v-if="proxyDialog && proxyDraft" class="modal-mask" @click.self="proxyDialog = false">
       <div class="modal" style="width: 720px">
-        <h3 class="modal-title">{{ proxyEditingIndex == null ? "添加代理" : "编辑代理" }}</h3>
+        <h3 class="modal-title">{{ proxyEditingIndex == null ? $t("proxyDialog.addTitle") : $t("proxyDialog.editTitle") }}</h3>
         <p v-if="proxyBatchError" class="error-text" style="margin: 0">{{ proxyBatchError }}</p>
         <div class="form-row">
           <div class="field" style="flex: 2">
-            <span class="field-label">代理名称</span>
+            <span class="field-label">{{ $t("proxyDialog.name") }}</span>
             <input v-model="proxyDraft.name" />
           </div>
           <div class="field">
-            <span class="field-label">类型</span>
+            <span class="field-label">{{ $t("proxyDialog.type") }}</span>
             <select v-model="proxyDraft.type">
               <option v-for="t in PROXY_TYPES" :key="t" :value="t">{{ t }}</option>
             </select>
           </div>
           <div class="switch-row" style="align-self: flex-end; padding-bottom: 6px">
-            <span class="sw-label">启用</span>
+            <span class="sw-label">{{ $t("proxyDialog.enabled") }}</span>
             <label class="switch">
               <input v-model="proxyDraft.enabled" type="checkbox" />
               <span class="track"></span><span class="thumb"></span>
@@ -956,27 +964,27 @@ async function clearAll() {
         </div>
         <div class="form-row">
           <div class="field">
-            <span class="field-label">本地地址</span>
+            <span class="field-label">{{ $t("proxyDialog.localIP") }}</span>
             <input v-model="proxyDraft.localIP" />
           </div>
           <div class="field">
-            <span class="field-label">本地端口</span>
+            <span class="field-label">{{ $t("proxyDialog.localPort") }}</span>
             <input v-model.number="proxyDraft.localPort" type="number" />
           </div>
         </div>
         <div v-if="typeCaps(proxyDraft.type).remotePort" class="field">
           <span class="field-label">
-            远程端口（留空随机；支持批量：6001-6003、8080,8081 会按「名称-端口」创建多条）
+            {{ $t("proxyDialog.remotePort") }}
           </span>
-          <input v-model="proxyBatchPorts" :placeholder="proxyEditingIndex == null ? '例如 6001 或 6001-6003' : ''" />
+          <input v-model="proxyBatchPorts" :placeholder="proxyEditingIndex == null ? $t('proxyDialog.remotePortPlaceholder') : ''" />
         </div>
         <div v-if="typeCaps(proxyDraft.type).domain" class="form-row">
           <div class="field">
-            <span class="field-label">子域名</span>
+            <span class="field-label">{{ $t("proxyDialog.subdomain") }}</span>
             <input v-model="proxyDraft.subdomain" />
           </div>
           <div class="field">
-            <span class="field-label">自定义域名（逗号分隔）</span>
+            <span class="field-label">{{ $t("proxyDialog.customDomains") }}</span>
             <input
               :value="(proxyDraft.customDomains ?? []).join(',')"
               @change="
@@ -993,26 +1001,26 @@ async function clearAll() {
         <template v-if="typeCaps(proxyDraft.type).httpAuth">
           <div class="form-row">
             <div class="field">
-              <span class="field-label">HTTP 账号</span>
+              <span class="field-label">{{ $t("proxyDialog.httpUser") }}</span>
               <input v-model="proxyDraft.httpUser" />
             </div>
             <div class="field">
-              <span class="field-label">HTTP 密码</span>
+              <span class="field-label">{{ $t("proxyDialog.httpPassword") }}</span>
               <input v-model="proxyDraft.httpPassword" />
             </div>
             <div class="field">
-              <span class="field-label">按 HTTP 用户路由</span>
+              <span class="field-label">{{ $t("proxyDialog.routeByHTTPUser") }}</span>
               <input v-model="proxyDraft.routeByHTTPUser" />
             </div>
           </div>
         </template>
         <template v-if="typeCaps(proxyDraft.type).httpAdv">
           <div class="field">
-            <span class="field-label">Host 重写</span>
+            <span class="field-label">{{ $t("proxyDialog.hostHeaderRewrite") }}</span>
             <input v-model="proxyDraft.hostHeaderRewrite" />
           </div>
           <div class="field">
-            <span class="field-label">路由路径（逗号分隔）</span>
+            <span class="field-label">{{ $t("proxyDialog.locations") }}</span>
             <input
               :value="(proxyDraft.locations ?? []).join(',')"
               @change="
@@ -1028,17 +1036,17 @@ async function clearAll() {
         </template>
         <template v-if="typeCaps(proxyDraft.type).mux">
           <div class="field">
-            <span class="field-label">多路复用器</span>
+            <span class="field-label">{{ $t("proxyDialog.multiplexer") }}</span>
             <input v-model="proxyDraft.multiplexer" placeholder="httpconnect" />
           </div>
         </template>
         <template v-if="typeCaps(proxyDraft.type).secretKey">
           <div class="field">
-            <span class="field-label">私密密钥</span>
+            <span class="field-label">{{ $t("proxyDialog.secretKey") }}</span>
             <input v-model="proxyDraft.secretKey" type="password" />
           </div>
           <div class="field">
-            <span class="field-label">允许的访问者（逗号分隔，* 全部）</span>
+            <span class="field-label">{{ $t("proxyDialog.allowUsers") }}</span>
             <input
               :value="(proxyDraft.allowUsers ?? []).join(',')"
               @change="
@@ -1054,11 +1062,11 @@ async function clearAll() {
         </template>
         <div class="form-row">
           <div class="field">
-            <span class="field-label">带宽限制</span>
+            <span class="field-label">{{ $t("proxyDialog.bandwidthLimit") }}</span>
             <input v-model="proxyDraft.transport!.bandwidthLimit" placeholder="1MB" />
           </div>
           <div class="field">
-            <span class="field-label">限速方</span>
+            <span class="field-label">{{ $t("proxyDialog.bandwidthLimitMode") }}</span>
             <select v-model="proxyDraft.transport!.bandwidthLimitMode">
               <option value=""></option>
               <option value="client">client</option>
@@ -1066,14 +1074,14 @@ async function clearAll() {
             </select>
           </div>
           <div class="switch-row" style="align-self: flex-end; padding-bottom: 6px">
-            <span class="sw-label">加密</span>
+            <span class="sw-label">{{ $t("proxyDialog.encryption") }}</span>
             <label class="switch">
               <input v-model="proxyDraft.transport!.useEncryption" type="checkbox" />
               <span class="track"></span><span class="thumb"></span>
             </label>
           </div>
           <div class="switch-row" style="align-self: flex-end; padding-bottom: 6px">
-            <span class="sw-label">压缩</span>
+            <span class="sw-label">{{ $t("proxyDialog.compression") }}</span>
             <label class="switch">
               <input v-model="proxyDraft.transport!.useCompression" type="checkbox" />
               <span class="track"></span><span class="thumb"></span>
@@ -1082,45 +1090,45 @@ async function clearAll() {
         </div>
         <template v-if="typeCaps(proxyDraft.type).httpsPlugin">
           <div class="field">
-            <span class="field-label">插件类型</span>
+            <span class="field-label">{{ $t("proxyDialog.pluginType") }}</span>
             <select
               :value="proxyDraft.plugin?.type ?? ''"
               @change="
                 (e) => {
-                  const t = (e.target as HTMLInputElement).value;
-                  proxyDraft!.plugin = t ? ({ type: t } as ProxyPluginConfig) : null;
+                  const p = (e.target as HTMLInputElement).value;
+                  proxyDraft!.plugin = p ? ({ type: p } as ProxyPluginConfig) : null;
                 }
               "
             >
-              <option value="">不使用</option>
+              <option value="">{{ $t("proxyDialog.pluginNone") }}</option>
               <option value="https2http">https2http</option>
               <option value="tls2raw">tls2raw</option>
             </select>
           </div>
           <template v-if="proxyDraft.plugin?.type">
             <div class="field">
-              <span class="field-label">插件本地地址</span>
+              <span class="field-label">{{ $t("proxyDialog.pluginLocalAddr") }}</span>
               <input v-model="proxyDraft.plugin!.localAddr" placeholder="127.0.0.1:80" />
             </div>
             <div class="form-row">
               <div class="field">
-                <span class="field-label">证书文件</span>
+                <span class="field-label">{{ $t("proxyDialog.pluginCrt") }}</span>
                 <input v-model="proxyDraft.plugin!.crtPath" />
               </div>
               <div class="field">
-                <span class="field-label">密钥文件</span>
+                <span class="field-label">{{ $t("proxyDialog.pluginKey") }}</span>
                 <input v-model="proxyDraft.plugin!.keyPath" />
               </div>
             </div>
             <div v-if="proxyDraft.plugin!.type === 'https2http'" class="field">
-              <span class="field-label">Host 重写</span>
+              <span class="field-label">{{ $t("proxyDialog.hostHeaderRewrite") }}</span>
               <input v-model="proxyDraft.plugin!.hostHeaderRewrite" />
             </div>
           </template>
         </template>
         <div class="modal-actions">
-          <button class="btn text-btn" @click="proxyDialog = false">取消</button>
-          <button class="btn filled" @click="saveProxy">保存</button>
+          <button class="btn text-btn" @click="proxyDialog = false">{{ $t("common.cancel") }}</button>
+          <button class="btn filled" @click="saveProxy">{{ $t("common.save") }}</button>
         </div>
       </div>
     </div>
@@ -1128,20 +1136,20 @@ async function clearAll() {
     <!-- 访问者编辑对话框 -->
     <div v-if="visitorDialog && visitorDraft" class="modal-mask" @click.self="visitorDialog = false">
       <div class="modal" style="width: 640px">
-        <h3 class="modal-title">{{ visitorEditingIndex == null ? "添加访问者" : "编辑访问者" }}</h3>
+        <h3 class="modal-title">{{ visitorEditingIndex == null ? $t("visitorDialog.addTitle") : $t("visitorDialog.editTitle") }}</h3>
         <div class="form-row">
           <div class="field" style="flex: 2">
-            <span class="field-label">访问者名称</span>
+            <span class="field-label">{{ $t("visitorDialog.name") }}</span>
             <input v-model="visitorDraft.name" />
           </div>
           <div class="field">
-            <span class="field-label">类型</span>
+            <span class="field-label">{{ $t("visitorDialog.type") }}</span>
             <select v-model="visitorDraft.type">
-              <option v-for="t in VISITOR_TYPES" :key="t" :value="t">{{ t }}</option>
+              <option v-for="vt in VISITOR_TYPES" :key="vt" :value="vt">{{ vt }}</option>
             </select>
           </div>
           <div class="switch-row" style="align-self: flex-end; padding-bottom: 6px">
-            <span class="sw-label">启用</span>
+            <span class="sw-label">{{ $t("visitorDialog.enabled") }}</span>
             <label class="switch">
               <input v-model="visitorDraft.enabled" type="checkbox" />
               <span class="track"></span><span class="thumb"></span>
@@ -1150,40 +1158,40 @@ async function clearAll() {
         </div>
         <div class="form-row">
           <div class="field" style="flex: 2">
-            <span class="field-label">对方代理名</span>
+            <span class="field-label">{{ $t("visitorDialog.serverName") }}</span>
             <input v-model="visitorDraft.serverName" />
           </div>
           <div class="field">
-            <span class="field-label">私密密钥</span>
+            <span class="field-label">{{ $t("visitorDialog.secretKey") }}</span>
             <input v-model="visitorDraft.secretKey" type="password" />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <span class="field-label">绑定地址</span>
+            <span class="field-label">{{ $t("visitorDialog.bindAddr") }}</span>
             <input v-model="visitorDraft.bindAddr" />
           </div>
           <div class="field">
-            <span class="field-label">本地监听端口</span>
+            <span class="field-label">{{ $t("visitorDialog.bindPort") }}</span>
             <input v-model.number="visitorDraft.bindPort" type="number" />
           </div>
           <div class="field">
-            <span class="field-label">对方设备前缀（serverUser）</span>
+            <span class="field-label">{{ $t("visitorDialog.serverUser") }}</span>
             <input v-model="visitorDraft.serverUser" />
           </div>
         </div>
         <template v-if="visitorDraft.type === 'xtcp'">
           <div class="form-row">
             <div class="field">
-              <span class="field-label">打洞失败转交给</span>
+              <span class="field-label">{{ $t("visitorDialog.fallbackTo") }}</span>
               <input v-model="visitorDraft.fallbackTo" />
             </div>
             <div class="field">
-              <span class="field-label">打洞等待时长（ms）</span>
+              <span class="field-label">{{ $t("visitorDialog.fallbackTimeout") }}</span>
               <input v-model.number="visitorDraft.fallbackTimeoutMs" type="number" />
             </div>
             <div class="switch-row" style="align-self: flex-end; padding-bottom: 6px">
-              <span class="sw-label">保持隧道</span>
+              <span class="sw-label">{{ $t("visitorDialog.keepTunnelOpen") }}</span>
               <label class="switch">
                 <input v-model="visitorDraft.keepTunnelOpen" type="checkbox" />
                 <span class="track"></span><span class="thumb"></span>
@@ -1193,8 +1201,8 @@ async function clearAll() {
         </template>
         <p v-if="visitorError" class="error-text" style="margin: 0">{{ visitorError }}</p>
         <div class="modal-actions">
-          <button class="btn text-btn" @click="visitorDialog = false">取消</button>
-          <button class="btn filled" @click="saveVisitor">保存</button>
+          <button class="btn text-btn" @click="visitorDialog = false">{{ $t("common.cancel") }}</button>
+          <button class="btn filled" @click="saveVisitor">{{ $t("common.save") }}</button>
         </div>
       </div>
     </div>
@@ -1202,14 +1210,14 @@ async function clearAll() {
     <!-- 保存运行中的配置 -->
     <div v-if="confirmSaveRunning" class="modal-mask" @click.self="confirmSaveRunning = false">
       <div class="modal" style="width: 480px">
-        <h3 class="modal-title">保存运行中的配置</h3>
-        <p style="margin: 0">保存后 frpc 仍在使用旧配置。是否立即重载让它生效？</p>
+        <h3 class="modal-title">{{ $t("editor.saveRunningTitle") }}</h3>
+        <p style="margin: 0">{{ $t("editor.saveRunningBody") }}</p>
         <div class="modal-actions">
           <button class="btn text-btn" style="color: var(--brand)" @click="confirmSaveRunning = false; doSave(true)">
-            保存并重载
+            {{ $t("common.saveReload") }}
           </button>
-          <button class="btn text-btn" @click="confirmSaveRunning = false; doSave(false)">仅保存</button>
-          <button class="btn text-btn" @click="confirmSaveRunning = false">取消</button>
+          <button class="btn text-btn" @click="confirmSaveRunning = false; doSave(false)">{{ $t("common.saveOnly") }}</button>
+          <button class="btn text-btn" @click="confirmSaveRunning = false">{{ $t("common.cancel") }}</button>
         </div>
       </div>
     </div>
@@ -1219,41 +1227,41 @@ async function clearAll() {
   <div v-else class="page">
     <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
       <div>
-        <h2 class="page-title">服务器配置</h2>
-        <p class="page-sub">每份配置对应一个 frps；导入的 frpc.toml 会按代理类型清理掉多余字段</p>
+        <h2 class="page-title">{{ $t("profiles.title") }}</h2>
+        <p class="page-sub">{{ $t("profiles.subtitle") }}</p>
       </div>
       <div style="display: flex; gap: 12px">
         <label class="btn">
-          导入
+          {{ $t("profiles.import") }}
           <input type="file" accept=".toml" hidden @change="onImportFile" />
         </label>
-        <button class="btn filled" @click="openEditor(null)">新建配置</button>
+        <button class="btn filled" @click="openEditor(null)">{{ $t("profiles.new") }}</button>
       </div>
     </div>
 
     <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
       <div class="field" style="flex: 1">
-        <input v-model="query" placeholder="名称 / 服务器地址" />
+        <input v-model="query" :placeholder="$t('profiles.searchPlaceholder')" />
       </div>
-      <button class="btn" @click="exportAll">导出全部</button>
+      <button class="btn" @click="exportAll">{{ $t("profiles.exportAll") }}</button>
       <label class="btn">
-        导入全部
+        {{ $t("profiles.importAll") }}
         <input ref="bundleFile" type="file" accept=".json" hidden @change="onImportBundle" />
       </label>
-      <button class="btn text-btn danger-text" @click="clearAllConfirm = true">清空全部</button>
+      <button class="btn text-btn danger-text" @click="clearAllConfirm = true">{{ $t("profiles.clearAll") }}</button>
     </div>
 
     <div v-if="message" class="section-card" style="flex-direction: row; justify-content: space-between; align-items: center">
       <span>{{ message }}</span>
-      <button class="btn text-btn" @click="message = ''">关闭</button>
+      <button class="btn text-btn" @click="message = ''">{{ $t("common.close") }}</button>
     </div>
 
     <div v-if="!store.profiles.length" class="section-card">
-      <div style="font-size: 15px; font-weight: 500">还没有任何配置</div>
-      <p class="muted" style="margin: 0">点右上角「新建配置」从零填，或「导入」现成的 frpc.toml</p>
+      <div style="font-size: 15px; font-weight: 500">{{ $t("profiles.empty") }}</div>
+      <p class="muted" style="margin: 0">{{ $t("profiles.emptyHint") }}</p>
     </div>
     <div v-else-if="!visible.length" class="section-card">
-      <p class="muted" style="margin: 0">没有匹配「{{ query }}」的配置</p>
+      <p class="muted" style="margin: 0">{{ $t("profiles.noMatch", { q: query }) }}</p>
     </div>
 
     <div v-for="profile in visible" :key="profile.id" class="section-card">
@@ -1261,14 +1269,14 @@ async function clearAll() {
         <div style="flex: 1; min-width: 0">
           <div style="display: flex; align-items: center; gap: 8px">
             <span style="font-size: 15px; font-weight: 500">{{ profile.name }}</span>
-            <span v-if="store.runningId === profile.id" class="status-chip chip-running">运行中</span>
-            <span v-if="store.pendingReload === profile.id" class="status-chip chip-error">待重载</span>
-            <span v-if="store.settings?.defaultProfileId === profile.id" class="status-chip chip-brand">默认</span>
+            <span v-if="store.runningId === profile.id" class="status-chip chip-running">{{ $t("profiles.chipRunning") }}</span>
+            <span v-if="store.pendingReload === profile.id" class="status-chip chip-error">{{ $t("profiles.chipPending") }}</span>
+            <span v-if="store.settings?.defaultProfileId === profile.id" class="status-chip chip-brand">{{ $t("profiles.chipDefault") }}</span>
           </div>
           <div class="muted">
-            {{ `${profile.config.serverAddr}:${profile.config.serverPort}` }} · 代理
-            {{ profile.config.proxies.length }} 个<template v-if="profile.config.visitors.length">
-              · 访问者 {{ profile.config.visitors.length }} 个</template
+            {{ `${profile.config.serverAddr}:${profile.config.serverPort}` }} ·
+            {{ $t("profiles.metaProxies", { n: profile.config.proxies.length }) }}<template v-if="profile.config.visitors.length">
+              · {{ $t("profiles.metaVisitors", { n: profile.config.visitors.length }) }}</template
             >
           </div>
           <div
@@ -1278,14 +1286,14 @@ async function clearAll() {
           >
             {{
               store.pendingReload === profile.id
-                ? "已保存，尚未重载，仍在使用旧配置"
-                : "运行中，保存后需「重载配置」才生效"
+                ? $t("profiles.pendingHint")
+                : $t("profiles.runningHint")
             }}
           </div>
         </div>
         <button
           class="icon-btn"
-          :title="store.runningId === profile.id ? '停止' : '启动'"
+          :title="store.runningId === profile.id ? $t('home.stop') : $t('home.start')"
           @click="toggleProfile(profile)"
         >
           <svg v-if="store.runningId === profile.id" viewBox="0 0 24 24" fill="currentColor">
@@ -1295,24 +1303,24 @@ async function clearAll() {
             <path d="M8 5v14l11-7z" />
           </svg>
         </button>
-        <button class="icon-btn" title="编辑" @click="openEditor(profile)">
+        <button class="icon-btn" :title="$t('common.edit')" @click="openEditor(profile)">
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
           </svg>
         </button>
-        <button class="icon-btn" title="复制" @click="store.duplicateProfile(profile.id)">
+        <button class="icon-btn" :title="$t('common.duplicate')" @click="store.duplicateProfile(profile.id)">
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
           </svg>
         </button>
-        <button class="icon-btn" title="导出" @click="exportToml(profile)">
+        <button class="icon-btn" :title="$t('common.export')" @click="exportToml(profile)">
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
           </svg>
         </button>
         <button
           class="icon-btn"
-          title="设为默认"
+          :title="$t('profiles.setDefault')"
           :disabled="store.settings?.defaultProfileId === profile.id"
           @click="store.saveSettings({ ...store.settings!, defaultProfileId: profile.id })"
         >
@@ -1322,7 +1330,7 @@ async function clearAll() {
         </button>
         <button
           class="icon-btn"
-          title="删除"
+          :title="$t('common.delete')"
           :disabled="store.runningId === profile.id"
           @click="removeProfile(profile)"
         >
@@ -1337,27 +1345,32 @@ async function clearAll() {
 
     <div v-if="clearAllConfirm" class="modal-mask" @click.self="clearAllConfirm = false">
       <div class="modal" style="width: 480px">
-        <h3 class="modal-title">清空全部配置</h3>
+        <h3 class="modal-title">{{ $t("profiles.clearAllTitle") }}</h3>
         <p style="margin: 0">
-          将删除 {{ store.profiles.length }} 份配置（含代理与访问者规则），并停止正在运行的服务。该操作不可撤销——建议先点「导出全部」备份。
+          {{ $t("profiles.clearAllBody", { n: store.profiles.length }) }}
         </p>
         <div class="modal-actions">
-          <button class="btn text-btn" style="color: var(--error)" @click="clearAll">清空</button>
-          <button class="btn text-btn" @click="clearAllConfirm = false">取消</button>
+          <button class="btn text-btn" style="color: var(--error)" @click="clearAll">{{ $t("common.clear") }}</button>
+          <button class="btn text-btn" @click="clearAllConfirm = false">{{ $t("common.cancel") }}</button>
         </div>
       </div>
     </div>
 
     <div v-if="deleteTarget" class="modal-mask" @click.self="deleteTarget = null">
       <div class="modal" style="width: 480px">
-        <h3 class="modal-title">删除配置</h3>
+        <h3 class="modal-title">{{ $t("profiles.deleteTitle") }}</h3>
         <p style="margin: 0">
-          确定删除「{{ deleteTarget.name }}」（{{ `${deleteTarget.config.serverAddr}:${deleteTarget.config.serverPort}` }}，代理
-          {{ deleteTarget.config.proxies.length }} 个）？该操作不可撤销。
+          {{
+            $t("profiles.deleteBody", {
+              name: deleteTarget.name,
+              server: `${deleteTarget.config.serverAddr}:${deleteTarget.config.serverPort}`,
+              n: deleteTarget.config.proxies.length,
+            })
+          }}
         </p>
         <div class="modal-actions">
-          <button class="btn text-btn" style="color: var(--error)" @click="confirmDelete">删除</button>
-          <button class="btn text-btn" @click="deleteTarget = null">取消</button>
+          <button class="btn text-btn" style="color: var(--error)" @click="confirmDelete">{{ $t("common.delete") }}</button>
+          <button class="btn text-btn" @click="deleteTarget = null">{{ $t("common.cancel") }}</button>
         </div>
       </div>
     </div>

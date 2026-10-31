@@ -1,4 +1,10 @@
 // 展示格式化与校验文案 —— 与旧版 Format.kt / ProfileEditScreen.kt 逐字对齐
+import { i18n } from "./i18n";
+
+/// vue-i18n 的类型化 key 在动态拼接（validate.reason.XXX）时无法静态校验，
+/// 这里收窄成 string 签名的薄包装。调用点都在渲染过程中，locale 变化会重建依赖。
+const tr = (key: string, params?: Record<string, unknown>): string =>
+  (i18n.global.t as unknown as (k: string, p?: Record<string, unknown>) => string)(key, params);
 
 export function formatLogTime(epochMs: number): string {
   const d = new Date(epochMs);
@@ -57,25 +63,25 @@ export function parsePortExpr(expr: string, maxExpand = 100): { ok: true; ports:
     .split(/[,， \n\t]/)
     .map((s) => s.trim())
     .filter(Boolean);
-  if (!tokens.length) return { ok: false, reason: "端口为空" };
+  if (!tokens.length) return { ok: false, reason: tr("port.empty") };
   const ports: number[] = [];
   for (const token of tokens) {
     const dash = token.indexOf("-");
     if (dash < 0) {
       const port = Number(token);
-      if (!Number.isInteger(port)) return { ok: false, reason: `「${token}」不是数字` };
-      if (port < 1 || port > 65535) return { ok: false, reason: `「${token}」超出 1-65535` };
+      if (!Number.isInteger(port)) return { ok: false, reason: tr("port.notNumber", { token }) };
+      if (port < 1 || port > 65535) return { ok: false, reason: tr("port.outOfRange", { token }) };
       if (!ports.includes(port)) ports.push(port);
     } else {
       const start = Number(token.slice(0, dash).trim());
       const end = Number(token.slice(dash + 1).trim());
       if (!Number.isInteger(start) || !Number.isInteger(end))
-        return { ok: false, reason: `「${token}」不是有效的范围` };
+        return { ok: false, reason: tr("port.badRange", { token }) };
       if (start < 1 || end < 1 || start > 65535 || end > 65535)
-        return { ok: false, reason: `「${token}」超出 1-65535` };
-      if (start > end) return { ok: false, reason: `「${token}」起点大于终点` };
+        return { ok: false, reason: tr("port.outOfRange", { token }) };
+      if (start > end) return { ok: false, reason: tr("port.startGtEnd", { token }) };
       if (end - start + 1 > maxExpand - ports.length)
-        return { ok: false, reason: `「${token}」一次最多展开 ${maxExpand} 个端口` };
+        return { ok: false, reason: tr("port.tooMany", { token, max: maxExpand }) };
       for (let p = start; p <= end; p++) if (!ports.includes(p)) ports.push(p);
     }
   }
@@ -100,15 +106,18 @@ export function describeProxy(p: {
 }): string {
   const caps = typeCaps(p.type);
   let s = p.type.toUpperCase();
-  s += ` · 本地 ${p.localIP || "127.0.0.1"}:${p.localPort ?? "?"}`;
+  s += tr("desc.local", { addr: `${p.localIP || "127.0.0.1"}:${p.localPort ?? "?"}` });
   if (caps.remotePort) {
-    s += p.remotePort == null || p.remotePort === 0 ? " → 远程端口随机" : ` → 远程 :${p.remotePort}`;
+    s +=
+      p.remotePort == null || p.remotePort === 0
+        ? tr("desc.remoteRandom")
+        : tr("desc.remote", { port: p.remotePort });
   } else if (caps.domain) {
-    s += ` → ${p.customDomains?.[0] || p.subdomain || "域名待配置"}`;
+    s += ` → ${p.customDomains?.[0] || p.subdomain || tr("desc.domainPending")}`;
   } else {
-    s += " → 私密代理（由访问者接入）";
+    s += tr("desc.private");
   }
-  if (p.enabled === false) s += " · 已禁用";
+  if (p.enabled === false) s += tr("desc.disabled");
   return s;
 }
 
@@ -124,9 +133,9 @@ export function describeVisitor(
   localUser?: string | null,
 ): string {
   let s = v.type.toUpperCase();
-  s += v.bindPort < 0 ? " · 不监听端口" : ` · 本地 ${v.bindAddr}:${v.bindPort}`;
-  s += ` · 访问 ${targetServerProxyName(localUser, v.serverUser, v.serverName)}`;
-  if (v.enabled === false) s += " · 已禁用";
+  s += v.bindPort < 0 ? tr("desc.noBindPort") : tr("desc.bind", { addr: `${v.bindAddr}:${v.bindPort}` });
+  s += tr("desc.access", { name: targetServerProxyName(localUser, v.serverUser, v.serverName) });
+  if (v.enabled === false) s += tr("desc.disabled");
   return s;
 }
 
@@ -147,56 +156,12 @@ export const PROXY_TYPES = ["tcp", "udp", "http", "https", "stcp", "sudp", "xtcp
 export const VISITOR_TYPES = ["stcp", "sudp", "xtcp"];
 
 // ---------- 校验文案（ProfileEditScreen validationText 逐字对齐） ----------
-
-const FIELD_NAMES: Record<string, string> = {
-  serverAddr: "服务器地址",
-  serverPort: "服务器端口",
-  user: "代理名前缀",
-  clientID: "客户端标识",
-  token: "认证 Token",
-  method: "认证方式",
-  addr: "监听地址",
-  port: "端口",
-  protocol: "连接协议",
-  poolCount: "预连接数",
-  bandwidthLimit: "带宽限制",
-  proxyProtocolVersion: "PROXY Protocol",
-  name: "名称",
-  type: "类型",
-  localIP: "本地地址",
-  localPort: "本地端口",
-  remotePort: "远程端口",
-  subdomain: "子域名",
-  customDomains: "自定义域名",
-  locations: "路由路径",
-  httpUser: "HTTP 账号",
-  httpPassword: "HTTP 密码",
-  secretKey: "私密密钥",
-  multiplexer: "多路复用器",
-  serverName: "对方代理名",
-  serverUser: "对方设备前缀",
-  bindAddr: "监听地址",
-  bindPort: "本地监听端口",
-  level: "日志级别",
-  natHoleStunServer: "STUN 服务器",
-  fallbackTo: "打洞失败转交给",
-  fallbackTimeoutMs: "打洞等待时长",
-  certFile: "客户端证书",
-  keyFile: "客户端私钥",
-  trustedCaFile: "CA 证书",
-  heartbeatInterval: "心跳间隔",
-  heartbeatTimeout: "心跳超时",
-  tcpMuxKeepaliveInterval: "多路复用保活间隔",
-  plugin: "插件",
-  localAddr: "插件本地地址",
-  crtPath: "证书文件",
-  keyPath: "密钥文件",
-  maxDays: "日志保留天数",
-};
+// 字段显示名与各 reason 的文案都在语言包 validate.field.* / validate.reason.* 里
 
 function fieldDisplayName(field: string): string {
   const key = field.split(".").pop()!.split("]")[0];
-  return FIELD_NAMES[key] ?? field;
+  const path = `validate.field.${key}`;
+  return i18n.global.te(path) ? tr(path) : field;
 }
 
 const SCOPE_PROXY = "PROXY";
@@ -211,44 +176,30 @@ export function validationText(issue: {
 }): string {
   const where =
     issue.scope === "GLOBAL"
-      ? "全局"
+      ? tr("validate.scopeGlobal")
       : issue.scope === "AUTH"
-        ? "认证"
+        ? tr("validate.scopeAuth")
         : issue.scope === "WEB_SERVER"
-          ? "状态监控"
+          ? tr("validate.scopeWebServer")
           : issue.scope === "TRANSPORT"
-            ? "传输"
+            ? tr("validate.scopeTransport")
             : issue.scope === "LOG"
-              ? "日志"
+              ? tr("validate.scopeLog")
               : issue.scope === SCOPE_PROXY
-                ? `代理「${issue.entityName ?? ""}」`
+                ? tr("validate.scopeProxy", { name: issue.entityName ?? "" })
                 : issue.scope === SCOPE_VISITOR
-                  ? `访问者「${issue.entityName ?? ""}」`
+                  ? tr("validate.scopeVisitor", { name: issue.entityName ?? "" })
                   : issue.scope;
   const label = fieldDisplayName(issue.field);
-  let what: string;
-  switch (issue.reason) {
-    case "EMPTY_REQUIRED_FIELD": what = `${label} 不能为空`; break;
-    case "PORT_OUT_OF_RANGE": what = `${label} 需在 1-65535`; break;
-    case "PORT_IN_USE": what = `${label} 已被占用，换一个端口`; break;
-    case "INVALID_VALUE": what = `${label} 取值不合法`; break;
-    case "DUPLICATE_NAME": what = `代理名「${issue.entityName ?? ""}」重复，frps 上必须唯一`; break;
-    case "TYPE_FIELD_MISSING": what = "该类型缺少必填字段"; break;
-    case "DOMAIN_OR_SUBDOMAIN_REQUIRED": what = "需要自定义域名或子域名（frp 要求至少填一个）"; break;
-    case "UNSUPPORTED_VALUE": what = `${label} 暂不支持，请导出 frpc.toml 手动配置`; break;
-    case "FIELD_NOT_SUPPORTED_FOR_TYPE": what = `${label} 不适用于该类型（frp 严格解码，写进去会启动失败）`; break;
-    case "BIND_PORT_REQUIRED": what = "本地监听端口不能为 0（frp 会报 bind port is required）；不监听请填 -1"; break;
-    case "SUBDOMAIN_INVALID": what = "子域名不能包含 . 或 *（通配请用自定义域名）"; break;
-    case "MULTIPLEXER_INVALID": what = "多路复用器只能是 httpconnect"; break;
-    case "BANDWIDTH_LIMIT_INVALID": what = "带宽限制必须带 KB 或 MB 单位，例如 1MB"; break;
-    case "FALLBACK_VISITOR_NOT_FOUND": what = "打洞失败转交的访问者不存在，打洞失败时没有退路"; break;
-    case "SERVER_NAME_PREFIX_DOUBLED": what = `${label} 只填代理名。前缀取「对方设备前缀」，留空则用本机前缀`; break;
-    case "XTCP_STUN_SERVER_NOT_SET":
-      what = "用了 xtcp 却没填 STUN 服务器：frpc 会退回默认 stun.easyvoip.com:3478，该地址经常超时，会导致打洞失败（访问者侧报 context deadline exceeded）。建议填一个能连通的，例如 stun.miwifi.com:3478";
-      break;
-    default: what = issue.reason;
-  }
-  return `${where}：${what}${issue.detail ? `（${issue.detail}）` : ""}`;
+  // 语言包没收录的 reason（后端新增时）直接显示原始 code，比显示 key 路径可读
+  const reasonKey = `validate.reason.${issue.reason}`;
+  const what = i18n.global.te(reasonKey)
+    ? tr(reasonKey, { label, name: issue.entityName ?? "" })
+    : issue.reason;
+  return (
+    tr("validate.text", { where, what }) +
+    (issue.detail ? tr("validate.detail", { detail: issue.detail }) : "")
+  );
 }
 
 // ---------- 快照辅助（Rust 侧 all()/item() 是方法，JSON 无此字段） ----------

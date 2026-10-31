@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { api } from "../api";
 import { formatLogTime } from "../format";
 import { useEngineStore } from "../stores/engine";
 
 const store = useEngineStore();
+const { t } = useI18n();
 const level = ref<string | null>(null);
 const query = ref("");
 const autoScroll = ref(true);
@@ -49,9 +51,9 @@ async function save() {
   // 对齐旧版 FileDialog.SAVE：弹系统保存对话框自选位置
   const { save: saveDialog } = await import("@tauri-apps/plugin-dialog");
   const target = await saveDialog({
-    title: "保存日志",
+    title: t("logs.saveDialogTitle"),
     defaultPath: "frpc-log.txt",
-    filters: [{ name: "文本文件", extensions: ["txt"] }],
+    filters: [{ name: t("logs.textFile"), extensions: ["txt"] }],
   });
   if (!target) return;
   // 所见即所得：界面上有筛选（标签页 / 级别 / 搜索）时只导出筛选出来的行
@@ -61,8 +63,8 @@ async function save() {
     : await api.getLogsText();
   await api.writeTextFile(target, text);
   saved.value = filtering
-    ? `已保存当前筛选的 ${filtered.value.length} 行到 ${target}`
-    : `已保存到 ${target}`;
+    ? t("logs.savedFiltered", { n: filtered.value.length, path: target })
+    : t("logs.saved", { path: target });
 }
 
 // Android 属于 unix 但没有 xdg-open，也没有可唤起的文件管理器
@@ -79,60 +81,60 @@ async function openLogsDir() {
   <div class="page" style="height: 100%; max-width: none">
     <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap">
       <div>
-        <h2 class="page-title">日志</h2>
+        <h2 class="page-title">{{ $t("logs.title") }}</h2>
         <p class="small muted" style="margin: 0">
-          显示 {{ filtered.length }} / 共 {{ store.logs.length }} 行 · 时间按本机时区
+          {{ $t("logs.showing", { shown: filtered.length, total: store.logs.length }) }}
         </p>
       </div>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
         <div class="field fixed-field">
-          <input v-model="query" placeholder="搜索" />
+          <input v-model="query" :placeholder="$t('logs.search')" />
         </div>
-        <button class="btn filled" @click="save">保存</button>
-        <button class="btn filled" @click="store.clearLogs()">清空</button>
-        <button v-if="!isAndroid" class="btn" @click="openLogsDir">日志目录</button>
+        <button class="btn filled" @click="save">{{ $t("logs.save") }}</button>
+        <button class="btn filled" @click="store.clearLogs()">{{ $t("logs.clear") }}</button>
+        <button v-if="!isAndroid" class="btn" @click="openLogsDir">{{ $t("logs.openDir") }}</button>
       </div>
     </div>
 
     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
       <button class="filter-chip" :class="{ selected: tab === 0 }" @click="tab = 0">
-        连接日志 {{ store.logs.filter((l) => l.tag !== APP_TAG).length }}
+        {{ $t("logs.tabConnection", { n: store.logs.filter((l) => l.tag !== APP_TAG).length }) }}
       </button>
       <button class="filter-chip" :class="{ selected: tab === 1 }" @click="tab = 1">
-        应用日志 {{ store.logs.filter((l) => l.tag === APP_TAG).length }}
+        {{ $t("logs.tabApp", { n: store.logs.filter((l) => l.tag === APP_TAG).length }) }}
       </button>
       <span class="muted">·</span>
-      <button class="filter-chip" :class="{ selected: level === null }" @click="level = null">全部</button>
+      <button class="filter-chip" :class="{ selected: level === null }" @click="level = null">{{ $t("logs.all") }}</button>
       <button
         class="filter-chip"
         :class="{ selected: level === 'ERROR' }"
         @click="level = level === 'ERROR' ? null : 'ERROR'"
       >
-        错误
+        {{ $t("logs.levelError") }}
       </button>
       <button
         class="filter-chip"
         :class="{ selected: level === 'WARN' }"
         @click="level = level === 'WARN' ? null : 'WARN'"
       >
-        警告
+        {{ $t("logs.levelWarn") }}
       </button>
       <button
         class="filter-chip"
         :class="{ selected: level === 'INFO' }"
         @click="level = level === 'INFO' ? null : 'INFO'"
       >
-        信息
+        {{ $t("logs.levelInfo") }}
       </button>
       <button
         class="filter-chip"
         :class="{ selected: level === 'DEBUG' }"
         @click="level = level === 'DEBUG' ? null : 'DEBUG'"
       >
-        调试
+        {{ $t("logs.levelDebug") }}
       </button>
       <label class="switch-row" style="gap: 8px; margin-left: 12px; width: auto">
-        <span class="sw-label">自动滚动</span>
+        <span class="sw-label">{{ $t("logs.autoScroll") }}</span>
         <span class="switch">
           <input v-model="autoScroll" type="checkbox" />
           <span class="track"></span><span class="thumb"></span>

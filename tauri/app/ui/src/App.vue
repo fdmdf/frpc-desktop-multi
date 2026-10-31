@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, watch } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { useEngineStore } from "./stores/engine";
 import logo from "./assets/logo.svg";
 
 const route = useRoute();
 const store = useEngineStore();
+const { t } = useI18n();
 
 onMounted(async () => {
   await store.init();
@@ -21,13 +23,16 @@ watch(
   { immediate: true },
 );
 
-const tabs = [
-  { to: "/", label: "主页", icon: "home" },
-  { to: "/profiles", label: "配置", icon: "dashboard" },
-  { to: "/logs", label: "日志", icon: "article" },
-  { to: "/monitor", label: "监控", icon: "monitor" },
-  { to: "/settings", label: "设置", icon: "settings" },
-] as const;
+const tabs = computed(
+  () =>
+    [
+      { to: "/", label: t("nav.home"), icon: "home" },
+      { to: "/profiles", label: t("nav.profiles"), icon: "dashboard" },
+      { to: "/logs", label: t("nav.logs"), icon: "article" },
+      { to: "/monitor", label: t("nav.monitor"), icon: "monitor" },
+      { to: "/settings", label: t("nav.settings"), icon: "settings" },
+    ] as const,
+);
 
 const icons: Record<string, string> = {
   home: "M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z",
@@ -65,7 +70,7 @@ const icons: Record<string, string> = {
         <span>{{ t.label }}</span>
       </RouterLink>
       <div class="sidebar-foot">
-        引擎 frp {{ store.engineVersion }}
+        {{ $t("app.engineFooter", { version: store.engineVersion }) }}
         <span v-if="store.appVersion"> · v{{ store.appVersion }}</span>
       </div>
     </aside>
