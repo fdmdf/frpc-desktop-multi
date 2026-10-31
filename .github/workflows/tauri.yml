@@ -88,12 +88,12 @@ jobs:
           set -o pipefail
           bash -x scripts/build-frpc.sh desktop 2>&1 | tee /tmp/eng.log || CODE=$?
           if [ "${CODE:-0}" -ne 0 ]; then
-            tail -n 40 /tmp/eng.log | while IFS= read -r line; do echo "::error::$line"; done
+            tail -n 10 /tmp/eng.log | while IFS= read -r line; do echo "::error::$line"; done
             exit "${CODE:-1}"
           fi
-          mkdir -p tauri/app/src-tauri/resources/engine
-          cp desktopApp/engine/frpc* tauri/app/src-tauri/resources/engine/
-          cp desktopApp/engine/VERSION tauri/app/src-tauri/resources/engine/
+          mkdir -p tauri/app/src-tauri/resources/engine || { echo "::error::mkdir resources/engine failed"; exit 1; }
+          cp desktopApp/engine/frpc* tauri/app/src-tauri/resources/engine/ || { echo "::error::cp frpc* failed"; ls -la desktopApp/engine >&2 || true; exit 1; }
+          cp desktopApp/engine/VERSION tauri/app/src-tauri/resources/engine/ || { echo "::error::cp VERSION failed"; exit 1; }
           ls -la tauri/app/src-tauri/resources/engine/
 
       - name: Build UI (vue-tsc + vite)
@@ -180,7 +180,7 @@ jobs:
           set -o pipefail
           ui/node_modules/.bin/tauri android build --apk --target aarch64 2>&1 | tee /tmp/apk.log || CODE=$?
           if [ "${CODE:-0}" -ne 0 ]; then
-            tail -n 40 /tmp/apk.log | while IFS= read -r line; do echo "::error::$line"; done
+            tail -n 10 /tmp/apk.log | while IFS= read -r line; do echo "::error::$line"; done
             exit "${CODE:-1}"
           fi
 
