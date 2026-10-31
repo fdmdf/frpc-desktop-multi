@@ -2,7 +2,9 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover：让布局视口铺满整块屏幕（Android 15 起强制 edge-to-edge），
+         系统栏避让由原生侧 MainActivity 补 padding，不依赖 WebView 的 env(safe-area-*) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>frpc-desktop-multi</title>
   </head>
   <body>

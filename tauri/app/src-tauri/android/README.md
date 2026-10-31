@@ -13,6 +13,10 @@
   （`lib.rs::android_native_lib_dir`），数据目录用 `app_data_dir`（`state.rs::AppPaths::android`）。
 - **桌面专属功能**（托盘 / 单实例 / 开机自启插件）已用 `#[cfg(desktop)]` 门控，
   Android 构建不编译。
+- **系统栏避让**：`MainActivity.kt`（本目录，由 setup 脚本复制进 `gen/android`）在
+  `enableEdgeToEdge()` 之后按系统栏 / 刘海高度给 `android.R.id.content` 补 padding。
+  Android 15 起强制 edge-to-edge，不补的话顶部标题会被状态栏压住、底部导航被手势条
+  咬掉；WebView 的 `env(safe-area-inset-*)` 依赖系统 WebView 版本，不能替代这一步。
 
 ## 本机构建步骤（已验证）
 

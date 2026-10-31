@@ -167,6 +167,21 @@ body {
   max-width: 960px;
 }
 
+/* 全页编辑器（配置页）：顶部「返回 / 保存」条吸顶 —— 编辑器表单很长，
+   滚动到代理规则时按钮跑没了，只能滚回顶部才能保存 */
+.editor-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.editor-root > div:first-child {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--surface);
+}
+
 /* 固定宽度的下拉/输入（桌面端保持固定，窄屏整行显示） */
 .fixed-field {
   width: 280px;
@@ -600,6 +615,8 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
+    /* 安全区由原生侧补（android/MainActivity.kt 给内容视图加系统栏 padding）：
+       Android WebView 的 env(safe-area-inset-*) 不可靠，这里只用固定值，避免双重内边距 */
     padding: 10px 14px;
     background: var(--surface);
     border-bottom: 0.5px solid var(--border);
@@ -626,7 +643,7 @@ body {
     width: auto;
     flex-direction: row;
     gap: 0;
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 4px;
     border-right: none;
     border-top: 0.5px solid var(--border);
     box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.06);

@@ -71,7 +71,14 @@ const onlineSummary = computed(() => {
   return totalCount > 0 ? `${online}/${totalCount}` : "--";
 });
 
-const copied = ref("");
+// 轻提示（复制结果 / 开关操作失败），底部居中显示
+const toastMsg = ref("");
+let toastTimer: number | undefined;
+function toast(text: string) {
+  toastMsg.value = text;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => (toastMsg.value = ""), 2600);
+}
 
 /// 可复制的真实访问地址；拿不到（随机端口 / 私密代理 / 还没上线）时返回 null
 function copyableAddr(proxy: (typeof proxies.value)[number]): string | null {
@@ -94,13 +101,25 @@ function visitorAddr(visitor: (typeof visitors.value)[number]): string | null {
 async function copyRemote(text: string | null) {
   if (!text) return;
   try {
-    if (!navigator.clipboard) throw new Error("clipboard 不可用");
+    if (!navigator.clipboard) throw new Error("剪贴板不可用");
     await navigator.clipboard.writeText(text);
-    copied.value = `已复制 ${text}`;
+    toast(`已复制 ${text}`);
   } catch {
-    copied.value = `复制失败，可手动复制：${text}`;
+    toast(`复制失败，可手动复制：${text}`);
   }
-  setTimeout(() => (copied.value = ""), 2500);
+}
+
+/// 开关入口：保存失败要把 checkbox 拨回去 —— `:checked` 的绑定值没变时 Vue 不会再写
+/// DOM，只看界面会以为"开关开了但状态还是禁用"。
+async function onToggle(name: string, visitor: boolean, e: Event) {
+  const input = e.target as HTMLInputElement;
+  const next = input.checked;
+  try {
+    await toggleEnabled(name, next, visitor);
+  } catch (err) {
+    input.checked = !next;
+    toast(String(err).replace(/^Error:\s*/, ""));
+  }
 }
 
 async function toggleEnabled(name: string, enabled: boolean, visitor: boolean) {
@@ -311,9 +330,15 @@ const uptime = computed(() =>
     <template v-if="proxies.length">
       <div style="display: flex; align-items: center; justify-content: space-between">
         <h3 class="page-title" style="font-size: 16px; color: var(--brand); margin: 4px 0 0">
-          代理规则（{{ enabledProxies.length }}）
+          代理规则（{{ proxies.length }}）<span
+            v-if="proxies.length !== enabledProxies.length"
+            class="muted small"
+            style="font-weight: 400"
+          >
+            · {{ enabledProxies.length }} 条启用，{{ proxies.length - enabledProxies.length }} 条禁用
+          </span>
         </h3>
-        <span v-if="!isAndroid && copied" class="muted small">{{ copied }}</span>
+        <span v-if="!isAndroid && toastMsg" class="muted small">{{ toastMsg }}</span>
       </div>
 
       <div v-for="proxy in proxies" :key="proxy.name" class="section-card">
@@ -348,7 +373,7 @@ const uptime = computed(() =>
             <input
               type="checkbox"
               :checked="proxy.enabled !== false"
-              @change="toggleEnabled(proxy.name, ($event.target as HTMLInputElement).checked, false)"
+              @change="onToggle(proxy.name, false, $event)"
             />
             <span class="track"></span><span class="thumb"></span>
           </label>
@@ -411,7 +436,7 @@ const uptime = computed(() =>
             <input
               type="checkbox"
               :checked="visitor.enabled !== false"
-              @change="toggleEnabled(visitor.name, ($event.target as HTMLInputElement).checked, true)"
+              @change="onToggle(visitor.name, true, $event)"
             />
             <span class="track"></span><span class="thumb"></span>
           </label>
@@ -422,7 +447,7 @@ const uptime = computed(() =>
     <div style="height: 8px"></div>
 
     <!-- 复制结果提示：放在底部固定层，任何位置点了复制都看得见 -->
-    <div v-if="copied" class="toast">{{ copied }}</div>
+    <div v-if="toastMsg" class="toast">{{ toastMsg }}</div>
 
     <div v-if="switchTargetId" class="modal-mask" @click.self="switchTargetId = ''">
       <div class="modal" style="width: 480px">

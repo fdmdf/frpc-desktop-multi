@@ -162,6 +162,16 @@ for folder in os.listdir(icons_android):
             shutil.copy2(os.path.join(src, name), os.path.join(dst, name))
             copied += 1
 print("icons copied into res: %d files (from %s)" % (copied, icons_android))
+
+# ---- 6) MainActivity：补系统栏内边距（Android 15 强制 edge-to-edge，否则标题被状态栏压住）
+#        模板只调 enableEdgeToEdge()，WebView 会画到状态栏/手势条底下；
+#        WebView 的 env(safe-area-inset-*) 不可靠，改在原生侧补 padding。
+activity_dir = os.path.join(gen, "app", "src", "main", "java", "io", "github", "fdmdf", "frpc")
+activity_src = os.path.join(os.path.dirname(os.path.dirname(gen)), "android", "MainActivity.kt")
+activity_dst = os.path.join(activity_dir, "MainActivity.kt")
+os.makedirs(activity_dir, exist_ok=True)
+shutil.copy2(activity_src, activity_dst)
+print("MainActivity.kt installed (edge-to-edge insets padding)")
 PYEOF
 
 echo "==> 写 local.properties（SDK 路径，仅 Windows Git Bash 需要）"

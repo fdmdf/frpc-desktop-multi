@@ -1,9 +1,12 @@
 //! 进程资源指标：CPU / 内存 / 线程 / 状态采样。
 //!
 //! Kotlin 来源：`desktopApp/.../runtime/ProcessMetrics.kt`（逐分支对译）。
-//! 平台分支：Linux 读 `/proc`；Windows 走 PowerShell `Get-CimInstance`；
+//! 平台分支：Linux / Android 读 `/proc`；Windows 走 PowerShell `Get-CimInstance`；
 //! 其余平台（macOS）返回 `None` —— 与 Kotlin 行为一致（macOS 上原本就是 null）。
 //! CPU 百分比按 `delta / (elapsed × cores) × 100` 归一，钳制 0..100。
+//!
+//! 注意：Android 的 `target_os` 是 `android` 而不是 `linux`，早期只在 linux 分支读
+//! `/proc`，导致移动端指标恒为 null —— 现在两个平台共用 `read_proc`。
 
 use serde::{Deserialize, Serialize};
 
@@ -116,18 +119,18 @@ fn read_raw(pid: i64) -> Option<Raw> {
     {
         read_windows(pid)
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         read_proc(pid)
     }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "android")))]
     {
         let _ = pid;
         None
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn read_proc(pid: i64) -> Option<Raw> {
     let stat_text = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
     let tail = stat_text.rsplit(')').next()?.trim_start().to_string();
@@ -148,16 +151,31 @@ fn read_proc(pid: i64) -> Option<Raw> {
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(0);
     let threads = cols.get(17).and_then(|s| s.parse::<i32>().ok());
-    let pages = std::fs::read_to_string(format!("/proc/{pid}/statm"))
-        .ok()
-        .and_then(|s| s.split(' ').nth(1).and_then(|p| p.parse::<i64>().ok()))
-        .unwrap_or(0);
     Some(Raw {
         cpu100ns: Some((utime + stime) * 100_000),
-        rss_kb: Some(pages * 4),
+        rss_kb: read_rss_kb(pid),
         threads,
         state,
     })
+}
+
+/// RSS（kB）：优先 `/proc/pid/status` 的 VmRSS（准确），不可读时回退
+/// `/proc/pid/statm` 的 resident 页数 × 4KB。
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn read_rss_kb(pid: i64) -> Option<i64> {
+    if let Ok(status) = std::fs::read_to_string(format!("/proc/{pid}/status")) {
+        for line in status.lines() {
+            if let Some(rest) = line.strip_prefix("VmRSS:") {
+                if let Ok(kb) = rest.split_whitespace().next().unwrap_or("").parse::<i64>() {
+                    return Some(kb);
+                }
+            }
+        }
+    }
+    std::fs::read_to_string(format!("/proc/{pid}/statm"))
+        .ok()
+        .and_then(|s| s.split(' ').nth(1).and_then(|p| p.parse::<i64>().ok()))
+        .map(|pages| pages * 4)
 }
 
 #[cfg(target_os = "windows")]

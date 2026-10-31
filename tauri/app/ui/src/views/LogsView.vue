@@ -31,6 +31,10 @@ async function scrollBottom() {
   listEl.value?.scrollTo({ top: listEl.value.scrollHeight });
 }
 watch(filtered, scrollBottom, { immediate: true });
+// 重新打开「自动滚动」时立刻跳到底部，否则要等下一条日志才有反应
+watch(autoScroll, (on) => {
+  if (on) void scrollBottom();
+});
 
 const levelColor = (lv: string) =>
   lv === "ERROR"
