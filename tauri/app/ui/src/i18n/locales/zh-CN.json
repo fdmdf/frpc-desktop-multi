@@ -1,0 +1,6 @@
+{
+  "app": { "title": "Frpc 内网穿透" },
+  "nav": { "home": "主页", "monitor": "监控", "logs": "日志", "profiles": "配置", "settings": "设置" },
+  "engine": { "running": "运行中", "idle": "未启动" },
+  "stub": { "m2": "该页面在 M2 实现（迁移方案里程碑 M2）。" }
+}

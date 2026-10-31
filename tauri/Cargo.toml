@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = ["crates/frpc-core", "app/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/fdmdf/frpc-desktop-multi"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# 序列化 / 编解码
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml_edit = "0.22" # 无损往返：保留注释与未建模字段（旧版 Kotlin 实现会忽略）
+# 异步 / 进程监管（M1 启用）
+tokio = { version = "1", features = ["process", "macros", "rt-multi-thread", "time", "sync"] }
+# HTTP（admin API，M1 启用）
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# 系统指标（M1 启用，替代 desktopApp 手读 /proc 的平台分支）
+sysinfo = "0.33"
+# 通用
+thiserror = "2"
+tracing = "0.1"
+
+# 体积优先：安装包目标 ≤ 15MB（docs/tauri-migration-plan.md 第 8 节）
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -1,0 +1,18 @@
+[package]
+name = "frpc-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "frpc 客户端核心逻辑：模型 / TOML 编解码 / 校验 / admin API / 进程监管 / 指标 / 日志"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+toml_edit.workspace = true
+tokio.workspace = true
+# M1 启用：admin API 与进程指标
+# reqwest.workspace = true
+# sysinfo.workspace = true

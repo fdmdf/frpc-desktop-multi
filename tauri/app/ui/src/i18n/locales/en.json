@@ -1,0 +1,6 @@
+{
+  "app": { "title": "Frpc Tunnel Client" },
+  "nav": { "home": "Home", "monitor": "Monitor", "logs": "Logs", "profiles": "Profiles", "settings": "Settings" },
+  "engine": { "running": "Running", "idle": "Idle" },
+  "stub": { "m2": "This page lands in milestone M2." }
+}

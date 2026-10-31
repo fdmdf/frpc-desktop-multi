@@ -1,0 +1,111 @@
+/* 轻量基础样式：亮色主题，M2 引入完整设计变量（对齐桌面端 Theme.kt 配色） */
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --border: rgba(0, 0, 0, 0.12);
+  --text: #26251f;
+  --text-2: #6f6e66;
+  --accent: #0f6e56;
+  --accent-soft: #e1f5ee;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.shell {
+  display: flex;
+  height: 100%;
+}
+
+.sidebar {
+  width: 200px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  background: var(--surface);
+  border-right: 0.5px solid var(--border);
+}
+
+.brand {
+  margin: 0 8px 16px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-item {
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+.nav-item:hover {
+  background: var(--bg);
+}
+
+.nav-item.router-link-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.engine-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.engine-dot.on {
+  background: var(--accent);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 20px 24px;
+  overflow: auto;
+}
+
+.view h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.view .hint {
+  margin: 0;
+  color: var(--text-2);
+}
