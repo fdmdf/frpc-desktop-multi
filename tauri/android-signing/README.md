@@ -40,24 +40,44 @@ keytool -list -v -keystore tauri/android-signing/release.keystore \
   -storepass frpc-desktop-multi -alias frpc | grep SHA256
 ```
 
-## 换成自己的密钥（推荐用于正式分发）
+## 唯一来源：仓库里的这个文件
 
-CI 优先读这几个 secret，存在时**完全忽略**仓库内的密钥：
+CI 的签名步骤**只认** `tauri/android-signing/release.keystore`：
 
-| Secret | 说明 |
+- 不读 secrets，不读环境变量，不自动生成；
+- 文件不存在 → 步骤直接失败（`::error::签名密钥缺失`），不打 unsigned 包冒充 release；
+- 签名前用 `keytool -list -v` 校验指纹必须等于下面这个 `EXPECTED_SHA256`，
+  签名后再用 `apksigner verify --print-certs` 复核产物证书，两次任一不符都失败。
+
+这样「发出去的包签名一定一致」是构建约束，而不是靠人记得。
+
+| 校验点 | 位置 |
 | --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | keystore 的 base64：`base64 -w0 my.keystore` |
-| `ANDROID_KEYSTORE_PASSWORD` | 库口令，缺省 `frpc-desktop-multi` |
-| `ANDROID_KEY_ALIAS` | 别名，缺省 `frpc` |
+| `EXPECTED_SHA256`（期望值常量） | `.github/workflows/tauri.yml` 的 `Sign APK` 步骤 |
 
-webhook 里私钥口令与库口令一致，所以只需要一个密码 secret；想分开就再加
-`ANDROID_KEY_PASSWORD`。
+## 更换密钥（例如密钥泄露）
+
+1. 生成新 keystore，替换 `release.keystore`：
+
+   ```bash
+   keytool -genkeypair -v -keystore tauri/android-signing/release.keystore \
+     -alias frpc -keyalg RSA -keysize 2048 -validity 10950 \
+     -storepass frpc-desktop-multi -keypass frpc-desktop-multi \
+     -dname "CN=frpc-desktop-multi, O=fdmdf, C=CN"
+   ```
+
+2. 把 `keytool -list -v` 里的 `SHA256:` 那行同步到 workflow 的 `EXPECTED_SHA256`
+   （不改这一步，CI 会**拒绝出包**——这是故意的）。
+3. 更新本 README 的参数表。
+
+⚠️ **换密钥那一刻，所有用户都必须卸载重装一次**，没有例外。
 
 ## 已知代价
 
 密钥公开意味着别人也能签出「能被本 App 覆盖安装」的包。对本项目（个人开源、不上架
-应用商店、APK 直接挂在 Release）可以接受；一旦要上架或分发到不受控渠道，请换成上面的
-secrets 方案，并把新密钥妥善备份 —— **换密钥那一刻，所有用户都必须卸载重装一次**。
+应用商店、APK 直接挂在 Release）可以接受；一旦要上架或分发到不受控渠道，就该把密钥
+移出仓库、改走私有分发流程 —— 但那样也必须**同时**保持指纹固定，且同步改
+`EXPECTED_SHA256`，否则等于回到「签名不一致」的老问题。
 
 ## 升级到固定密钥的这一次
 

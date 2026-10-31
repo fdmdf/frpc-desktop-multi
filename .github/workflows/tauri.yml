@@ -192,11 +192,6 @@ jobs:
           fi
 
       - name: Sign APK
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
           BT="$ANDROID_HOME/build-tools/34.0.0"
@@ -216,22 +211,39 @@ jobs:
           # 签名密钥必须**跨构建固定**，否则每个版本签名不同，覆盖安装报
           # INSTALL_FAILED_UPDATE_INCOMPATIBLE。历史实现每次 keytool -genkeypair
           # 现生成一把临时的，就是「每次安装都提示签名不对」的根因。
-          # 优先用 secret（换成自己的密钥时），否则用仓库内的固定密钥。
-          KS="$RUNNER_TEMP/release.keystore"
-          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
-            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KS"
-            KS_PASS="${ANDROID_KEYSTORE_PASSWORD:-frpc-desktop-multi}"
-            KEY_PASS="${ANDROID_KEY_PASSWORD:-$KS_PASS}"
-            KEY_ALIAS="${ANDROID_KEY_ALIAS:-frpc}"
-            echo "signing key: secret ANDROID_KEYSTORE_BASE64"
-          else
-            KS="tauri/android-signing/release.keystore"
-            test -f "$KS"
-            KS_PASS="frpc-desktop-multi"
-            KEY_PASS="frpc-desktop-multi"
-            KEY_ALIAS="frpc"
-            echo "signing key: committed tauri/android-signing/release.keystore"
+          #
+          # 唯一来源：仓库内的固定密钥。不接受 secrets、不接受环境变量、
+          # 不自动生成 —— 文件缺失或指纹不符一律**直接失败**，宁可打不出包，
+          # 也不能悄悄发一个签名不同的 APK 出去。
+          KS="tauri/android-signing/release.keystore"
+          KS_PASS="frpc-desktop-multi"
+          KEY_PASS="frpc-desktop-multi"
+          KEY_ALIAS="frpc"
+          # 仓库密钥的证书指纹（keytool -list -v 里那一行），换密钥时必须同步改这里
+          EXPECTED_SHA256="E2:D0:7C:A1:12:B8:BF:D8:F3:09:AA:AD:72:B4:1A:E2:8A:6B:FA:2B:42:D1:4E:9F:0C:07:86:92:91:5E:4A:02"
+
+          if [ ! -f "$KS" ]; then
+            echo "::error file=$KS::签名密钥缺失。安卓签名只认 $KS，仓库里没有这个文件就打不出可覆盖升级的包。见 tauri/android-signing/README.md"
+            exit 1
           fi
+          if command -v keytool >/dev/null 2>&1; then KT=keytool; else KT="$JAVA_HOME/bin/keytool"; fi
+          # `|| true`：密码/alias 不对时 keytool 退出码非 0，配合 pipefail + set -e
+          # 会直接中断脚本，下面的友好提示就没机会打印了
+          REAL_SHA256="$("$KT" -list -v -keystore "$KS" \
+            -alias "$KEY_ALIAS" -storepass "$KS_PASS" 2>/dev/null \
+            | sed -n 's/^[[:space:]]*SHA256: //p' | head -n 1 || true)"
+          if [ -z "$REAL_SHA256" ]; then
+            echo "::error file=$KS::读不出证书指纹。密钥文件损坏，或 alias/密码与 tauri/android-signing/README.md 不一致"
+            exit 1
+          fi
+          if [ "$REAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "::error file=$KS::签名密钥指纹不符，拒绝出包。"
+            echo "  期望: $EXPECTED_SHA256"
+            echo "  实际: $REAL_SHA256"
+            echo "  覆盖安装会报「签名不一致」。若确属更换密钥，请同步更新本步骤的 EXPECTED_SHA256。"
+            exit 1
+          fi
+          echo "signing key: $KS ($REAL_SHA256)"
 
           "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
           "$BT/apksigner" sign --ks "$KS" --ks-pass "pass:$KS_PASS" \
@@ -239,12 +251,22 @@ jobs:
             --out "$APK" "$RUNNER_TEMP/aligned.apk"
           "$BT/apksigner" verify --print-certs "$APK" | tee "$RUNNER_TEMP/certs.txt"
 
+          # 出包后再核对一次：产物证书必须就是仓库密钥那把，否则不出包
+          SIGNED_SHA256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt" | head -n 1)"
+          if [ "$(printf '%s' "$SIGNED_SHA256" | tr -d ':' | tr 'A-Z' 'a-z')" != \
+               "$(printf '%s' "$EXPECTED_SHA256" | tr -d ':' | tr 'A-Z' 'a-z')" ]; then
+            echo "::error::签名后的 APK 指纹与仓库密钥不一致（实际 ${SIGNED_SHA256:-<空>}），拒绝上传"
+            exit 1
+          fi
+          echo "signed apk cert: $SIGNED_SHA256"
+
           # 把证书指纹写进 job summary：出问题时一眼看出签名有没有被换掉
           {
             echo "### APK 签名证书"
             echo '```'
             grep -E "Signer #1 certificate (DN|SHA-256)" "$RUNNER_TEMP/certs.txt" || true
             echo '```'
+            echo "签名密钥：\`$KS\`（仓库固定，无 secrets 回退）"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK artifact

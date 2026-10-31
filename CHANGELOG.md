@@ -163,9 +163,9 @@
   被系统拒绝（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。实测两个版本的证书指纹确实不同：
   v1.4.6 `06282f3e…`、v1.4.7 `1d64bc6e…`。
 
-  现在固定为仓库内的 `tauri/android-signing/release.keystore`（参数、指纹与代价见该目录
-  README）。CI 优先读 `ANDROID_KEYSTORE_BASE64` 等 secrets，没配才用仓库密钥，并把证书
-  指纹写进 job summary —— 以后签名被换掉一眼就能看见。
+  现在固定为仓库内的 `tauri/android-signing/release.keystore`，且它是**唯一来源**：CI 不读
+  secrets、不读环境变量、不自动生成；文件缺失直接构建失败，签名前的 keystore 指纹与签名
+  后的产物证书指纹各校验一次，任一不符即拒绝出包。参数与更换流程见该目录 README。
 
   ⚠️ 历史版本每版都是随机密钥，与本密钥对不上，**v1.4.8 必须卸载重装一次**；
   从这一版起才能正常覆盖升级。卸载会清空应用数据，要保留配置请先「导出全部配置」。
