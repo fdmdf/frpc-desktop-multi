@@ -34,9 +34,13 @@ jobs:
         run: |
           cargo fmt --all --manifest-path tauri/Cargo.toml -- --check 2>&1 | tee /tmp/fmt.log || CODE=$?
           if [ "${CODE:-0}" -ne 0 ]; then
-            rustfmt --version
-            tail -c 1500 /tmp/fmt.log | tr '\n' '\001' | sed 's/\x01/%0A/g' >&2
-            echo "::error::rustfmt diff detected (see above)"
+            rustfmt --version || true
+            tail -c 4000 /tmp/fmt.log | head -c 4000
+            cp /tmp/fmt.log "$GITHUB_WORKSPACE/ci-log-fmt.txt"
+            cd "$GITHUB_WORKSPACE"
+            git config user.email ci@local && git config user.name ci-log
+            git add -f ci-log-fmt.txt && git commit -m "ci: log fmt [skip ci]" && git push || true
+            echo "::error::rustfmt diff (full log in ci-log-fmt.txt on branch)"
             exit "${CODE:-1}"
           fi
       - name: Test frpc-core
@@ -90,8 +94,12 @@ jobs:
           set -o pipefail
           bash scripts/build-frpc.sh desktop 2>&1 | tee /tmp/eng.log || CODE=$?
           if [ "${CODE:-0}" -ne 0 ]; then
-            tail -c 1500 /tmp/eng.log | tr '\n' '\001' | sed 's/\x01/%0A/g' >&2
-            echo "::error::engine build failed (see above)"
+            tail -c 4000 /tmp/eng.log
+            cp /tmp/eng.log "$GITHUB_WORKSPACE/ci-log-eng-windows.txt"
+            cd "$GITHUB_WORKSPACE"
+            git config user.email ci@local && git config user.name ci-log
+            git add -f ci-log-eng-windows.txt && git commit -m "ci: log eng [skip ci]" && git push || true
+            echo "::error::engine build failed (full log in ci-log-eng-windows.txt on branch)"
             exit "${CODE:-1}"
           fi
           mkdir -p tauri/app/src-tauri/resources/engine
@@ -183,8 +191,12 @@ jobs:
           set -o pipefail
           ui/node_modules/.bin/tauri android build --apk --target aarch64 2>&1 | tee /tmp/apk.log || CODE=$?
           if [ "${CODE:-0}" -ne 0 ]; then
-            tail -c 1500 /tmp/apk.log | tr '\n' '\001' | sed 's/\x01/%0A/g' >&2
-            echo "::error::android build failed (see above)"
+            tail -c 6000 /tmp/apk.log
+            cp /tmp/apk.log "$GITHUB_WORKSPACE/ci-log-android.txt"
+            cd "$GITHUB_WORKSPACE"
+            git config user.email ci@local && git config user.name ci-log
+            git add -f ci-log-android.txt && git commit -m "ci: log android [skip ci]" && git push || true
+            echo "::error::android build failed (full log in ci-log-android.txt on branch)"
             exit "${CODE:-1}"
           fi
 
