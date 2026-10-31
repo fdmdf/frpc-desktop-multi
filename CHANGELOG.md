@@ -165,16 +165,11 @@
 
   改为蒙版绘制：先填外半圆（半径 106+17）再挖内圆（半径 106-17），等价于居中描边，与
   `icon.svg` 逐像素对齐；竖腿用矩形 + 圆头补齐。同时把旧版位图（`ic_launcher.png` /
-  `ic_launcher_round.png`，API 24/25 与部分第三方启动器直接使用）也纳入脚本统一生成，
-  不再依赖 `tauri icon` 的出厂产物。
+  `ic_launcher_round.png`，API 24/25 直接使用）也纳入脚本统一生成，不再依赖
+  `tauri icon` 的出厂产物。
 
-- **`roundIcon` 缺自适应版本，圆形图标启动器显示的是非自适应大图**
-
-  `AndroidManifest` 的 `android:roundIcon` 指向 `@mipmap/ic_launcher_round`，但只做了
-  `mipmap-anydpi-v26/ic_launcher.xml`。用圆形图标的启动器在 8+ 上找不到自适应版本，
-  会回退到旧版位图 PNG —— 于是「方形图标」的启动器（自适应，遮罩内缩）和「圆形图标」的
-  启动器（旧位图，满幅）显示成两种完全不同的样子。现在补上
-  `mipmap-anydpi-v26/ic_launcher_round.xml` 与 `mipmap-anydpi-v33/ic_launcher_round.xml`。
+  启动器图标和「下载列表里的 APK 图标」是同一个自适应图标渲染出来的，桌面图标画错了，
+  两处就一起错 —— 这是同一处根因，不是两个问题。
 
 - **「内置版本」永远显示 unknown（Android）**
 
@@ -199,6 +194,25 @@
   现在卡片拆成「文本块（自适应）+ 操作按钮组（固定宽）」，窄屏时按钮整组换到下一行靠右；
   每条元信息（地址 / 代理数 / 访问者数）单独成段且不拆行，换行只发生在「·」分隔处；
   工具行里搜索框独占一行，导出 / 导入 / 清空按钮排到下一行。桌面端仍是单行卡片。
+
+### 验证
+
+- 从 v1.4.6 成品 APK 里取出 `mipmap/ic_launcher_foreground`（xxxhdpi；AGP 会混淆 res
+  文件名，实际是 `res/as.png`）：内容宽 216/432 = **50.0%**、高 211px（与 240/246 的
+  字形比例一致）、中心偏移 0；叠背景后与 `icons/icon.png` 并排比对，拱门粗细、开口、
+  竖腿衔接一致，圆形与方圆角遮罩下均零裁切。
+- 顺带查了 APK 的资源表与清单：只有 `android:icon`，没有 `android:roundIcon`，
+  `mipmap/ic_launcher_round` 根本不在包里（未引用资源被 release 压缩剥掉）。
+  所以「圆形图标的启动器」和「方形图标的启动器」用的是同一份自适应图标，
+  不存在两套图标的问题 —— 上一轮我把它当成两个独立问题，属误判，这里更正。
+- 配置列表：Edge headless 在 390px 视口实测 `clientWidth = bodyScrollWidth = 390`
+  （无横向溢出），卡片 366px、按钮组整组换行右对齐。
+
+### 已知问题
+
+- macOS arm64 的 dmg 连续第五次在分配 runner 之前被平台取消（`started_at` 与
+  `completed_at` 同一秒、`runner_name` 为空、0 个 step），与代码无关；本轮 release
+  仍无 dmg，需要平台侧排查或改用自托管 runner。
 
 ## [1.4.5] - 2026-11-01
 

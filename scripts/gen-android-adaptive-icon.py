@@ -211,6 +211,13 @@ def write_foreground() -> None:
 
 
 def write_legacy() -> None:
+    """旧版位图 `ic_launcher.png`（圆角方）与 `ic_launcher_round.png`（圆形）。
+
+    这两张是 `tauri icon` 的出厂产物，API 24/25（minSdk 24）会直接当图标用；
+    当前清单没有声明 `android:roundIcon`，所以 `_round` 那张在 release 包里会被
+    资源压缩剥掉，但保留在 `icons/android/` 里与其余密度保持一致，将来若声明
+    roundIcon 也不至于拿到上一版几何。
+    """
     for folder, size in LEGACY_SIZES.items():
         for name, circle in (("ic_launcher.png", False), ("ic_launcher_round.png", True)):
             out = os.path.join(ICONS, folder, name)
@@ -235,28 +242,27 @@ def write_background() -> None:
 
 
 def write_adaptive_xml() -> None:
-    """anydpi-v26 / anydpi-v33 的 ic_launcher **和 ic_launcher_round**。
+    """写 anydpi-v26 / anydpi-v33 的 `ic_launcher.xml`。
 
-    缺 ic_launcher_round.xml 是另一个坑：AndroidManifest 的 `android:roundIcon`
-    指向 @mipmap/ic_launcher_round，8+ 找不到自适应版本就会回退到旧版位图
-    PNG —— 于是「用圆形图标的启动器」显示的是非自适应的大方块，
-    和「方形图标」的启动器显示的样式完全不一致。
+    只写 `ic_launcher`：Tauri 模板的 AndroidManifest 只声明 `android:icon`，
+    没有 `android:roundIcon` —— 用 aapt2 查过成品 APK 的资源表，里面根本不存在
+    `mipmap/ic_launcher_round`（未引用的图标会被 release 的资源压缩直接剥掉）。
+    所以不要再补 `ic_launcher_round.xml`，那只是打包时被裁掉的死资源。
     """
     for folder, mono in (("mipmap-anydpi-v26", False), ("mipmap-anydpi-v33", True)):
         out_dir = os.path.join(ICONS, folder)
         os.makedirs(out_dir, exist_ok=True)
-        for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
-            path = os.path.join(out_dir, name)
-            with open(path, "w", encoding="utf-8", newline="\n") as f:
-                f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-                f.write('<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n')
-                f.write('  <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n')
-                f.write('  <background android:drawable="@color/ic_launcher_background"/>\n')
-                if mono:
-                    # Android 13+ 主题图标：前景本身是「纯白 + alpha」，系统按 alpha 着色
-                    f.write('  <monochrome android:drawable="@mipmap/ic_launcher_foreground"/>\n')
-                f.write("</adaptive-icon>\n")
-            print("adaptive  ", path)
+        path = os.path.join(out_dir, "ic_launcher.xml")
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+            f.write('<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n')
+            f.write('  <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n')
+            f.write('  <background android:drawable="@color/ic_launcher_background"/>\n')
+            if mono:
+                # Android 13+ 主题图标：前景本身是「纯白 + alpha」，系统按 alpha 着色
+                f.write('  <monochrome android:drawable="@mipmap/ic_launcher_foreground"/>\n')
+            f.write("</adaptive-icon>\n")
+        print("adaptive  ", path)
 
 
 def verify_ratios() -> None:
