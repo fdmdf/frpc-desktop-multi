@@ -194,7 +194,11 @@ jobs:
         run: |
           set -euo pipefail
           BT="$ANDROID_HOME/build-tools/34.0.0"
-          UNSIGNED="tauri/app/src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk"
+          # CLI 打的是 universal flavor（产物目录随 flavor 变化），这里按实际产物定位，
+          # 不再写死 arm64 目录
+          UNSIGNED="$(find tauri/app/src-tauri/gen/android/app/build/outputs/apk \
+            -name '*-release-unsigned.apk' -print -quit)"
+          echo "unsigned apk: $UNSIGNED"
           test -f "$UNSIGNED"
           KS="$RUNNER_TEMP/release.keystore"
           keytool -genkeypair -v -keystore "$KS" -alias frpc -keyalg RSA -keysize 2048 \

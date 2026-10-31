@@ -37,6 +37,14 @@ if "ndkVersion" not in s:
         '        ndkVersion = "%s"\n        minSdk = 24' % ndk_ver,
         1,
     )
+if "abiFilters" not in s:
+    # 只打 arm64：Rust 侧本次只编 aarch64，留着 x86_64 引擎会让 APK 多出约 7MB，
+    # 且 x86_64 设备上只有引擎、没有 libfrpc_app_lib.so，装上运行即崩。
+    s = s.replace(
+        "        minSdk = 24",
+        '        minSdk = 24\n        ndk { abiFilters += listOf("arm64-v8a") }',
+        1,
+    )
 if "useLegacyPackaging" not in s:
     s = re.sub(
         r"            packaging \{\n(                jniLibs\.keepDebugSymbols\.add\([^)]*\)\n)+",
