@@ -162,12 +162,16 @@ fn read_proc(pid: i64) -> Option<Raw> {
 
 #[cfg(target_os = "windows")]
 fn read_windows(pid: i64) -> Option<Raw> {
+    use std::os::windows::process::CommandExt;
     let script = format!(
         "(Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\" | \
          Select-Object KernelModeTime,UserModeTime,WorkingSetSize,ThreadCount | ConvertTo-Json -Compress)"
     );
+    // CREATE_NO_WINDOW：避免从 GUI 主进程拉起 PowerShell 时弹出控制台窗口
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let output = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&output.stdout).trim().to_string();

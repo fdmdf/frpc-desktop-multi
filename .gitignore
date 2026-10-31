@@ -58,5 +58,7 @@ desktopApp/src/main/resources/icon/
 tauri/target/
 tauri/app/src-tauri/target/
 tauri/app/src-tauri/gen/schemas/
+# Android 生成工程（scripts/tauri-android-setup.sh 可一键重建，含镜像/jniLibs 注入）
+tauri/app/src-tauri/gen/
 tauri/app/src-tauri/resources/engine/
 tauri/app/ui/node_modules/

@@ -307,8 +307,9 @@ pub fn open_path(path: String) -> Result<(), String> {
 pub fn open_url_inner(url: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", url])
+        // explorer 会用默认浏览器打开 URL 且不弹控制台窗口（cmd /c start 会闪 CMD）
+        std::process::Command::new("explorer")
+            .arg(url)
             .spawn()
             .map_err(|e| e.to_string())?;
         Ok(())

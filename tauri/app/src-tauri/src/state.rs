@@ -20,6 +20,9 @@ pub struct AppPaths {
     pub run_dir: PathBuf,
     pub logs_dir: PathBuf,
     pub engine_file_name: String,
+    /// Android：引擎所在的原生库目录（nativeLibraryDir，可执行）。
+    /// 桌面端为 None（引擎在 bin_dir，随包资源解包）。
+    pub engine_dir: Option<PathBuf>,
     pub is_windows: bool,
 }
 
@@ -55,8 +58,27 @@ impl AppPaths {
             } else {
                 "frpc".into()
             },
+            engine_dir: None,
             home,
             is_windows,
+        }
+    }
+
+    /// Android：数据目录用应用 files 目录（`app_data_dir`），
+    /// 引擎固定为 jniLibs 打包的 `libfrpc.so`（落在 nativeLibraryDir，可执行）。
+    #[cfg(target_os = "android")]
+    pub fn android(data_dir: PathBuf, native_lib_dir: PathBuf) -> Self {
+        let _ = std::fs::create_dir_all(&data_dir);
+        Self {
+            bin_dir: data_dir.join("bin"),
+            logs_dir: data_dir.join("logs"),
+            profiles_file: data_dir.join("profiles.json"),
+            run_dir: data_dir.join("run"),
+            settings_file: data_dir.join("settings.json"),
+            engine_file_name: "libfrpc.so".into(),
+            engine_dir: Some(native_lib_dir),
+            home: data_dir,
+            is_windows: false,
         }
     }
 
@@ -77,14 +99,22 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(supervisor: Supervisor) -> Self {
-        let paths = AppPaths::resolve();
+        Self::new_with_paths(AppPaths::resolve(), supervisor)
+    }
+
+    pub fn new_with_paths(paths: AppPaths, supervisor: Supervisor) -> Self {
         for dir in [&paths.bin_dir, &paths.run_dir, &paths.logs_dir] {
             let _ = std::fs::create_dir_all(dir);
         }
         let profiles = load_profiles(&paths.profiles_file);
         let settings = load_settings(&paths.settings_file);
+        let engine_default = paths
+            .engine_dir
+            .as_ref()
+            .map(|d| d.join(&paths.engine_file_name))
+            .unwrap_or_else(|| paths.bin_dir.join(&paths.engine_file_name));
         Self {
-            engine_path: RwLock::new(paths.bin_dir.join(&paths.engine_file_name)),
+            engine_path: RwLock::new(engine_default),
             paths,
             profiles: RwLock::new(profiles),
             settings: RwLock::new(settings),
@@ -223,12 +253,16 @@ pub struct EngineManager<'a> {
 }
 
 impl EngineManager<'_> {
-    /// 引擎文件：设置中的自定义路径优先，其次 `bin/frpc(.exe)`。
+    /// 引擎文件：设置中的自定义路径优先；Android 用 nativeLibraryDir/libfrpc.so；
+    /// 其余平台用 `bin/frpc(.exe)`。
     pub fn engine_file(&self) -> PathBuf {
         let custom = self.state.settings().engine_path;
         let custom = PathBuf::from(custom.trim());
         if custom.is_file() {
             return custom;
+        }
+        if let Some(dir) = &self.state.paths.engine_dir {
+            return dir.join(&self.state.paths.engine_file_name);
         }
         self.state
             .paths

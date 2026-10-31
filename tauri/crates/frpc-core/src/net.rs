@@ -414,12 +414,16 @@ fn split_endpoint(text: &str) -> Option<(String, i32)> {
 
 fn exec(command: &[&str]) -> Option<String> {
     use std::process::Stdio;
-    let mut child = std::process::Command::new(command[0])
-        .args(&command[1..])
+    let mut cmd = std::process::Command::new(command[0]);
+    cmd.args(&command[1..])
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let mut child = cmd.spawn().ok()?;
     let deadline = Instant::now() + Duration::from_millis(10_000);
     loop {
         match child.try_wait() {

@@ -7,11 +7,14 @@ mod bridge;
 mod commands;
 mod state;
 
+#[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager, WindowEvent,
+    WindowEvent,
 };
+use tauri::Manager;
+#[cfg(desktop)]
 use tauri_plugin_single_instance::init as single_instance;
 
 use state::{AppPaths, AppState, EngineManager};
@@ -19,25 +22,42 @@ use state::{AppPaths, AppState, EngineManager};
 /// 桌面 / 移动统一入口（main.rs / mobile_entry_point 调用）。
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(single_instance(|app, _args, _cwd| {
-            // 二次启动：唤起已有窗口
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
-        }))
+    let builder = tauri::Builder::default();
+    // 单实例是桌面特性（Android 由系统任务栈天然保证单实例）
+    #[cfg(desktop)]
+    let builder = builder.plugin(single_instance(|app, _args, _cwd| {
+        // 二次启动：唤起已有窗口
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    }));
+    builder
         .setup(|app| {
-            // 核心层监管器：路径在应用装配时确定（与 Kotlin AppPaths 对齐）
+            // 核心层监管器：路径在应用装配时确定（与 Kotlin AppPaths 对齐）。
+            // Android：数据目录用 app files 目录，引擎用 jniLibs 的 libfrpc.so。
+            #[cfg(target_os = "android")]
+            let paths = {
+                let data_dir = app.path().app_data_dir().expect("app data dir");
+                let native_lib = android_native_lib_dir();
+                AppPaths::android(data_dir, native_lib)
+            };
+            #[cfg(not(target_os = "android"))]
             let paths = AppPaths::resolve();
+
+            let engine_path = paths
+                .engine_dir
+                .as_ref()
+                .map(|d| d.join(&paths.engine_file_name))
+                .unwrap_or_else(|| paths.bin_dir.join(&paths.engine_file_name));
             let cfg = frpc_core::supervisor::SupervisorConfig {
-                engine_path: paths.bin_dir.join(&paths.engine_file_name),
+                engine_path,
                 run_dir: paths.run_dir.clone(),
                 run_config_file: paths.run_config_file(),
                 ..Default::default()
             };
             let supervisor = frpc_core::supervisor::Supervisor::new(cfg);
-            let mut app_state = AppState::new(supervisor);
+            let mut app_state = AppState::new_with_paths(paths, supervisor);
             app_state.resource_dir = app.path().resource_dir().ok();
             app.manage(app_state);
 
@@ -45,7 +65,8 @@ pub fn run() {
             let handle = app.handle().clone();
             bridge::start(handle, &app.state::<AppState>());
 
-            // 托盘 + 关闭行为
+            // 托盘 + 关闭行为（桌面专属；Android 无托盘概念）
+            #[cfg(desktop)]
             setup_tray(app)?;
 
             // 设置了「启动即连」时自动启动默认档案
@@ -114,6 +135,7 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+#[cfg(desktop)]
 fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // 菜单项与旧版自绘托盘菜单对齐
     let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
@@ -247,4 +269,49 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         });
     }
     Ok(())
+}
+
+/// Android：通过 JNI 从 ApplicationInfo 取 `nativeLibraryDir`
+/// （APK 里以 jniLibs 形式打包的 `libfrpc.so` 会落在该目录，且该目录可执行）。
+/// 初始化时序兜底：ndk-context 未就绪时返回 None（UI 仍可用，仅引擎不可启动）。
+#[cfg(target_os = "android")]
+fn android_native_lib_dir() -> std::path::PathBuf {
+    use jni::objects::JObject;
+
+    let attempt = std::panic::catch_unwind(|| -> Option<String> {
+        let ctx = ndk_context::android_context();
+        let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
+        let mut env = vm.attach_current_thread().ok()?;
+        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+        let app_info = env
+            .call_method(
+                &context,
+                "getApplicationInfo",
+                "()Landroid/content/pm/ApplicationInfo;",
+                &[],
+            )
+            .ok()?
+            .l()
+            .ok()?;
+        let jstr = env
+            .get_field(&app_info, "nativeLibraryDir", "Ljava/lang/String;")
+            .ok()?
+            .s()
+            .ok()?;
+        let java_str = env.get_string(&jstr).ok()?;
+        Some(java_str.to_string_lossy().into_owned())
+    })
+    .ok()
+    .flatten();
+
+    match attempt {
+        Some(dir) => {
+            println!("nativeLibraryDir = {dir}");
+            std::path::PathBuf::from(dir)
+        }
+        None => {
+            println!("nativeLibraryDir unavailable (ndk-context not ready)");
+            std::path::PathBuf::new()
+        }
+    }
 }

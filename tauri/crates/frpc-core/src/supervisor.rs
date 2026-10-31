@@ -17,7 +17,9 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(test)]
+use std::time::Instant;
 
 use chrono::TimeZone as _;
 use serde::{Deserialize, Serialize};
@@ -85,6 +87,10 @@ pub struct ProfileRef {
     pub name: String,
     pub config: FrpcConfig,
 }
+
+/// Windows：隐藏子进程控制台窗口（CREATE_NO_WINDOW，0x08000000）。
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone)]
 pub struct SupervisorConfig {
@@ -497,6 +503,8 @@ impl Supervisor {
         );
 
         let mut command = Command::new(&self.cfg.engine_path);
+        #[cfg(windows)]
+        command.creation_flags(CREATE_NO_WINDOW);
         command
             .arg("-c")
             .arg(&toml_path)
@@ -838,6 +846,7 @@ fn kill_orphans(run_dir: &std::path::Path) -> usize {
     let token = run_dir.to_string_lossy().to_string();
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
         use std::process::Stdio;
         let script = format!(
             "$mine='{token}'\nGet-CimInstance Win32_Process -Filter \"Name='frpc.exe'\" | \
@@ -846,6 +855,7 @@ fn kill_orphans(run_dir: &std::path::Path) -> usize {
         );
         match std::process::Command::new("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .creation_flags(CREATE_NO_WINDOW)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()

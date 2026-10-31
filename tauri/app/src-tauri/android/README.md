@@ -1,56 +1,64 @@
-# Tauri Android 端接入指南（M4 交付物）
+# Tauri Android 端（M4）
 
-> 本机无 Android SDK/NDK，本目录交付**可评审的参考实现源码 + 逐步接入指南**；
-> 在具备 SDK 的环境按下面步骤编译验证后即可并入构建（预计 1~2 周含真机联调）。
+> 2026-10-31 更新：APK 构建流水线已在本机**实跑打通**（`scripts/tauri-android-setup.sh` +
+> `tauri android build --apk`），V1 APK 直接复用 Rust 核心层监管器跑引擎；
+> 前台服务（后台存活）为阶段 2，见文末。
 
-## 架构（与迁移方案第 5 节一致）
+## 架构
 
 - **UI**：同一套 Vue（`app/ui`），Tauri 2 的 Android WebView 承载，无需改动。
-- **Rust 核心层**：`frpc-core` 的 model / toml / validate / admin / logs 照常使用。
-- **进程监管**：不走 Rust `supervisor`（App 进程可能被回收），由 **Kotlin 前台服务**承担——
-  直接复用 `androidApp/src/main/java/com/frpc/android/service/` 的既有实现
-  （`FrpcSupervisor.kt` / `FrpcService.kt` / `FrpcBinaryManager.kt` / `BootReceiver.kt` /
-  `Notifications.kt` / `LogModels.kt`，约 800 行，逻辑已在线上验证）。
+- **Rust 核心层**：model / toml / validate / admin / logs / metrics / supervisor 全量复用。
 - **frpc 引擎**：`libfrpc.so` 随 jniLibs 分发（W^X 合规：`nativeLibraryDir` 可执行），
-  构建方式 = `scripts/build-frpc.sh android`（现有 CI 已产出）。
+  Rust 启动器通过 JNI 读 `ApplicationInfo.nativeLibraryDir` 定位引擎
+  （`lib.rs::android_native_lib_dir`），数据目录用 `app_data_dir`（`state.rs::AppPaths::android`）。
+- **桌面专属功能**（托盘 / 单实例 / 开机自启插件）已用 `#[cfg(desktop)]` 门控，
+  Android 构建不编译。
 
-## 接入步骤
+## 本机构建步骤（已验证）
 
-1. **初始化 Android 工程**（需 SDK/NDK）：
-   ```bash
-   cd tauri/app && ui/node_modules/.bin/tauri android init
-   ```
-   生成 `src-tauri/gen/android`。
+前置：JDK 17、Android SDK（platform 34+/build-tools/NDK 27.2）、
+rustup target `aarch64-linux-android`。
 
-2. **复制服务层**：把 `androidApp/src/main/java/com/frpc/android/service/` 六个文件
-   复制到生成的工程 `gen/android/app/src/main/java/io/github/fdmdf/frpc/service/`，
-   包名 `com.frpc.android.service` 全局替换为宿主包名。
+```bash
+export ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"     # Windows Git Bash 示例
+export NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
 
-3. **复制 jniLibs 与 assets**：
-   ```bash
-   cp -r ../../androidApp/src/main/jniLibs  gen/android/app/src/main/
-   cp -r ../../androidApp/src/main/assets   gen/android/app/src/main/
-   ```
+bash scripts/tauri-android-setup.sh                 # init + 阿里云镜像 + jniLibs 注入
+cd tauri/app && ui/node_modules/.bin/tauri android build --apk --target aarch64
+```
 
-4. **合并清单**：把 `AndroidManifest-snippet.xml` 的权限与组件声明合并进
-   `gen/android/app/src/main/AndroidManifest.xml`。
+产物：`gen/android/app/build/outputs/apk/universal/release/app-release-unsigned.apk`。
 
-5. **挂插件**：参考 `FrpcTauriPlugin.kt` 实现 Tauri Android 插件（`@Command`
-   方法 + 事件回传），在 `MainActivity` 的 `registerPlugin` 处注册。
+## 签名（release APK 必须签名才能安装）
 
-6. **Rust 侧分流**：`commands.rs` 的 `start_tunnel` / `stop_tunnel` / `reload_tunnel`
-   在 `#[cfg(target_os = "android")]` 下改为 invoke 插件命令（配置编码仍走
-   `FrpcToml::encode`，把 TOML 文本与档案 id 传给插件），桌面路径不变。
+密钥在 `src-tauri/android-signing/release.keystore`（不入库；密码与别名见下方命令，
+正式分发前请换成自己的密钥）：
 
-7. **真机验证清单**（对应迁移方案 M4 验收）：
-   - [ ] 前台服务通知合规（Android 8+ channel）
-   - [ ] 切后台 / 杀进程后隧道存活
-   - [ ] 开机自启（BootReceiver + 权限 `RECEIVE_BOOT_COMPLETED`）
-   - [ ] `libfrpc.so` 在 arm64 真机可执行
-   - [ ] 低版本系统 WebView（Chrome 内核 < 90）页面渲染冒烟
+```bash
+BT="$ANDROID_HOME/build-tools/36.0.0"
+"$BT/zipalign" -f -p 4 app-release-unsigned.apk app-release-aligned.apk
+"$BT/apksigner" sign \
+  --ks ../../../../../android-signing/release.keystore \
+  --ks-pass pass:frpc-desktop-multi --key-pass pass:frpc-desktop-multi \
+  --ks-key-alias frpc \
+  --out frpc-desktop-multi-0.1.0-arm64.apk app-release-aligned.apk
+```
 
-## 已知差异（相对 Kotlin 版）
+## 阶段 2：前台服务（后台存活）
 
-- 档案存储：桌面端用 `~/.frpcdash`；Android 端 Tauri WebView 无该目录概念，
-  档案 JSON 放应用私有目录 `files_dir`，与 Kotlin 版 `ProfileBundle` 导入/导出互通。
-- 前台服务的通知文案走既有 `Notifications.kt`（中文），M4 联调时接入 i18n。
+V1 APK 的 frpc 跑在应用进程里，**应用被系统回收时隧道会断**——与 Kotlin 版
+"前台服务保活" 的行为差异。阶段 2 计划（源码已备好）：
+
+- 复用 `androidApp/src/main/java/com/frpc/android/service/` 六个文件
+  （`FrpcSupervisor.kt` / `FrpcService.kt` / `FrpcBinaryManager.kt` / `BootReceiver.kt` /
+  `Notifications.kt` / `LogModels.kt`，约 800 行，逻辑已在线上验证），
+  包成 Tauri Android 插件（参考 `FrpcTauriPlugin.kt` 参考实现 + `AndroidManifest-snippet.xml`）。
+- Rust 侧 `#[cfg(target_os = "android")]` 把 start/stop/reload 分流到插件命令。
+
+## 真机验证清单（对应迁移方案 M4 验收）
+
+- [ ] `libfrpc.so` 在 arm64 真机可执行、隧道建立
+- [ ] 前台服务通知合规（阶段 2 后：Android 8+ channel）
+- [ ] 切后台 / 杀进程后隧道存活（阶段 2 后）
+- [ ] 开机自启（BootReceiver + `RECEIVE_BOOT_COMPLETED`，阶段 2）
+- [ ] 低版本系统 WebView（Chrome 内核 < 90）页面渲染冒烟
