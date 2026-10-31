@@ -61,12 +61,40 @@ echo "==> 写 local.properties（SDK 路径）"
 ANDROID_HOME_WIN=$(cygpath -w "$ANDROID_HOME" | sed 's/\\/\\\\/g')
 printf 'sdk.dir=%s\n' "$ANDROID_HOME_WIN" > "$GEN/local.properties"
 
-echo "==> BuildTask 加 TAURI_SKIP_RUST_BUILD 守卫"
-echo "   （Windows 非管理员无法创建符号链接：先 tauri android build 一次拿到"
-echo "     cargo 产物并手工复制 libfrpc_app_lib.so，再据此跳过 CLI 回调）"
-python - "$GEN" <<'EOF'
+echo "==> gradle 工程补丁（init 重新生成后必须重打）"
+python - "$GEN" <<'PYEOF'
 import sys
 gen = sys.argv[1]
+
+# 1) app/build.gradle.kts：NDK 版本 / 压缩打包 / 引擎源目录
+p = f"{gen}/app/build.gradle.kts"
+s = open(p, encoding="utf-8").read()
+if "ndkVersion" not in s:
+    s = s.replace("        minSdk = 24",
+                  '        ndkVersion = "27.2.12479018"\n        minSdk = 24', 1)
+if "useLegacyPackaging" not in s:
+    import re
+    s = re.sub(
+        r"            packaging \{\n(                jniLibs\.keepDebugSymbols\.add\([^)]*\)\n)+",
+        "            packaging {\n"
+        "                // native 库压缩存储（17.4MB 引擎 → ~6.2MB，与旧版 androidApp 一致）\n"
+        "                jniLibs.useLegacyPackaging = true\n",
+        s, 1)
+if "androidApp/src/main/jniLibs" not in s:
+    s = s.replace("    defaultConfig {",
+                  "    sourceSets {\n"
+                  "        getByName("main") {\n"
+                  "            // frpc 引擎复用旧工程预编译产物（仓库根 = rootDir 上溯 5 级）\n"
+                  "            jniLibs.srcDir(\n"
+                  "                File(rootDir.parentFile.parentFile.parentFile.parentFile.parentFile,\n"
+                  "                     "androidApp/src/main/jniLibs")\n"
+                  "            )\n"
+                  "        }\n"
+                  "    }\n\n    defaultConfig {", 1)
+open(p, "w", encoding="utf-8", newline="").write(s)
+print("app/build.gradle.kts patched")
+
+# 2) BuildTask：TAURI_SKIP_RUST_BUILD 守卫（Windows 非管理员符号链接限制）
 p2 = f"{gen}/buildSrc/src/main/java/io/github/fdmdf/frpc/kotlin/BuildTask.kt"
 s2 = open(p2, encoding="utf-8").read()
 old = """    @TaskAction
@@ -74,17 +102,20 @@ old = """    @TaskAction
 new = """    @TaskAction
     fun assemble() {
         // 预构建模式：cargo 产物已由外部放置到 jniLibs，跳过 tauri CLI
-        // （Windows 非管理员无法创建符号链接；如需恢复 CLI 构建请删除此 return）
         if (System.getenv("TAURI_SKIP_RUST_BUILD") != null) {
             println("BuildTask: skipped (TAURI_SKIP_RUST_BUILD set)")
             return
         }"""
 if "TAURI_SKIP_RUST_BUILD" not in s2:
-    assert old in s2, "BuildTask anchor not found"
+    assert old in s2
     s2 = s2.replace(old, new, 1)
     open(p2, "w", encoding="utf-8", newline="").write(s2)
 print("BuildTask guarded")
-EOF
+PYEOF
+
+echo "==> 写 local.properties（SDK 路径）"
+ANDROID_HOME_WIN=$(cygpath -w "$ANDROID_HOME" | sed 's/\\/\\\\/g')
+printf 'sdk.dir=%s\n' "$ANDROID_HOME_WIN" > "$GEN/local.properties"
 
 echo "==> 完成。完整构建流程（Windows 非管理员绕过符号链接限制）："
 cat <<'NOTE'
