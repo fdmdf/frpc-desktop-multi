@@ -77,7 +77,7 @@ function remoteOf(
   return t("home.privateProxy");
 }
 
-/// 状态接口偶尔只给「:端口」（没带动词的主机部分），补上当前档案的服务器地址，
+/// 状态接口偶尔只给「:端口」（不带主机部分），补上当前档案的服务器地址，
 /// 否则复制出来的是一个没法直接用的裸端口。
 function normalizeRemote(raw?: string | null): string {
   const v = (raw ?? "").trim();
