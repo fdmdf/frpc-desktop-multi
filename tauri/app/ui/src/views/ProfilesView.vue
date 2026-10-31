@@ -13,6 +13,7 @@ import {
 import {
   describeProxy,
   describeVisitor,
+  errorText,
   parsePortExpr,
   PROXY_TYPES,
   proxyNameFor,
@@ -185,11 +186,26 @@ async function save() {
     showErrors.value = false;
     return;
   }
-  if (runningThis.value) {
-    confirmSaveRunning.value = true;
-    return;
+  try {
+    if (runningThis.value) {
+      confirmSaveRunning.value = true;
+      return;
+    }
+    await doSave(false);
+  } catch (err) {
+    // save_profile 的 Err 是校验问题数组，直接塞进模板会变成 [object Object]
+    saveError.value = errorText(err);
   }
-  await doSave(false);
+}
+
+/// 对话框里的「保存并重载 / 仅保存」；后端兜底失败也要有可见反馈
+async function saveFromDialog(reload: boolean) {
+  confirmSaveRunning.value = false;
+  try {
+    await doSave(reload);
+  } catch (err) {
+    saveError.value = errorText(err);
+  }
 }
 
 async function doSave(reload: boolean) {
@@ -374,7 +390,7 @@ async function onImportFile(e: Event) {
     }
     message.value = t("profiles.imported", { name: profile.name });
   } catch (err) {
-    message.value = t("profiles.importFailed", { err });
+    message.value = t("profiles.importFailed", { err: errorText(err) });
   }
   (e.target as HTMLInputElement).value = "";
 }
@@ -404,7 +420,7 @@ async function onImportBundle(e: Event) {
         : "");
     await store.refreshProfiles();
   } catch (err) {
-    message.value = t("profiles.importFailed", { err });
+    message.value = t("profiles.importFailed", { err: errorText(err) });
   }
   (e.target as HTMLInputElement).value = "";
 }
@@ -432,7 +448,7 @@ async function toggleProfile(p: ServerProfile) {
   try {
     await store.start(p.id);
   } catch (e) {
-    message.value = String(e).replace(/^Error:\s*/, "");
+    message.value = errorText(e);
   }
 }
 
@@ -1213,10 +1229,10 @@ async function clearAll() {
         <h3 class="modal-title">{{ $t("editor.saveRunningTitle") }}</h3>
         <p style="margin: 0">{{ $t("editor.saveRunningBody") }}</p>
         <div class="modal-actions">
-          <button class="btn text-btn" style="color: var(--brand)" @click="confirmSaveRunning = false; doSave(true)">
+          <button class="btn text-btn" style="color: var(--brand)" @click="saveFromDialog(true)">
             {{ $t("common.saveReload") }}
           </button>
-          <button class="btn text-btn" @click="confirmSaveRunning = false; doSave(false)">{{ $t("common.saveOnly") }}</button>
+          <button class="btn text-btn" @click="saveFromDialog(false)">{{ $t("common.saveOnly") }}</button>
           <button class="btn text-btn" @click="confirmSaveRunning = false">{{ $t("common.cancel") }}</button>
         </div>
       </div>

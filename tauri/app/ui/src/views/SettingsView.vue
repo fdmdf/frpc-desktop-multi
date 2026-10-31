@@ -153,24 +153,29 @@ async function browseEngine() {
             : $t("settings.inUseBundled", { path: engineInfo?.path ?? "" })
         }}
       </p>
-      <button class="btn text-btn" @click="showEngineAdvanced = !showEngineAdvanced">
-        {{ showEngineAdvanced ? $t("settings.advancedHide") : $t("settings.advancedShow") }}
-      </button>
-      <div v-if="showEngineAdvanced" style="display: flex; flex-direction: column; gap: 12px">
-        <div class="field">
-          <span class="field-label">{{ $t("settings.enginePath") }}</span>
-          <input
-            :value="settings.enginePath"
-            placeholder="C:\tools\frpc.exe"
-            @change="update({ enginePath: ($event.target as HTMLInputElement).value })"
-          />
+      <!-- Android 只认随包内置的 libfrpc.so：10+ 禁止从可写目录 exec，选路径必然失败，
+           所以整个「自定义引擎路径」入口都不展示，只留一句说明 -->
+      <template v-if="!isAndroid">
+        <button class="btn text-btn" @click="showEngineAdvanced = !showEngineAdvanced">
+          {{ showEngineAdvanced ? $t("settings.advancedHide") : $t("settings.advancedShow") }}
+        </button>
+        <div v-if="showEngineAdvanced" style="display: flex; flex-direction: column; gap: 12px">
+          <div class="field">
+            <span class="field-label">{{ $t("settings.enginePath") }}</span>
+            <input
+              :value="settings.enginePath"
+              placeholder="C:\tools\frpc.exe"
+              @change="update({ enginePath: ($event.target as HTMLInputElement).value })"
+            />
+          </div>
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+            <button class="btn" @click="browseEngine">{{ $t("settings.browse") }}</button>
+            <button class="btn filled small" @click="checkEngine">{{ $t("settings.checkEngine") }}</button>
+            <span v-if="engineMessage" class="muted small">{{ engineMessage }}</span>
+          </div>
         </div>
-        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
-          <button class="btn" @click="browseEngine">{{ $t("settings.browse") }}</button>
-          <button class="btn filled small" @click="checkEngine">{{ $t("settings.checkEngine") }}</button>
-          <span v-if="engineMessage" class="muted small">{{ engineMessage }}</span>
-        </div>
-      </div>
+      </template>
+      <p v-else class="muted small" style="margin: 0">{{ $t("settings.androidEngineOnly") }}</p>
       <hr class="hr" />
       <div v-if="!isAndroid" style="display: flex; gap: 12px; flex-wrap: wrap">
         <button class="btn text-btn" @click="api.openPath(dataDir)">{{ $t("settings.openDataDir") }}</button>

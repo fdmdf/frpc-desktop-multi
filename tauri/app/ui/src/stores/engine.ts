@@ -148,6 +148,14 @@ export const useEngineStore = defineStore("engine", {
       await this.refreshProfiles();
       return saved;
     },
+    /// 主页/配置列表的启用开关：只改 enabled 标记，不做整份配置校验
+    /// （运行中校验会把自己的 admin 端口报成「被占用」）。
+    async setRuleEnabled(profileId: string, name: string, visitor: boolean, enabled: boolean) {
+      const saved = await A.setRuleEnabled(profileId, name, visitor, enabled);
+      await this.refreshProfiles();
+      this.pendingReload = await A.getPendingReload();
+      return saved;
+    },
     async deleteProfile(id: string) {
       await A.deleteProfile(id);
       await this.refreshProfiles();

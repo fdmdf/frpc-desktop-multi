@@ -202,6 +202,49 @@ export function validationText(issue: {
   );
 }
 
+// ---------- 错误文案 ----------
+
+/// 把 IPC 抛出来的东西变成一句人能看懂的话。
+///
+/// 容易踩的坑：`save_profile` 的 Err 是 `Vec<ValidationIssue>`，到前端是一个**对象
+/// 数组**，`String(err)` 只会得到 `[object Object]` —— 主页关代理时那句看不懂的
+/// 提示就是这么来的。这里把数组逐条翻译成校验文案，只有最后一个兜底才 JSON 化。
+export function errorText(e: unknown): string {
+  if (Array.isArray(e)) {
+    const items = e
+      .map((it) =>
+        typeof it === "string"
+          ? it
+          : it && typeof it === "object" && "reason" in (it as Record<string, unknown>)
+            ? validationText(
+                it as {
+                  scope: string;
+                  field: string;
+                  reason: string;
+                  entityName?: string | null;
+                  detail?: string | null;
+                },
+              )
+            : String(it),
+      )
+      .filter(Boolean);
+    return items.join("；") || tr("err.unknown");
+  }
+  if (typeof e === "string") return e.replace(/^Error:\s*/, "");
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const o = e as { message?: unknown; reason?: unknown };
+    if (typeof o.message === "string" && o.message) return o.message;
+    if (typeof o.reason === "string" && o.reason) return o.reason;
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return tr("err.unknown");
+    }
+  }
+  return e == null ? tr("err.unknown") : String(e);
+}
+
 // ---------- 快照辅助（Rust 侧 all()/item() 是方法，JSON 无此字段） ----------
 
 export function snapshotAll(snap: { byType: Record<string, { name: string; type: string; status: string; err: string; remoteAddr?: string; localAddr?: string }[]> } | null): { name: string; type: string; status: string; err: string; remoteAddr?: string; localAddr?: string }[] {

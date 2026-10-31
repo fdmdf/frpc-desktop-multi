@@ -80,7 +80,14 @@
     "switchBody": "\"{current}\" is running. Switching to \"{target}\" stops the current process and restarts it with the new config, so existing connections will drop.",
     "switchConfirm": "Switch and restart",
     "cannotStart": "Cannot start",
-    "goProfiles": "Open profiles"
+    "goProfiles": "Open profiles",
+    "ruleEnabledNeedReload": "Enabled \"{name}\". Click \"Reload config\" to apply.",
+    "ruleDisabledNeedReload": "Disabled \"{name}\". Click \"Reload config\" to apply.",
+    "reloaded": "Config reloaded",
+    "reloadFailed": "Reload failed: {err}",
+    "reloadRestarted": "The admin API did not apply the new config, so the engine was restarted",
+    "ruleEnabled": "Enabled \"{name}\"",
+    "ruleDisabled": "Disabled \"{name}\""
   },
   "monitor": {
     "title": "Monitor",
@@ -160,7 +167,8 @@
     "about": "About",
     "aboutEngine": "Bundled engine frp {version} · config folder {dir}",
     "chooseEngineTitle": "Select the frpc executable",
-    "allFiles": "All files"
+    "allFiles": "All files",
+    "androidEngineOnly": "Android always uses the bundled engine (libfrpc.so); custom paths are not supported."
   },
   "profiles": {
     "title": "Server profiles",
@@ -345,7 +353,8 @@
     "duplicateProxyList": "These proxy names already exist: {list}{more}",
     "duplicateProxyMore": ", etc.",
     "visitorNameEmpty": "Visitor name cannot be empty",
-    "duplicateVisitor": "Visitor name \"{name}\" is already used by another visitor"
+    "duplicateVisitor": "Visitor name \"{name}\" is already used by another visitor",
+    "unknown": "Unknown error"
   },
   "desc": {
     "local": " · local {addr}",

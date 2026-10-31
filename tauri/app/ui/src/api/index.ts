@@ -212,6 +212,9 @@ export const api = {
     invoke<ServerProfile>("save_profile", { profile }),
   deleteProfile: (id: string) => invoke<void>("delete_profile", { id }),
   duplicateProfile: (id: string) => invoke<ServerProfile>("duplicate_profile", { id }),
+  /// 只翻转一条规则的 enabled（不做全量校验，运行中登记待重载）
+  setRuleEnabled: (profileId: string, name: string, visitor: boolean, enabled: boolean) =>
+    invoke<ServerProfile>("set_rule_enabled", { profileId, name, visitor, enabled }),
   exportProfileToml: (id: string) => invoke<string>("export_profile_toml", { id }),
   importToml: (name: string, text: string) =>
     invoke<ServerProfile>("import_toml", { name, text }),

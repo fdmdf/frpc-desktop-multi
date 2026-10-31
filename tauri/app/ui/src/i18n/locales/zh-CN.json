@@ -80,7 +80,14 @@
     "switchBody": "frpc 正在运行「{current}」。切换到「{target}」会停止当前进程并用新配置重新启动，现有连接会中断。",
     "switchConfirm": "切换并重启",
     "cannotStart": "无法启动",
-    "goProfiles": "去配置"
+    "goProfiles": "去配置",
+    "ruleEnabledNeedReload": "已启用「{name}」，点「重载配置」后生效",
+    "ruleDisabledNeedReload": "已关闭「{name}」，点「重载配置」后生效",
+    "reloaded": "配置已重载",
+    "reloadFailed": "重载失败：{err}",
+    "reloadRestarted": "admin 接口未能应用新配置，已自动重启引擎",
+    "ruleEnabled": "已启用「{name}」",
+    "ruleDisabled": "已关闭「{name}」"
   },
   "monitor": {
     "title": "监控",
@@ -160,7 +167,8 @@
     "about": "关于",
     "aboutEngine": "内置引擎 frp {version} · 配置文件 {dir}",
     "chooseEngineTitle": "选择 frpc 可执行文件",
-    "allFiles": "全部文件"
+    "allFiles": "全部文件",
+    "androidEngineOnly": "Android 只使用安装包内置的引擎（libfrpc.so），不支持自定义路径。"
   },
   "profiles": {
     "title": "服务器配置",
@@ -345,7 +353,8 @@
     "duplicateProxyList": "以下代理名已存在：{list}{more}",
     "duplicateProxyMore": " 等",
     "visitorNameEmpty": "访问者名称不能为空",
-    "duplicateVisitor": "访问者名「{name}」与其他访问者重复"
+    "duplicateVisitor": "访问者名「{name}」与其他访问者重复",
+    "unknown": "未知错误"
   },
   "desc": {
     "local": " · 本地 {addr}",

@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { api } from "../api";
-import { formatDateTime, formatDuration, formatMemoryKb, formatPercent, snapshotAll, snapshotItem, targetServerProxyName } from "../format";
+import { errorText, formatDateTime, formatDuration, formatMemoryKb, formatPercent, snapshotAll, snapshotItem, targetServerProxyName } from "../format";
 import { useEngineStore } from "../stores/engine";
 
 const store = useEngineStore();
@@ -57,13 +57,35 @@ function proxyChip(proxy: (typeof proxies.value)[number], adminItem?: { status?:
   return { label: t("state.notRunning"), cls: "chip-idle" };
 }
 
-function remoteOf(proxy: (typeof proxies.value)[number], adminItem?: { remoteAddr?: string; err?: string } | undefined): string {
-  if (adminItem?.remoteAddr) return adminItem.remoteAddr;
+/// 远程地址展示优先级：状态接口给的真实地址（域名或 IP + 分配到的端口）→ 配置里的
+/// 自定义域名/子域名 → 固定远程端口（拼上服务器地址）→ 随机端口占位文案。
+/// 真机出现过「随机端口一直显示『远程端口随机』」，根因是后端把 remote_addr 序列化成了
+/// snake_case，前端读 remoteAddr 永远拿不到值 —— 已在 frpc-core::admin 修掉。
+function remoteOf(
+  proxy: (typeof proxies.value)[number],
+  adminItem?: { remoteAddr?: string; err?: string } | undefined,
+): string {
+  const live = normalizeRemote(adminItem?.remoteAddr);
+  if (live) return live;
   const domain = proxy.customDomains?.[0] || proxy.subdomain;
-  if (proxy.remotePort != null && proxy.remotePort !== 0) return t("home.remotePort", { port: proxy.remotePort });
-  if (proxy.remotePort === 0) return t("home.remoteRandom");
   if (domain) return domain;
+  if (proxy.remotePort != null && proxy.remotePort !== 0) {
+    const host = currentProfile.value?.config.serverAddr?.trim();
+    return host ? `${host}:${proxy.remotePort}` : t("home.remotePort", { port: proxy.remotePort });
+  }
+  if (proxy.remotePort === 0) return t("home.remoteRandom");
   return t("home.privateProxy");
+}
+
+/// 状态接口偶尔只给「:端口」（没带动词的主机部分），补上当前档案的服务器地址，
+/// 否则复制出来的是一个没法直接用的裸端口。
+function normalizeRemote(raw?: string | null): string {
+  const v = (raw ?? "").trim();
+  if (!v) return "";
+  const host = currentProfile.value?.config.serverAddr?.trim() ?? "";
+  if (/^:\d+$/.test(v)) return host ? `${host}${v}` : v.slice(1);
+  if (/^\d+$/.test(v)) return host ? `${host}:${v}` : v;
+  return v;
 }
 
 const onlineSummary = computed(() => {
@@ -83,10 +105,11 @@ function toast(text: string) {
   toastTimer = window.setTimeout(() => (toastMsg.value = ""), 2600);
 }
 
-/// 可复制的真实访问地址；拿不到（随机端口 / 私密代理 / 还没上线）时返回 null
+/// 可复制的真实访问地址；拿不到（尚未分配端口 / 私密代理 / 还没上线）时返回 null
 function copyableAddr(proxy: (typeof proxies.value)[number]): string | null {
   const item = snapshotItem(store.status, proxy.name);
-  if (item?.remoteAddr) return item.remoteAddr;
+  const live = normalizeRemote(item?.remoteAddr);
+  if (live) return live;
   const domain = proxy.customDomains?.[0] || proxy.subdomain;
   if (domain) return domain;
   const host = currentProfile.value?.config.serverAddr?.trim();
@@ -112,34 +135,42 @@ async function copyRemote(text: string | null) {
   }
 }
 
-/// 开关入口：保存失败要把 checkbox 拨回去 —— `:checked` 的绑定值没变时 Vue 不会再写
-/// DOM，只看界面会以为"开关开了但状态还是禁用"。
+/// 开关入口：只翻转这一条规则的启用状态，运行中登记「待重载」并如实提示
+/// —— 不能在这里做整份配置校验（运行中会把自己的 admin 端口报成被占用），
+/// 也不该自动重载（用户需要知道旧配置还在生效）。
+/// 保存失败要把 checkbox 拨回去：`:checked` 的绑定值没变时 Vue 不会再写 DOM。
 async function onToggle(name: string, visitor: boolean, e: Event) {
   const input = e.target as HTMLInputElement;
   const next = input.checked;
   try {
     await toggleEnabled(name, next, visitor);
+    if (running.value) {
+      toast(t(next ? "home.ruleEnabledNeedReload" : "home.ruleDisabledNeedReload", { name }));
+    } else {
+      toast(t(next ? "home.ruleEnabled" : "home.ruleDisabled", { name }));
+    }
   } catch (err) {
     input.checked = !next;
-    toast(String(err).replace(/^Error:\s*/, ""));
+    toast(errorText(err));
   }
 }
 
 async function toggleEnabled(name: string, enabled: boolean, visitor: boolean) {
   const profile = currentProfile.value;
   if (!profile) return;
-  const updated = JSON.parse(JSON.stringify(profile)) as typeof profile;
-  if (visitor) {
-    updated.config.visitors = updated.config.visitors.map((v) =>
-      v.name === name ? { ...v, enabled: enabled ? null : false } : v,
-    );
-  } else {
-    updated.config.proxies = updated.config.proxies.map((p) =>
-      p.name === name ? { ...p, enabled: enabled ? null : false } : p,
-    );
+  await store.setRuleEnabled(profile.id, name, visitor, enabled);
+}
+
+/// 「重载配置」：等待真实生效（后端核对失败会自动退回重启），并把结果说清楚
+async function doReload() {
+  const before = store.runState.startedAtMs;
+  try {
+    await store.reload();
+    const restarted = store.runState.startedAtMs !== before;
+    toast(restarted ? t("home.reloadRestarted") : t("home.reloaded"));
+  } catch (err) {
+    toast(t("home.reloadFailed", { err: errorText(err) }));
   }
-  await store.saveProfile(updated);
-  if (running.value) await store.reload();
 }
 
 const blockedReason = ref("");
@@ -287,7 +318,7 @@ const uptime = computed(() =>
         >
           {{ running ? $t("home.stop") : $t("home.start") }}
         </button>
-        <button class="btn" :disabled="!running" @click="store.reload()">{{ $t("home.reload") }}</button>
+        <button class="btn" :disabled="!running" @click="doReload()">{{ $t("home.reload") }}</button>
         <button class="btn" :disabled="!currentProfile" @click="editProfile">{{ $t("home.editConfig") }}</button>
       </div>
     </div>
@@ -298,7 +329,7 @@ const uptime = computed(() =>
     >
       <h3 class="card-title">{{ $t("home.pendingTitle") }}</h3>
       <p class="error-text" style="margin: 0">{{ $t("home.pendingBody") }}</p>
-      <button class="btn filled" style="justify-content: center" @click="store.reload()">{{ $t("home.reload") }}</button>
+      <button class="btn filled" style="justify-content: center" @click="doReload()">{{ $t("home.reload") }}</button>
     </div>
 
     <div class="section-card">
@@ -351,9 +382,10 @@ const uptime = computed(() =>
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
           <div style="flex: 1; min-width: 0">
             <div style="font-size: 15px; font-weight: 500">{{ proxy.name }}</div>
+            <!-- 箭头与地址之间用不换行空格：窄屏换行时整段一起下移，不会只剩一个「→」 -->
             <div class="muted">
-              {{ proxy.type.toUpperCase() }} · {{ $t("home.local", { addr: `${proxy.localIP || "127.0.0.1"}:${proxy.localPort ?? "?"}` }) }} →
-              {{ remoteOf(proxy, snapshotItem(store.status, proxy.name)) }}
+              {{ proxy.type.toUpperCase() }} · {{ $t("home.local", { addr: `${proxy.localIP || "127.0.0.1"}:${proxy.localPort ?? "?"}` }) }}
+              →&nbsp;{{ remoteOf(proxy, snapshotItem(store.status, proxy.name)) }}
             </div>
             <div
               v-if="snapshotItem(store.status, proxy.name)?.err || store.proxyStates[proxy.name]?.error"
