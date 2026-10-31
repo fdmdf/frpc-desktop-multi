@@ -147,7 +147,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android
+          # gradle universal flavor 会为 4 个 ABI 逐个触发 cargo 构建
+          targets: aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: tauri
