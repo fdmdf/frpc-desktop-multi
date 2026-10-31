@@ -1,7 +1,24 @@
 <script setup lang="ts">
-import { useAppStore } from "./stores/app";
+import { onMounted, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { useEngineStore } from "./stores/engine";
 
-const app = useAppStore();
+const { locale } = useI18n();
+const store = useEngineStore();
+
+onMounted(async () => {
+  locale.value = localStorage.getItem("locale") || "zh-CN";
+  await store.init();
+});
+
+// 主题：设置页改 theme 时切 data-theme（M2 仅浅色视觉，dark 做基础反色）
+watch(
+  () => store.settings?.theme,
+  (t) => {
+    document.documentElement.dataset.theme = t === "dark" ? "dark" : "light";
+  },
+  { immediate: true },
+);
 
 const navItems = [
   { to: "/", label: "nav.home" },
@@ -22,8 +39,8 @@ const navItems = [
         </RouterLink>
       </nav>
       <footer class="sidebar-foot">
-        <span class="engine-dot" :class="{ on: app.engineRunning }"></span>
-        {{ app.engineRunning ? $t("engine.running") : $t("engine.idle") }}
+        <span class="engine-dot" :class="{ on: store.isRunning, err: store.runState.phase === 'ERROR' }"></span>
+        {{ $t(`engine.${store.runState.phase.toLowerCase()}`) }}
       </footer>
     </aside>
     <main class="content">
