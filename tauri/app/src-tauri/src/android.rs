@@ -203,7 +203,12 @@ pub fn is_ignoring_battery_optimizations() -> Result<bool, String> {
                 "(Landroid/content/Context;)Z",
                 &[JValue::Object(activity)],
             )
-            .map_err(|e| format!("FrpcHost.isIgnoringBatteryOptimizations 失败：{}", java_detail(env, e)))?;
+            .map_err(|e| {
+                format!(
+                    "FrpcHost.isIgnoringBatteryOptimizations 失败：{}",
+                    java_detail(env, e)
+                )
+            })?;
         Ok(result.z().unwrap_or(false))
     })
 }
