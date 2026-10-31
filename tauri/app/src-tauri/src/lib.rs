@@ -293,11 +293,12 @@ fn android_native_lib_dir() -> std::path::PathBuf {
             .ok()?
             .l()
             .ok()?;
-        let jstr = env
+        let obj = env
             .get_field(&app_info, "nativeLibraryDir", "Ljava/lang/String;")
             .ok()?
-            .s()
+            .l()
             .ok()?;
+        let jstr = jni::objects::JString::from(obj);
         let java_str = env.get_string(&jstr).ok()?;
         Some(java_str.to_string_lossy().into_owned())
     })

@@ -29,6 +29,20 @@ cd tauri/app && ui/node_modules/.bin/tauri android build --apk --target aarch64
 
 产物：`gen/android/app/build/outputs/apk/universal/release/app-release-unsigned.apk`。
 
+### Windows 非管理员注意事项（已实测踩坑）
+
+未开启"开发者模式"时 `tauri android build` 会在符号链接一步失败，且**该步骤会清空
+jniLibs**。绕过流程（`scripts/tauri-android-setup.sh` 末尾的 NOTE 有完整命令）：
+
+1. 先跑 CLI 到符号链接报错（Rust 产物已编译好）；
+2. 手工把 `libfrpc_app_lib.so`（cargo 产物）与 `libfrpc.so`（引擎）复制进
+   `gen/android/app/src/main/jniLibs/arm64-v8a/`；
+3. `TAURI_SKIP_RUST_BUILD=1 ./gradlew :app:assembleArm64Release` 直接构建
+   （若全局 `~/.gradle/gradle.properties` 有过期代理配置，加
+   `-Dhttp.proxyHost= -Dhttps.proxyHost=` 覆盖为直连）；
+4. zipalign + apksigner 签名。
+5. 根治方案：开启 Windows 开发者模式后可直接 `tauri android build`。
+
 ## 签名（release APK 必须签名才能安装）
 
 密钥在 `src-tauri/android-signing/release.keystore`（不入库；密码与别名见下方命令，
