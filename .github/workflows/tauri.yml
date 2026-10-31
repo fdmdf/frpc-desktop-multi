@@ -17,6 +17,11 @@ concurrency:
 env:
   FRP_VERSION: v0.71.1
 
+# 全部 run 统一用 bash——Windows 默认是 pwsh，bash 语法（set -o pipefail 等）会直接报错
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ---------------------------------------------------------------- 核心层（对拍测试）
   core:
