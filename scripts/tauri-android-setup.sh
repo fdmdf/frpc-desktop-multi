@@ -20,12 +20,12 @@ echo "==> tauri android init"
 cd "$APP" && ui/node_modules/.bin/tauri android init
 
 echo "==> gradle 工程补丁"
-python - "$GEN" "$NDK_HOME" <<'PYEOF'
+python - "$GEN" "$NDK_HOME" "$APP/ui/node_modules/@tauri-apps/cli/tauri.js" <<'PYEOF'
 import os
 import re
 import sys
 
-gen, ndk_home = sys.argv[1], sys.argv[2]
+gen, ndk_home, cli_js = sys.argv[1], sys.argv[2], sys.argv[3]
 ndk_ver = os.path.basename(ndk_home.rstrip("/\\")) or "27.2.12479018"
 
 # ---- 1) app/build.gradle.kts：NDK 版本 / 压缩打包 / 引擎声明式源目录 ----
@@ -115,9 +115,24 @@ guard = (
     "            return\n"
     "        }"
 )
+orig = s4
 if "TAURI_SKIP_RUST_BUILD" not in s4:
     assert anchor in s4, "BuildTask anchor not found"
     s4 = s4.replace(anchor, guard, 1)
+
+# 生成的 args[0] 是裸 "tauri"，gradle 会以 cwd=src-tauri 执行 `node tauri ...`，
+# node 把它当脚本路径解析 -> Cannot find module '<src-tauri>/tauri'。
+# 指到真实的 CLI 入口（tauri.js）即可让 gradle 逐 ABI 调回 CLI 做 cargo 构建。
+cli_js_kotlin = cli_js.replace("\\", "/")
+old_args = 'val args = listOf("tauri", "android", "android-studio-script");'
+new_args = 'val args = listOf("%s", "android", "android-studio-script");' % cli_js_kotlin
+if old_args in s4:
+    s4 = s4.replace(old_args, new_args, 1)
+    print("BuildTask cli entry -> %s" % cli_js_kotlin)
+elif cli_js_kotlin not in s4:
+    print("WARN: BuildTask args line not matched, CLI 入口未改写")
+
+if s4 != orig:
     open(p4, "w", encoding="utf-8", newline="").write(s4)
 print("BuildTask guarded")
 PYEOF
