@@ -156,12 +156,13 @@ jobs:
       - name: Build frpc engine (android arm64)
         run: bash scripts/build-frpc.sh android
 
+      # tauri CLI 在 ui/node_modules，必须先装依赖再 init
+      - name: Build UI (vue-tsc + vite)
+        run: npm --prefix tauri/app/ui ci --no-audit --no-fund && npm --prefix tauri/app/ui run build
+
       # init + gradle 补丁（镜像 / 压缩打包 / 引擎源目录 / BuildTask 守卫）
       - name: Init Tauri Android project
         run: bash scripts/tauri-android-setup.sh
-
-      - name: Build UI (vue-tsc + vite)
-        run: npm --prefix tauri/app/ui ci --no-audit --no-fund && npm --prefix tauri/app/ui run build
 
       # Linux 上符号链接可用，CLI 全流程直通
       - name: Tauri android build (apk)

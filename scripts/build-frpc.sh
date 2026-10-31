@@ -10,7 +10,8 @@ esac
 
 FRP_VERSION="${FRP_VERSION:-v0.71.1}"
 GO="${GO:-go}"
-export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
+# 多源按序 fallback（goproxy.cn 国内快；proxy.golang.org 供 CI 机房兜底）
+export GOPROXY="${GOPROXY:-https://goproxy.cn,https://proxy.golang.org,direct}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPO_ROOT="$(cygpath -m "$REPO_ROOT" 2>/dev/null || echo "$REPO_ROOT")"
 

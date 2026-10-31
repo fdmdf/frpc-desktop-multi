@@ -7,13 +7,13 @@ mod bridge;
 mod commands;
 mod state;
 
+use tauri::Manager;
 #[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     WindowEvent,
 };
-use tauri::Manager;
 #[cfg(desktop)]
 use tauri_plugin_single_instance::init as single_instance;
 
