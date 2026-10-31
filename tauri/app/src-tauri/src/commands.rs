@@ -270,6 +270,12 @@ pub fn export_logs(state: tauri::State<'_, AppState>) -> Result<String, String> 
     Ok(target.display().to_string())
 }
 
+/// 日志全文（前端配合 dialog.save 自选保存位置，对齐旧版 FileDialog.SAVE）。
+#[tauri::command]
+pub fn get_logs_text(state: tauri::State<'_, AppState>) -> String {
+    state.supervisor.logs_text()
+}
+
 // ---------- 设置 ----------
 
 #[tauri::command]

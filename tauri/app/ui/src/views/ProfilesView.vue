@@ -58,6 +58,30 @@ const saveError = ref("");
 const proxyQuery = ref("");
 const showTransportAdvanced = ref(false);
 const showTlsAdvanced = ref(false);
+// 「自定义传输配置」开关：编辑实例始终存在（表单可安全绑定），
+// 关闭时仅在保存时把 transport 置 null（不写 transport 段 = 全用 frpc 默认值）
+const customTransport = ref(true);
+
+function defaultTransport(): NonNullable<ServerProfile["config"]["transport"]> {
+  return {
+    protocol: "tcp",
+    tcpMux: true,
+    poolCount: 0,
+    tls: null,
+    dialServerTimeout: 10,
+    dialServerKeepalive: 7200,
+    connectServerLocalIP: null,
+    proxyURL: null,
+    heartbeatInterval: null,
+    heartbeatTimeout: null,
+    tcpMuxKeepaliveInterval: null,
+  };
+}
+
+function defaultLog(): NonNullable<ServerProfile["config"]["log"]> {
+  // to 空串 = 不写日志文件（frpc 默认输出到控制台）
+  return { to: "", level: "info", maxDays: 3, disablePrintColor: false };
+}
 
 const proxyDialog = ref(false);
 const proxyEditingIndex = ref<number | null>(null);
@@ -91,14 +115,41 @@ function openEditor(profile: ServerProfile | null) {
       proxyProtocolVersion: null,
     };
   }
+  // 可空段统一实例化为默认值：模板可安全绑定；保存时按开关决定是否写回。
+  // （此前 transport/log 为 null 时模板裸访问直接抛错 → 点「编辑」整页白屏）
+  customTransport.value = copy.config.transport != null || profile == null;
+  copy.config.transport = copy.config.transport ?? defaultTransport();
+  copy.config.log = copy.config.log ?? defaultLog();
+  // Kotlin decode 语义：缺 [auth] 段 = method "none"
+  copy.config.auth = copy.config.auth ?? { method: "none", token: "" };
   draft.value = copy;
   showErrors.value = false;
+  showTransportAdvanced.value = false;
+  showTlsAdvanced.value = false;
   saveError.value = "";
 }
 
 function closeEditor() {
   draft.value = null;
   store.editingProfileId = null;
+}
+
+function toggleTlsAdvanced() {
+  showTlsAdvanced.value = !showTlsAdvanced.value;
+  // 展开双向认证 / 私有 CA 前确保 tls 段存在，否则模板裸访问会炸
+  if (showTlsAdvanced.value && draft.value && !draft.value.config.transport?.tls) {
+    draft.value.config.transport = {
+      ...(draft.value.config.transport ?? defaultTransport()),
+      tls: {
+        enable: true,
+        serverName: null,
+        certFile: null,
+        keyFile: null,
+        trustedCaFile: null,
+        disableCustomTLSFirstByte: null,
+      },
+    };
+  }
 }
 
 // 校验走后端（含端口占用实测），保存时触发
@@ -133,6 +184,8 @@ async function doSave(reload: boolean) {
   if (!draft.value) return;
   draft.value.name = draft.value.name.trim() || "未命名配置";
   draft.value.updatedAt = Date.now();
+  // 「自定义传输配置」关闭 = 不写 transport 段（全用 frpc 默认值）
+  if (!customTransport.value) draft.value.config.transport = null;
   await store.saveProfile(draft.value);
   if (!store.settings!.defaultProfileId) {
     await store.saveSettings({ ...store.settings!, defaultProfileId: draft.value.id });
@@ -611,7 +664,7 @@ async function clearAll() {
         </div>
 
         <hr class="hr" />
-        <button class="btn text-btn" @click="showTlsAdvanced = !showTlsAdvanced">
+        <button class="btn text-btn" @click="toggleTlsAdvanced">
           {{ showTlsAdvanced ? "收起 TLS 证书" : "TLS 高级（双向认证 / 私有 CA）" }}
         </button>
         <div v-if="showTlsAdvanced" style="display: flex; flex-direction: column; gap: 12px">
@@ -653,29 +706,16 @@ async function clearAll() {
         <div class="switch-row">
           <div class="sw-text">
             <div class="sw-label">自定义传输配置</div>
-            <div class="sw-support">关闭时不写 transport 段，全部用 frpc 默认值</div>
+            <div class="sw-support">关闭时保存不写 transport 段，全部用 frpc 默认值</div>
           </div>
           <label class="switch">
             <input
               type="checkbox"
-              :checked="!!draft.config.transport"
+              :checked="customTransport"
               @change="
                 (e) => {
-                  draft!.config.transport = (e.target as HTMLInputElement).checked
-                    ? {
-                        protocol: 'tcp',
-                        tcpMux: true,
-                        poolCount: 0,
-                        tls: null,
-                        dialServerTimeout: 10,
-                        dialServerKeepalive: 7200,
-                        connectServerLocalIP: null,
-                        proxyURL: null,
-                        heartbeatInterval: null,
-                        heartbeatTimeout: null,
-                        tcpMuxKeepaliveInterval: null,
-                      }
-                    : null;
+                  customTransport = (e.target as HTMLInputElement).checked;
+                  if (customTransport && !draft!.config.transport) draft!.config.transport = defaultTransport();
                 }
               "
             />
@@ -686,6 +726,11 @@ async function clearAll() {
 
       <div class="section-card">
         <h3 class="card-title">日志（frpc 自身）</h3>
+        <div class="field">
+          <span class="field-label">日志文件路径（可选）</span>
+          <input v-model="draft.config.log!.to" placeholder="留空 = 只输出到控制台，由 App 采集展示" />
+          <span class="support">填了路径才会写日志文件；App 的「日志」页始终实时展示控制台输出</span>
+        </div>
         <div class="form-row">
           <div class="field" style="flex: 1">
             <span class="field-label">日志级别</span>
@@ -984,7 +1029,15 @@ async function clearAll() {
         <template v-if="typeCaps(proxyDraft.type).httpsPlugin">
           <div class="field">
             <span class="field-label">插件类型</span>
-            <select v-model="proxyDraft.plugin!.type" @change="proxyDraft.plugin = { type: proxyDraft.plugin!.type } as ProxyPluginConfig">
+            <select
+              :value="proxyDraft.plugin?.type ?? ''"
+              @change="
+                (e) => {
+                  const t = (e.target as HTMLInputElement).value;
+                  proxyDraft!.plugin = t ? ({ type: t } as ProxyPluginConfig) : null;
+                }
+              "
+            >
               <option value="">不使用</option>
               <option value="https2http">https2http</option>
               <option value="tls2raw">tls2raw</option>

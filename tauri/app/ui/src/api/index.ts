@@ -242,6 +242,7 @@ export const api = {
   getLogs: () => invoke<LogLine[]>("get_logs"),
   clearLogs: () => invoke<void>("clear_logs"),
   exportLogs: () => invoke<string>("export_logs"),
+  getLogsText: () => invoke<string>("get_logs_text"),
   getSettings: () => invoke<SettingsData>("get_settings"),
   setSettings: (settings: SettingsData) => invoke<void>("set_settings", { settings }),
   getDataDir: () => invoke<string>("get_data_dir"),

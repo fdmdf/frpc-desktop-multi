@@ -33,6 +33,7 @@ pub fn run() {
         }
     }));
     builder
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // 核心层监管器：路径在应用装配时确定（与 Kotlin AppPaths 对齐）。
             // Android：数据目录用 app files 目录，引擎用 jniLibs 的 libfrpc.so。
@@ -125,6 +126,7 @@ pub fn run() {
             commands::get_logs,
             commands::clear_logs,
             commands::export_logs,
+            commands::get_logs_text,
             commands::get_settings,
             commands::set_settings,
             commands::get_data_dir,

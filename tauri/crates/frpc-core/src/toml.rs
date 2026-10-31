@@ -109,7 +109,10 @@ impl FrpcToml {
 
         if let Some(log) = &c.log {
             let mut t = Table::new();
-            t.insert("to", value(log.to.clone()));
+            // Kotlin 语义：to 为空串（默认值）时不写 to 字段 = frpc 默认输出到控制台
+            if !log.to.is_empty() {
+                t.insert("to", value(log.to.clone()));
+            }
             t.insert("level", value(log.level.clone()));
             t.insert("maxDays", value(i64::from(log.max_days)));
             if let Some(d) = log.disable_print_color {
@@ -118,7 +121,14 @@ impl FrpcToml {
             doc.insert("log", Item::Table(t));
         }
 
-        if let Some(auth) = &c.auth {
+        // Kotlin 语义：method 为 none/空白时不写 auth 段（frps 未启用认证时的合法形态）
+        let write_auth = c
+            .auth
+            .as_ref()
+            .map(|a| !a.method.trim().is_empty() && a.method != "none")
+            .unwrap_or(false);
+        if write_auth {
+            let auth = c.auth.as_ref().expect("checked above");
             let mut t = Table::new();
             t.insert("method", value(auth.method.clone()));
             t.insert("token", value(auth.token.clone()));

@@ -29,6 +29,24 @@ async function checkEngine() {
     ? `引擎就绪：${engineInfo.value.path}`
     : `引擎不可用：未找到 ${engineInfo.value.path}`;
 }
+
+/// 对齐旧版 FileDialog 选择 frpc 可执行文件
+async function browseEngine() {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({
+    title: "选择 frpc 可执行文件",
+    multiple: false,
+    directory: false,
+    filters: [
+      { name: "frpc", extensions: ["exe", "so", "bin"] },
+      { name: "全部文件", extensions: ["*"] },
+    ],
+  });
+  if (typeof picked === "string" && picked) {
+    update({ enginePath: picked });
+    engineMessage.value = "";
+  }
+}
 </script>
 
 <template>
@@ -121,7 +139,8 @@ async function checkEngine() {
             @change="update({ enginePath: ($event.target as HTMLInputElement).value })"
           />
         </div>
-        <div style="display: flex; gap: 12px; align-items: center">
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+          <button class="btn" @click="browseEngine">浏览</button>
           <button class="btn filled small" @click="checkEngine">检查引擎</button>
           <span v-if="engineMessage" class="muted small">{{ engineMessage }}</span>
         </div>

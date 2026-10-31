@@ -42,13 +42,22 @@ const levelColor = (lv: string) =>
         : "var(--text)";
 
 async function save() {
-  const path = await api.exportLogs();
-  saved.value = `已保存到 ${path}`;
+  // 对齐旧版 FileDialog.SAVE：弹系统保存对话框自选位置
+  const { save: saveDialog } = await import("@tauri-apps/plugin-dialog");
+  const target = await saveDialog({
+    title: "保存日志",
+    defaultPath: "frpc-log.txt",
+    filters: [{ name: "文本文件", extensions: ["txt"] }],
+  });
+  if (!target) return;
+  await api.writeTextFile(target, await api.getLogsText());
+  saved.value = `已保存到 ${target}`;
 }
 
 async function openLogsDir() {
   const dataDir = await api.getDataDir();
-  await api.openPath(`${dataDir.replace(/[\\/]+$/, "")}\\logs`.replace(/\\/g, "\\"));
+  const sep = dataDir.includes("\\") ? "\\" : "/";
+  await api.openPath(`${dataDir.replace(/[\\/]+$/, "")}${sep}logs`);
 }
 </script>
 

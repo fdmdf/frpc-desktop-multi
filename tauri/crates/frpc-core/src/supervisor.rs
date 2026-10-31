@@ -369,8 +369,13 @@ impl Supervisor {
 
     /// 导出日志（Kotlin `saveLogs`，格式 `HH:mm:ss.SSS [L] message`）。
     pub fn save_logs(&self, target: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
-        let text = self
-            .log_snapshot()
+        std::fs::write(target, self.logs_text())?;
+        Ok(target.to_path_buf())
+    }
+
+    /// 日志全文（与 save_logs 同格式；供前端配合文件对话框自选保存位置）。
+    pub fn logs_text(&self) -> String {
+        self.log_snapshot()
             .into_iter()
             .map(|l| {
                 let level = match l.level {
@@ -383,9 +388,7 @@ impl Supervisor {
                 format!("{} [{level}] {}", format_time(l.time_ms), l.message)
             })
             .collect::<Vec<_>>()
-            .join("\n");
-        std::fs::write(target, text)?;
-        Ok(target.to_path_buf())
+            .join("\n")
     }
 
     /// 清理上次残留的 frpc 进程（命令行包含本应用 run_dir 的）。
