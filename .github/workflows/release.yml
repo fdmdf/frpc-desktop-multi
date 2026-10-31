@@ -18,8 +18,8 @@ name: Release
 #   frpc-engine-VERSION.txt                           内置 frpc 引擎版本留档
 
 on:
-  push:
-    tags: ['v*']
+  # v* tag 自动触发已停用：v1.4.0 起 tag 由 Tauri CI（.github/workflows/tauri.yml）发布，
+  # 避免新旧两条流水线竞争同一个 Release。补发 Kotlin 版（v1.3.x 线）请走手动触发。
   workflow_dispatch:
     inputs:
       version:
