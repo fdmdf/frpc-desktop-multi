@@ -447,6 +447,22 @@ pub fn request_battery_exemption() -> Result<bool, String> {
     }
 }
 
+/// Android：查询当前是否已在电池优化白名单。
+///
+/// 单独一个命令是为了让设置页能显示**真实状态**：跳系统设置是异步的，用户回来时
+/// 前端拿到的是「已发起跳转」，只能靠这个查询确认到底加没加上。
+#[tauri::command]
+pub fn battery_exemption_status() -> Result<bool, String> {
+    #[cfg(target_os = "android")]
+    {
+        crate::android::is_ignoring_battery_optimizations()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        Ok(true)
+    }
+}
+
 pub fn open_path_inner(path: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {

@@ -563,6 +563,27 @@ body {
   font-size: 12px;
 }
 
+/* 状态小胶囊：用于「已允许 / 未允许」这类一眼可见的状态（勿用红绿之外的语义色） */
+.pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.pill.ok {
+  background: color-mix(in srgb, var(--running) 16%, transparent);
+  color: var(--running);
+}
+
+.pill.warn {
+  background: color-mix(in srgb, var(--starting) 18%, transparent);
+  color: var(--starting);
+}
+
 .mono {
   font-family: Consolas, "Courier New", monospace;
   font-size: 12px;

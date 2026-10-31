@@ -98,11 +98,35 @@ Android 的进程回收按「有没有前台组件」排序：只有一个 Activ
 - `MainActivity` 在 Android 13+ 申请 `POST_NOTIFICATIONS`：不申请的话前台服务通知
   会被静默丢弃（服务在跑但用户看不到）。
 - 设置页「允许后台运行」调 `FrpcHost.requestIgnoreBatteryOptimizations()` 拉系统的
-  电池优化白名单弹窗；国产 ROM 还需要在「应用启动管理」里允许后台活动，这是 ROM 侧
-  行为，应用无法代劳。
+  电池优化白名单弹窗；跳转是异步的，前端拿到的只是「已发起」，所以另有
+  `battery_exemption_status` 命令在页面挂载和「从系统设置切回前台」时查真实状态，
+  用一个状态胶囊显示「已允许 / 未允许」。国产 ROM 还需要在「应用启动管理」里
+  允许后台活动，这是 ROM 侧行为，应用无法代劳。
 
 仍然做不到的：用户主动「强行停止」、部分 ROM 划掉后台即冻结。这两类只能靠白名单 +
 厂商自启管理，任何应用都绕不过去。
+
+## JNI 约定（v1.4.8 踩过的坑，别再踩）
+
+Rust `src/android.rs` 调 Kotlin 只有两条硬规矩，违反任一条的表现都是前端收到一句
+**「Error invoking postMessage: Java exception was raised during method invocation」**——
+完全看不出真正原因：
+
+1. **不要用 `JNIEnv::find_class`**。Tauri 的命令跑在 tokio 线程池上，从「不是 Java 创建的
+   线程」调 JNI `FindClass` 会退化成系统 ClassLoader，永远找不到 `io.github.fdmdf.frpc.*`，
+   抛 `ClassNotFoundException`。必须走
+   `activity.getClassLoader().loadClass("io.github.fdmdf.frpc.FrpcHost")`。
+2. **调用失败后必须清掉挂起的 Java 异常**（`exception_occurred` + `exception_clear`）。
+   `call_static_method` 只返回一个 `Err`，异常本身仍挂在线程上；带着异常的线程之后每次
+   JNI 调用都会立刻失败，包括 Tauri 自己回传结果的 IPC，于是真因被吞掉。
+
+配套的 Kotlin 侧约定：
+
+- `FrpcHost` 的每个入口都 `try/catch(Throwable)` 并返回安全默认值，**绝不向外抛**；
+- `startActivity` / `Toast` 一律 `Handler(Looper.getMainLooper()).post`，
+  非主线程调 Toast 会直接抛 `Can't create handler inside thread that has not called Looper.prepare()`；
+- Rust 每次调用都开 `push_local_frame` / `pop_local_frame`：attach 住的线程不回 Java，
+  局部引用不会自动回收，反复调用会撑满局部引用表。
 
 ## 真机验证清单（对应迁移方案 M4 验收）
 

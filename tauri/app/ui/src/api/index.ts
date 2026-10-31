@@ -256,4 +256,6 @@ export const api = {
     invoke<void>("set_keepalive", { enabled, title, text }),
   /// Android 电池优化白名单；返回 true 表示本来就在白名单
   requestBatteryExemption: () => invoke<boolean>("request_battery_exemption"),
+  /// Android 当前是否已在电池优化白名单（跳系统设置是异步的，回来要重新查）
+  batteryExemptionStatus: () => invoke<boolean>("battery_exemption_status"),
 };

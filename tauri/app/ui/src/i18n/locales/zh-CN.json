@@ -174,6 +174,8 @@
     "keepAliveOk": "已在电池优化白名单里",
     "keepAliveRequested": "已打开系统设置，请选择「不限制」或「允许后台运行」",
     "keepAliveFailed": "打开系统设置失败：{err}",
+    "keepAliveAllowed": "已允许后台运行",
+    "keepAliveDenied": "未允许，可能被后台清理",
     "aboutTagline": "frp 客户端的多配置图形界面：多套隧道并行管理，引擎随包内置。",
     "aboutDevBuild": "开发版",
     "aboutEngineLabel": "内置引擎",

@@ -150,6 +150,34 @@
   也无人引用，按页面重新组织为 `home.*` / `editor.*` / `proxyDialog.*` / `validate.*`；
   `hint.*`（frpc 报错提示）原样保留。
 
+## [1.4.9] - 2026-11-01
+
+### 修复
+
+- **安卓「允许后台运行」一点就报 `Error invoking postMessage: Java exception was raised
+  during method invocation`**
+
+  两个 JNI 错误叠在一起，而且互相掩护：
+
+  1. Rust 侧用 `JNIEnv::find_class` 找 `io.github.fdmdf.frpc.FrpcHost`。Tauri 的命令跑在
+     tokio 线程池上，从「不是 Java 创建的线程」调 JNI `FindClass` 会退化成系统
+     ClassLoader，永远找不到应用自己的类 —— 抛 `ClassNotFoundException`。
+     改用 `activity.getClassLoader().loadClass(...)`，与调用线程无关。
+  2. JNI 调用失败后没清掉挂起的 Java 异常。`call_static_method` 只返回一个 `Err`，
+     异常本身仍挂在线程上，于是 Tauri 自己回传结果的 IPC 也立刻失败，前端只能看到
+     「postMessage: Java exception was raised」，真正原因（ClassNotFound）全被吞掉。
+
+  现在：错误路径会调 `exception_occurred` + `exception_clear`，并把 Java 异常的
+  `toString()` 拼进错误信息（下次真出问题，界面上直接就是原因）；Kotlin 侧 `FrpcHost`
+  每个入口都 `try/catch(Throwable)`，`startActivity` / `Toast` 一律 post 回主线程
+  （非主线程调 Toast 会抛 `Can't create handler inside thread that has not called
+  Looper.prepare()`）；Rust 每次调用开 `push_local_frame`/`pop_local_frame`，避免局部
+  引用表被反复调用撑满。
+
+  顺带补上**真实状态显示**：新增 `battery_exemption_status` 命令，设置页在挂载和
+  「从系统设置切回前台」时查询白名单状态，按钮旁用小胶囊显示「已允许 / 未允许」——
+  跳系统设置是异步的，之前只能告诉用户「已打开」，加没加上无从得知。
+
 ## [1.4.8] - 2026-11-01
 
 安卓装上就报「签名不一致」、切后台隧道静默断开、托盘看不出当前是运行还是停止，设置里的「关于」也只有两行字。

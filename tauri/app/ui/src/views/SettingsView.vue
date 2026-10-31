@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { api, type SettingsData } from "../api";
 import logo from "../assets/logo.svg";
@@ -117,6 +117,35 @@ async function askBatteryExemption() {
     batteryMessage.value = t("settings.keepAliveFailed", { err: errorText(err) });
   }
 }
+
+/// 当前真实状态：null = 还没查到（桌面端不显示）
+const batteryAllowed = ref<boolean | null>(null);
+
+/// 跳系统设置是异步的，用户回来时前端并不知道结果，只能重新查一次
+async function refreshBatteryStatus() {
+  if (!isAndroid) return;
+  try {
+    batteryAllowed.value = await api.batteryExemptionStatus();
+  } catch {
+    batteryAllowed.value = null;
+  }
+}
+
+/// 页面重新可见 = 用户可能刚从系统设置页回来
+function onVisible() {
+  if (!document.hidden) void refreshBatteryStatus();
+}
+
+onMounted(() => {
+  void refreshBatteryStatus();
+  // 从系统设置页切回来（WebView 恢复可见）时刷新，用户能看到自己刚改的结果
+  document.addEventListener("visibilitychange", onVisible);
+});
+
+onUnmounted(() => {
+  // 页面切走要摘掉监听，否则反复进出设置页会挂一堆重复回调
+  document.removeEventListener("visibilitychange", onVisible);
+});
 </script>
 
 <template>
@@ -192,6 +221,17 @@ async function askBatteryExemption() {
         <button class="btn filled small" @click="askBatteryExemption">
           {{ $t("settings.keepAliveBattery") }}
         </button>
+        <span
+          v-if="batteryAllowed !== null"
+          class="pill small"
+          :class="batteryAllowed ? 'ok' : 'warn'"
+        >
+          {{
+            batteryAllowed
+              ? $t("settings.keepAliveAllowed")
+              : $t("settings.keepAliveDenied")
+          }}
+        </span>
         <span v-if="batteryMessage" class="muted small">{{ batteryMessage }}</span>
       </div>
     </div>

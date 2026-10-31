@@ -142,6 +142,7 @@ pub fn run() {
             commands::open_path,
             commands::set_keepalive,
             commands::request_battery_exemption,
+            commands::battery_exemption_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
