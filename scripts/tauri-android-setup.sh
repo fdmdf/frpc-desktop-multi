@@ -52,7 +52,7 @@ if "useLegacyPackaging" not in s:
         "                // native 库压缩存储（17.4MB 引擎 -> ~6.2MB，与旧版 androidApp 一致）\n"
         "                jniLibs.useLegacyPackaging = true\n",
         s,
-        1,
+        count=1,
     )
 if "jniLibs.srcDir" not in s:
     srcdir_block = (
@@ -68,7 +68,7 @@ if "jniLibs.srcDir" not in s:
         "        }\n"
         "    }\n\n    defaultConfig {"
     )
-    s = s.replace("    defaultConfig {", srcdir_block, count=1)
+    s = s.replace("    defaultConfig {", srcdir_block, 1)
 open(p, "w", encoding="utf-8", newline="").write(s)
 print("app/build.gradle.kts patched (ndk %s)" % ndk_ver)
 
@@ -126,7 +126,7 @@ guard = (
 orig = s4
 if "TAURI_SKIP_RUST_BUILD" not in s4:
     assert anchor in s4, "BuildTask anchor not found"
-    s4 = s4.replace(anchor, guard, count=1)
+    s4 = s4.replace(anchor, guard, 1)
 
 # 生成的 args[0] 是裸 "tauri"，gradle 会以 cwd=src-tauri 执行 `node tauri ...`，
 # node 把它当脚本路径解析 -> Cannot find module '<src-tauri>/tauri'。
@@ -135,7 +135,7 @@ cli_js_kotlin = cli_js.replace("\\", "/")
 old_args = 'val args = listOf("tauri", "android", "android-studio-script");'
 new_args = 'val args = listOf("%s", "android", "android-studio-script");' % cli_js_kotlin
 if old_args in s4:
-    s4 = s4.replace(old_args, new_args, count=1)
+    s4 = s4.replace(old_args, new_args, 1)
     print("BuildTask cli entry -> %s" % cli_js_kotlin)
 elif cli_js_kotlin not in s4:
     print("WARN: BuildTask args line not matched, CLI 入口未改写")
