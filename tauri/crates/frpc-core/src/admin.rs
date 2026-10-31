@@ -26,11 +26,15 @@ pub struct ProxyStatusItem {
     pub status: String,
     #[serde(default)]
     pub err: String,
-    #[serde(default, rename = "local_addr")]
+    // frps 的 JSON 是 snake_case，前端按 camelCase 读：字段级的 `rename` 会同时
+    // 作用在反序列化与序列化上，于是序列化出来的键依旧是 `local_addr` /
+    // `remote_addr`，前端 `item.remoteAddr` 永远是 undefined —— 远程端口随机的
+    // 代理因此只能显示占位文案。只改反序列化方向，序列化交给容器上的 camelCase。
+    #[serde(default, rename(deserialize = "local_addr"))]
     pub local_addr: String,
     #[serde(default)]
     pub plugin: String,
-    #[serde(default, rename = "remote_addr")]
+    #[serde(default, rename(deserialize = "remote_addr"))]
     pub remote_addr: String,
     #[serde(default)]
     pub today_traffic_in: u64,
@@ -320,6 +324,34 @@ mod tests {
         let (method, path, _) = server.snapshot();
         assert_eq!("GET", method);
         assert_eq!("/api/status", path);
+    }
+
+    /// 序列化给前端的键必须是 camelCase：`remote_addr` / `local_addr` 只用于
+    /// 反序列化 frps 的 JSON。这条断言就是「远程端口随机」一直取不到真实地址的护栏。
+    #[test]
+    fn status_serializes_camel_case_keys() {
+        let item = ProxyStatusItem {
+            name: "ssh".into(),
+            type_: "tcp".into(),
+            status: "running".into(),
+            local_addr: "127.0.0.1:22".into(),
+            remote_addr: "ipv4.example.com:52345".into(),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&item).expect("serialize");
+        assert!(
+            json.contains("\"remoteAddr\":\"ipv4.example.com:52345\""),
+            "{json}"
+        );
+        assert!(json.contains("\"localAddr\":\"127.0.0.1:22\""), "{json}");
+        assert!(!json.contains("remote_addr"), "{json}");
+
+        // 反序列化仍接受 frps 的 snake_case
+        let back: ProxyStatusItem = serde_json::from_str(
+            r#"{"name":"ssh","status":"running","remote_addr":"1.2.3.4:6000"}"#,
+        )
+        .expect("deserialize");
+        assert_eq!("1.2.3.4:6000", back.remote_addr);
     }
 
     #[tokio::test]

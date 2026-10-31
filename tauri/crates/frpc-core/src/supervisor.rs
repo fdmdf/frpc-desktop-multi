@@ -88,6 +88,16 @@ pub struct ProfileRef {
     pub config: FrpcConfig,
 }
 
+/// 一次重载的结果核对（见 `Supervisor::wait_reload_applied`）。
+pub enum ReloadOutcome {
+    /// 状态接口确认配置已落地
+    Applied(crate::admin::ProxyStatusSnapshot),
+    /// 状态接口还能查，但已禁用的代理仍挂在线 —— 重载没落地
+    Stale,
+    /// 状态接口整个不可用，无法核对（不算失败）
+    Unverifiable,
+}
+
 /// Windows：隐藏子进程控制台窗口（CREATE_NO_WINDOW，0x08000000）。
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -315,8 +325,12 @@ impl Supervisor {
     }
 
     /// 热重载；`profile` 为 None（档案已被删除等）时不动作。
+    ///
+    /// 走 admin API 而不是重启，是为了不断开已有连接；但 admin API 回 200 只代表
+    /// 「frpc 收到了」，不代表配置真的生效（例如 `enabled = false` 的代理没被摘掉）。
+    /// 所以重载后核对一次在线代理集合，对不上就退回重启 —— 用户点「重载配置」时
+    /// 要的是结果，不是一次 HTTP 200。
     pub async fn reload(&self, profile: Option<ProfileRef>) {
-        let mut inner = self.inner.lock().await;
         let Some(profile) = profile else {
             return;
         };
@@ -328,36 +342,93 @@ impl Supervisor {
             .map(|w| w.port)
             .unwrap_or(0)
             != st.admin_port;
-        if st.phase == Phase::Running && inner.admin.is_some() && !port_changed {
+
+        // admin 客户端的锁只在这里短暂持有：下面要等状态核对，不能抱着锁睡
+        let admin = if st.phase == Phase::Running && !port_changed {
+            self.inner.lock().await.admin.clone()
+        } else {
+            None
+        };
+
+        if let Some(admin) = admin {
             let write_ok = self.write_toml(&profile.config).is_ok();
-            let reload_ok = write_ok
-                && inner
-                    .admin
-                    .as_ref()
-                    .expect("checked above")
-                    .reload()
-                    .await
-                    .is_ok();
+            let reload_ok = write_ok && admin.reload().await.is_ok();
+            if reload_ok {
+                match self.wait_reload_applied(&admin, &profile.config).await {
+                    ReloadOutcome::Applied(snap) => {
+                        self.append_system_log(LogLevel::Info, "已通过 admin API 重载配置");
+                        let _ = self.status_tx.send(Some(snap));
+                        self.remember_active_counts(&profile);
+                        self.clear_pending_reload();
+                        return;
+                    }
+                    // 状态接口不通时无法核对，但重载本身已返回成功：不为了「核对不上」
+                    // 就去断一次连接，只把这件事记进日志
+                    ReloadOutcome::Unverifiable => {
+                        self.append_system_log(LogLevel::Info, "已通过 admin API 重载配置");
+                        self.append_system_log(
+                            LogLevel::Warn,
+                            "状态接口不可达，未能核对重载结果（可在监控页确认）",
+                        );
+                        self.remember_active_counts(&profile);
+                        self.clear_pending_reload();
+                        return;
+                    }
+                    ReloadOutcome::Stale => {}
+                }
+            }
             self.append_system_log(
+                LogLevel::Warn,
                 if reload_ok {
-                    LogLevel::Info
+                    "admin API 重载未生效，改为重启引擎"
                 } else {
-                    LogLevel::Error
-                },
-                if reload_ok {
-                    "已通过 admin API 重载配置"
-                } else {
-                    "admin API 重载失败"
+                    "admin API 重载失败，改为重启引擎"
                 },
             );
-            if reload_ok {
-                self.remember_active_counts(&profile);
-                self.clear_pending_reload();
+        }
+
+        let mut inner = self.inner.lock().await;
+        self.stop_internal(&mut inner, Duration::from_secs(6)).await;
+        self.start_internal(&mut inner, profile, false).await;
+        self.clear_pending_reload();
+    }
+
+    /// 核对重载结果：状态接口里的在线代理必须全部在「配置中启用」的集合里。
+    ///
+    /// 只做单向包含（在线的 ⊆ 启用的），因此刚上线 / 报错 / 还没连上的代理不会
+    /// 造成误判；反过来，已经禁用或删掉的代理仍挂在线就说明重载没落地。
+    /// 成功时返回那次快照，省掉界面等下一轮轮询的 4 秒。
+    async fn wait_reload_applied(
+        &self,
+        admin: &crate::admin::FrpcAdminClient,
+        config: &FrpcConfig,
+    ) -> ReloadOutcome {
+        let expected: std::collections::HashSet<&str> = config
+            .proxies
+            .iter()
+            .filter(|p| p.enabled != Some(false))
+            .map(|p| p.name.as_str())
+            .collect();
+        let mut saw_status = false;
+        for attempt in 0..6 {
+            // 首次短等（frpc 摘代理是本地的，通常几十毫秒）；之后每 400ms 再确认
+            tokio::time::sleep(Duration::from_millis(if attempt == 0 { 300 } else { 400 })).await;
+            let Ok(snap) = admin.status().await else {
+                continue;
+            };
+            saw_status = true;
+            if snap
+                .all()
+                .iter()
+                .all(|i| expected.contains(i.name.as_str()))
+            {
+                return ReloadOutcome::Applied(snap);
             }
+        }
+        if saw_status {
+            ReloadOutcome::Stale
         } else {
-            self.stop_internal(&mut inner, Duration::from_secs(6)).await;
-            self.start_internal(&mut inner, profile, false).await;
-            self.clear_pending_reload();
+            ReloadOutcome::Unverifiable
         }
     }
 
