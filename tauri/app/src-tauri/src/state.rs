@@ -50,7 +50,11 @@ impl AppPaths {
             profiles_file: home.join("profiles.json"),
             run_dir: home.join("run"),
             settings_file: home.join("settings.json"),
-            engine_file_name: if is_windows { "frpc.exe".into() } else { "frpc".into() },
+            engine_file_name: if is_windows {
+                "frpc.exe".into()
+            } else {
+                "frpc".into()
+            },
             home,
             is_windows,
         }
@@ -119,12 +123,7 @@ impl AppState {
         let list = self
             .profiles
             .read()
-            .map(|g| {
-                g.iter()
-                    .filter(|p| p.id != id)
-                    .cloned()
-                    .collect::<Vec<_>>()
-            })
+            .map(|g| g.iter().filter(|p| p.id != id).cloned().collect::<Vec<_>>())
             .unwrap_or_default();
         self.persist_profiles(list);
     }
@@ -231,7 +230,10 @@ impl EngineManager<'_> {
         if custom.is_file() {
             return custom;
         }
-        self.state.paths.bin_dir.join(&self.state.paths.engine_file_name)
+        self.state
+            .paths
+            .bin_dir
+            .join(&self.state.paths.engine_file_name)
     }
 
     pub fn is_using_custom(&self) -> bool {
@@ -252,10 +254,11 @@ impl EngineManager<'_> {
 
         // 2) 打包资源解包（Kotlin ensureReady 的资源拷贝逻辑）
         if let Some(res_dir) = &self.state.resource_dir {
-            let bundled = res_dir.join("resources/engine").join(&self.state.paths.engine_file_name);
+            let bundled = res_dir
+                .join("resources/engine")
+                .join(&self.state.paths.engine_file_name);
             if bundled.is_file() {
-                std::fs::copy(&bundled, &target)
-                    .map_err(|e| format!("解包内置引擎失败：{e}"))?;
+                std::fs::copy(&bundled, &target).map_err(|e| format!("解包内置引擎失败：{e}"))?;
                 #[cfg(unix)]
                 self.ensure_executable(&target);
                 return Ok(target);
@@ -390,17 +393,12 @@ fn parse_bundle(text: &str) -> Result<(Vec<ServerProfile>, Vec<String>), String>
         match serde_json::from_value::<ServerProfile>(element.clone()) {
             Ok(p) => ok.push(p),
             Err(_) => {
-                let name = element
-                    .get("name")
-                    .and_then(|n| n.as_str())
-                    .unwrap_or("");
-                bad.push(
-                    if name.is_empty() {
-                        format!("第 {} 条", index + 1)
-                    } else {
-                        name.to_string()
-                    },
-                );
+                let name = element.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                bad.push(if name.is_empty() {
+                    format!("第 {} 条", index + 1)
+                } else {
+                    name.to_string()
+                });
             }
         }
     }

@@ -1,6 +1,7 @@
 // 全局引擎/档案状态：Tauri 事件订阅 + 初始拉取 + 操作动作
 import { defineStore } from "pinia";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { api as A } from "../api";
 import type {
   ActiveRuleCounts,
@@ -17,6 +18,8 @@ import type {
 export const useEngineStore = defineStore("engine", {
   state: () => ({
     ready: false,
+    engineVersion: "",
+    editingProfileId: null as string | null,
     runState: {
       phase: "IDLE",
       profileName: "",
@@ -44,6 +47,9 @@ export const useEngineStore = defineStore("engine", {
 
   getters: {
     isRunning: (s) => s.runState.phase === "RUNNING" || s.runState.phase === "STARTING",
+    runningId: (s) => (s.runState.phase === "RUNNING" ? s.runState.profileId : null),
+    currentProfileId: (s) =>
+      s.runState.profileId ?? s.settings?.defaultProfileId ?? s.profiles[0]?.id ?? null,
     uptimeMs: (s) =>
       s.runState.startedAtMs ? Date.now() - s.runState.startedAtMs : 0,
   },
@@ -55,6 +61,7 @@ export const useEngineStore = defineStore("engine", {
       this.profiles = await A.listProfiles();
       this.settings = await A.getSettings();
       this.engineInfo = await A.getEngineInfo();
+      this.engineVersion = this.engineInfo.bundledVersion;
       this.logs = await A.getLogs();
       this.proxyStates = await A.getProxyStates();
       this.visitors = await A.getVisitors();
@@ -108,6 +115,7 @@ export const useEngineStore = defineStore("engine", {
     },
     async refreshEngineInfo() {
       this.engineInfo = await A.getEngineInfo();
+      this.engineVersion = this.engineInfo.bundledVersion;
     },
 
     async start(profileId: string) {
@@ -120,6 +128,12 @@ export const useEngineStore = defineStore("engine", {
     },
     async reload() {
       await A.reloadTunnel();
+    },
+    markPendingReload(id: string) {
+      void invoke("mark_pending_reload", { profileId: id });
+    },
+    clearPendingReload() {
+      void invoke("clear_pending_reload");
     },
     async saveProfile(profile: ServerProfile) {
       const saved = await A.saveProfile(profile);

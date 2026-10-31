@@ -99,44 +99,125 @@ pub fn run() {
             commands::get_admin_reachable,
             commands::get_metrics,
             commands::get_pending_reload,
+            commands::mark_pending_reload,
+            commands::clear_pending_reload,
             commands::get_logs,
             commands::clear_logs,
             commands::export_logs,
             commands::get_settings,
             commands::set_settings,
             commands::get_data_dir,
+            commands::open_url,
+            commands::open_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
 fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // 菜单项与旧版自绘托盘菜单对齐
     let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
+    let toggle = MenuItem::with_id(app, "toggle", "启动 / 停止（默认配置）", true, None::<&str>)?;
+    let restart = MenuItem::with_id(app, "restart", "重启", true, None::<&str>)?;
+    let status_page = MenuItem::with_id(app, "status", "打开 frp 面板", true, None::<&str>)?;
+    let logs_dir = MenuItem::with_id(app, "logsdir", "打开日志目录", true, None::<&str>)?;
+    let data_dir = MenuItem::with_id(app, "datadir", "打开数据目录", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &show,
+            &toggle,
+            &restart,
+            &status_page,
+            &logs_dir,
+            &data_dir,
+            &quit,
+        ],
+    )?;
     let mut tray = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip("Frpc-Android-Multi");
+        .tooltip("frpc-desktop-multi");
     if let Some(icon) = app.default_window_icon().cloned() {
         tray = tray.icon(icon);
     }
-    tray.on_menu_event(|app, event| match event.id.as_ref() {
-        "show" => {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.set_focus();
+    tray.on_menu_event(|app, event| {
+        let state = app.state::<AppState>();
+        match event.id.as_ref() {
+            "show" => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
             }
+            "toggle" => {
+                let phase = state.supervisor.state().borrow().phase;
+                if matches!(
+                    phase,
+                    frpc_core::supervisor::Phase::Running | frpc_core::supervisor::Phase::Starting
+                ) {
+                    state.supervisor.stop();
+                } else {
+                    let settings = state.settings();
+                    let profile = settings
+                        .default_profile_id
+                        .as_deref()
+                        .and_then(|id| state.find_profile(id))
+                        .or_else(|| state.profiles.read().ok().and_then(|g| g.first().cloned()));
+                    if let Some(p) = profile {
+                        if let Ok(engine) = (EngineManager { state: &state }).ensure_ready() {
+                            *state.engine_path.write().unwrap() = engine;
+                            state.supervisor.start(frpc_core::supervisor::ProfileRef {
+                                id: p.id,
+                                name: p.name,
+                                config: p.config,
+                            });
+                        }
+                    }
+                }
+            }
+            "restart" => {
+                let st = state.supervisor.state().borrow().clone();
+                if let Some(id) = st.profile_id {
+                    if let Some(p) = state.find_profile(&id) {
+                        state.supervisor.stop();
+                        state.supervisor.start(frpc_core::supervisor::ProfileRef {
+                            id: p.id,
+                            name: p.name,
+                            config: p.config,
+                        });
+                    }
+                }
+            }
+            "status" => {
+                let port = state.supervisor.state().borrow().admin_port;
+                if port > 0 {
+                    let _ = commands::open_url(format!("http://127.0.0.1:{port}/static/"));
+                }
+            }
+            "logsdir" => {
+                let _ = commands::open_path(state.paths.logs_dir.display().to_string());
+            }
+            "datadir" => {
+                let _ = commands::open_path(state.paths.home.display().to_string());
+            }
+            "quit" => {
+                let supervisor = &state.supervisor;
+                tauri::async_runtime::block_on(supervisor.stop_blocking());
+                app.exit(0);
+            }
+            _ => {}
         }
-        "quit" => {
-            let supervisor = &app.state::<AppState>().supervisor;
-            tauri::async_runtime::block_on(supervisor.stop_blocking());
-            app.exit(0);
-        }
-        _ => {}
     })
     .on_tray_icon_event(|tray, event| {
-        if let tauri::tray::TrayIconEvent::Click { .. } = event {
+        // 仅左键单击唤起窗口；右键保留给菜单 —— 否则抢焦点导致菜单一闪而过
+        if let tauri::tray::TrayIconEvent::Click {
+            button: tauri::tray::MouseButton::Left,
+            button_state: tauri::tray::MouseButtonState::Up,
+            ..
+        } = event
+        {
             let app = tray.app_handle();
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();

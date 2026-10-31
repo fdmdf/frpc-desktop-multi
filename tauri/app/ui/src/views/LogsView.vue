@@ -1,63 +1,128 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { useI18n } from "vue-i18n";
+import { computed, nextTick, ref, watch } from "vue";
 import { api } from "../api";
+import { formatLogTime } from "../format";
 import { useEngineStore } from "../stores/engine";
 
-const { t } = useI18n();
 const store = useEngineStore();
-const level = ref("ALL");
-const keyword = ref("");
+const level = ref<string | null>(null);
+const query = ref("");
+const autoScroll = ref(true);
+const saved = ref("");
+const tab = ref(0); // 0=连接日志 1=应用日志
+const listEl = ref<HTMLElement | null>(null);
+
+const APP_TAG = "app";
 
 const filtered = computed(() =>
-  store.logs.filter((l) => {
-    if (level.value !== "ALL" && l.level !== level.value) return false;
-    if (keyword.value && !l.message.toLowerCase().includes(keyword.value.toLowerCase())) return false;
-    return true;
+  store.logs.filter((line) => {
+    const byTab = tab.value === 0 ? line.tag !== APP_TAG : line.tag === APP_TAG;
+    return (
+      byTab &&
+      (level.value === null || line.level === level.value) &&
+      (!query.value || line.message.toLowerCase().includes(query.value.toLowerCase()))
+    );
   }),
 );
 
-const levelClass = (lv: string) => ({
-  TRACE: "lv-trace",
-  DEBUG: "lv-debug",
-  INFO: "lv-info",
-  WARN: "lv-warn",
-  ERROR: "lv-error",
-}[lv] ?? "lv-info");
+async function scrollBottom() {
+  if (!autoScroll.value || !filtered.value.length) return;
+  await nextTick();
+  listEl.value?.scrollTo({ top: listEl.value.scrollHeight });
+}
+watch(filtered, scrollBottom, { immediate: true });
 
-function fmtTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString(undefined, { hour12: false });
+const levelColor = (lv: string) =>
+  lv === "ERROR"
+    ? "var(--error)"
+    : lv === "WARN"
+      ? "var(--starting)"
+      : lv === "DEBUG" || lv === "TRACE"
+        ? "var(--text-2)"
+        : "var(--text)";
+
+async function save() {
+  const path = await api.exportLogs();
+  saved.value = `已保存到 ${path}`;
 }
 
-async function exportLogs() {
-  const path = await api.exportLogs();
-  alert(t("logs.exported", { path }));
+async function openLogsDir() {
+  const dataDir = await api.getDataDir();
+  await api.openPath(`${dataDir.replace(/[\\/]+$/, "")}\\logs`.replace(/\\/g, "\\"));
 }
 </script>
 
 <template>
-  <section class="view">
-    <h2>{{ $t("nav.logs") }}</h2>
-
-    <div class="toolbar">
-      <select v-model="level" class="input narrow">
-        <option v-for="lv in ['ALL', 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']" :key="lv" :value="lv">
-          {{ $t(`logs.levels.${lv}`) }}
-        </option>
-      </select>
-      <input v-model="keyword" class="input grow" :placeholder="$t('logs.search')" />
-      <button class="btn" @click="exportLogs">{{ $t("logs.export") }}</button>
-      <button class="btn" @click="store.clearLogs()">{{ $t("logs.clear") }}</button>
-    </div>
-
-    <div class="log-box">
-      <p v-if="!filtered.length" class="muted">{{ $t("engine.noLog") }}</p>
-      <div v-for="(l, i) in filtered" :key="i" class="log-line">
-        <span class="log-time">{{ fmtTime(l.timeMs) }}</span>
-        <span class="log-level" :class="levelClass(l.level)">{{ l.level }}</span>
-        <span v-if="l.tag" class="log-tag">[{{ l.tag }}]</span>
-        <span class="log-msg">{{ l.message }}</span>
+  <div class="page" style="height: 100%; max-width: none">
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+      <div>
+        <h2 class="page-title">日志</h2>
+        <p class="small muted" style="margin: 0">
+          显示 {{ filtered.length }} / 共 {{ store.logs.length }} 行 · 时间按本机时区
+        </p>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+        <div class="field" style="width: 240px">
+          <input v-model="query" placeholder="搜索" />
+        </div>
+        <button class="btn filled" @click="save">保存</button>
+        <button class="btn filled" @click="store.clearLogs()">清空</button>
+        <button class="btn" @click="openLogsDir">日志目录</button>
       </div>
     </div>
-  </section>
+
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+      <button class="filter-chip" :class="{ selected: tab === 0 }" @click="tab = 0">
+        连接日志 {{ store.logs.filter((l) => l.tag !== APP_TAG).length }}
+      </button>
+      <button class="filter-chip" :class="{ selected: tab === 1 }" @click="tab = 1">
+        应用日志 {{ store.logs.filter((l) => l.tag === APP_TAG).length }}
+      </button>
+      <span class="muted">·</span>
+      <button class="filter-chip" :class="{ selected: level === null }" @click="level = null">全部</button>
+      <button
+        class="filter-chip"
+        :class="{ selected: level === 'ERROR' }"
+        @click="level = level === 'ERROR' ? null : 'ERROR'"
+      >
+        错误
+      </button>
+      <button
+        class="filter-chip"
+        :class="{ selected: level === 'WARN' }"
+        @click="level = level === 'WARN' ? null : 'WARN'"
+      >
+        警告
+      </button>
+      <button
+        class="filter-chip"
+        :class="{ selected: level === 'INFO' }"
+        @click="level = level === 'INFO' ? null : 'INFO'"
+      >
+        信息
+      </button>
+      <button
+        class="filter-chip"
+        :class="{ selected: level === 'DEBUG' }"
+        @click="level = level === 'DEBUG' ? null : 'DEBUG'"
+      >
+        调试
+      </button>
+      <label class="switch-row" style="gap: 8px; margin-left: 12px; width: auto">
+        <span class="sw-label">自动滚动</span>
+        <span class="switch">
+          <input v-model="autoScroll" type="checkbox" />
+          <span class="track"></span><span class="thumb"></span>
+        </span>
+      </label>
+      <span v-if="saved" class="muted small">{{ saved }}</span>
+    </div>
+
+    <div ref="listEl" class="log-list">
+      <div v-for="(line, i) in filtered" :key="i" class="log-line">
+        <span class="log-time">{{ formatLogTime(line.timeMs) }}</span>
+        <span :style="{ color: levelColor(line.level) }">{{ line.message }}</span>
+      </div>
+    </div>
+  </div>
 </template>

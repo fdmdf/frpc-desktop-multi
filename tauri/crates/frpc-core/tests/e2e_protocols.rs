@@ -42,7 +42,11 @@ fn frps_bin() -> Option<std::path::PathBuf> {
 }
 
 fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+    TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
 }
 
 /// 在 frps allowPorts 范围内找一个空闲端口（临时端口池在 49152+，不可复用）。
@@ -91,71 +95,95 @@ fn all_protocol_configs(admin_port: u16) -> BTreeMap<&'static str, FrpcConfig> {
         c.proxies = vec![proxy];
         out.insert(name, c);
     };
-    mk("tcp", ProxyConfig {
-        name: "e2e-tcp".into(),
-        type_: "tcp".into(),
-        local_ip: Some("127.0.0.1".into()),
-        local_port: Some(18001),
-        remote_port: Some(17101),
-        ..ProxyConfig::bare()
-    });
-    mk("udp", ProxyConfig {
-        name: "e2e-udp".into(),
-        type_: "udp".into(),
-        local_ip: Some("127.0.0.1".into()),
-        local_port: Some(18002),
-        remote_port: Some(17102),
-        ..ProxyConfig::bare()
-    });
-    mk("http", ProxyConfig {
-        name: "e2e-http".into(),
-        type_: "http".into(),
-        local_ip: Some("127.0.0.1".into()),
-        local_port: Some(18003),
-        subdomain: Some("e2e".into()),
-        ..ProxyConfig::bare()
-    });
-    mk("https", ProxyConfig {
-        name: "e2e-https".into(),
-        type_: "https".into(),
-        local_ip: Some("127.0.0.1".into()),
-        local_port: Some(18004),
-        subdomain: Some("e2es".into()),
-        ..ProxyConfig::bare()
-    });
-    mk("tcpmux", ProxyConfig {
-        name: "e2e-tcpmux".into(),
-        type_: "tcpmux".into(),
-        multiplexer: Some("httpconnect".into()),
-        local_ip: Some("127.0.0.1".into()),
-        local_port: Some(18005),
-        custom_domains: Some(vec!["e2e-mux.example.com".into()]),
-        ..ProxyConfig::bare()
-    });
-    mk("stcp", ProxyConfig {
-        name: "e2e-stcp".into(),
-        type_: "stcp".into(),
-        local_ip: Some("127.0.0.1".into()),
-        local_port: Some(18006),
-        secret_key: Some("e2esecret".into()),
-        ..ProxyConfig::bare()
-    });
-    mk("sudp", ProxyConfig {
-        name: "e2e-sudp".into(),
-        type_: "sudp".into(),
-        local_ip: Some("127.0.0.1".into()),
-        local_port: Some(18007),
-        secret_key: Some("e2esecret".into()),
-        ..ProxyConfig::bare()
-    });
-    mk("xtcp", ProxyConfig {
-        name: "e2e-xtcp".into(),
-        type_: "xtcp".into(),
-        local_ip: Some("127.0.0.1".into()),
-        local_port: Some(18008),
-        secret_key: Some("e2esecret".into()),
-        ..ProxyConfig::bare()
-    });
+    mk(
+        "tcp",
+        ProxyConfig {
+            name: "e2e-tcp".into(),
+            type_: "tcp".into(),
+            local_ip: Some("127.0.0.1".into()),
+            local_port: Some(18001),
+            remote_port: Some(17101),
+            ..ProxyConfig::bare()
+        },
+    );
+    mk(
+        "udp",
+        ProxyConfig {
+            name: "e2e-udp".into(),
+            type_: "udp".into(),
+            local_ip: Some("127.0.0.1".into()),
+            local_port: Some(18002),
+            remote_port: Some(17102),
+            ..ProxyConfig::bare()
+        },
+    );
+    mk(
+        "http",
+        ProxyConfig {
+            name: "e2e-http".into(),
+            type_: "http".into(),
+            local_ip: Some("127.0.0.1".into()),
+            local_port: Some(18003),
+            subdomain: Some("e2e".into()),
+            ..ProxyConfig::bare()
+        },
+    );
+    mk(
+        "https",
+        ProxyConfig {
+            name: "e2e-https".into(),
+            type_: "https".into(),
+            local_ip: Some("127.0.0.1".into()),
+            local_port: Some(18004),
+            subdomain: Some("e2es".into()),
+            ..ProxyConfig::bare()
+        },
+    );
+    mk(
+        "tcpmux",
+        ProxyConfig {
+            name: "e2e-tcpmux".into(),
+            type_: "tcpmux".into(),
+            multiplexer: Some("httpconnect".into()),
+            local_ip: Some("127.0.0.1".into()),
+            local_port: Some(18005),
+            custom_domains: Some(vec!["e2e-mux.example.com".into()]),
+            ..ProxyConfig::bare()
+        },
+    );
+    mk(
+        "stcp",
+        ProxyConfig {
+            name: "e2e-stcp".into(),
+            type_: "stcp".into(),
+            local_ip: Some("127.0.0.1".into()),
+            local_port: Some(18006),
+            secret_key: Some("e2esecret".into()),
+            ..ProxyConfig::bare()
+        },
+    );
+    mk(
+        "sudp",
+        ProxyConfig {
+            name: "e2e-sudp".into(),
+            type_: "sudp".into(),
+            local_ip: Some("127.0.0.1".into()),
+            local_port: Some(18007),
+            secret_key: Some("e2esecret".into()),
+            ..ProxyConfig::bare()
+        },
+    );
+    mk(
+        "xtcp",
+        ProxyConfig {
+            name: "e2e-xtcp".into(),
+            type_: "xtcp".into(),
+            local_ip: Some("127.0.0.1".into()),
+            local_port: Some(18008),
+            secret_key: Some("e2esecret".into()),
+            ..ProxyConfig::bare()
+        },
+    );
     out
 }
 
@@ -261,7 +289,8 @@ fn live_tcp_tunnel_end_to_end() {
         .build()
         .unwrap();
     let result = rt.block_on(async {
-        let client = FrpcAdminClient::new("127.0.0.1", admin_port as i32, Some("admin"), Some("admin"));
+        let client =
+            FrpcAdminClient::new("127.0.0.1", admin_port as i32, Some("admin"), Some("admin"));
         // 等 admin API 起来 + 代理 running
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
@@ -290,7 +319,9 @@ fn live_tcp_tunnel_end_to_end() {
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();
-            stream.write_all(b"ping-e2e-12345").map_err(|e| e.to_string())?;
+            stream
+                .write_all(b"ping-e2e-12345")
+                .map_err(|e| e.to_string())?;
             let mut buf = [0u8; 14];
             stream.read_exact(&mut buf).map_err(|e| e.to_string())?;
             assert_eq!(b"ping-e2e-12345", &buf, "回环数据必须一致");

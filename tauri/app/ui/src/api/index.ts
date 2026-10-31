@@ -245,4 +245,6 @@ export const api = {
   getSettings: () => invoke<SettingsData>("get_settings"),
   setSettings: (settings: SettingsData) => invoke<void>("set_settings", { settings }),
   getDataDir: () => invoke<string>("get_data_dir"),
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
+  openPath: (path: string) => invoke<void>("open_path", { path }),
 };

@@ -80,9 +80,12 @@ pub fn start(app: AppHandle, state: &AppState) {
     spawn_watch(app.clone(), sup.active_counts(), "active-counts", |c| {
         serde_json::to_value(c).ok()
     });
-    spawn_watch(app.clone(), sup.server_connected(), "server-connected", |v| {
-        serde_json::to_value(v).ok()
-    });
+    spawn_watch(
+        app.clone(),
+        sup.server_connected(),
+        "server-connected",
+        |v| serde_json::to_value(v).ok(),
+    );
     spawn_watch(app.clone(), sup.login_error(), "login-error", |v| {
         serde_json::to_value(v).ok()
     });

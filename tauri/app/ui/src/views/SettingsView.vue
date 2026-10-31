@@ -1,83 +1,150 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { useI18n } from "vue-i18n";
 import { api, type EngineInfo, type SettingsData } from "../api";
 import { useEngineStore } from "../stores/engine";
 
-const { locale } = useI18n();
 const store = useEngineStore();
-const draft = ref<SettingsData | null>(null);
+const settings = ref<SettingsData | null>(null);
 const engineInfo = ref<EngineInfo | null>(null);
 const dataDir = ref("");
-const saved = ref(false);
+const engineMessage = ref("");
+const showEngineAdvanced = ref(false);
 
 onMounted(async () => {
-  draft.value = await api.getSettings();
+  settings.value = await api.getSettings();
   engineInfo.value = await api.getEngineInfo();
   dataDir.value = await api.getDataDir();
 });
 
-async function save() {
-  if (!draft.value) return;
-  await store.saveSettings(draft.value);
-  saved.value = true;
-  setTimeout(() => (saved.value = false), 1500);
+function update(patch: Partial<SettingsData>) {
+  if (!settings.value) return;
+  settings.value = { ...settings.value, ...patch };
+  void store.saveSettings(settings.value);
 }
 
-function setLocale(l: string) {
-  locale.value = l;
-  localStorage.setItem("locale", l);
+async function checkEngine() {
+  // ensure_ready 的结果通过启动验证；这里直接尝试拉引擎信息
+  engineInfo.value = await api.getEngineInfo();
+  engineMessage.value = engineInfo.value.exists
+    ? `引擎就绪：${engineInfo.value.path}`
+    : `引擎不可用：未找到 ${engineInfo.value.path}`;
 }
 </script>
 
 <template>
-  <section class="view" v-if="draft">
-    <h2>{{ $t("nav.settings") }} <span v-if="saved" class="pill ok">{{ $t("settings.saved") }}</span></h2>
+  <div class="page" v-if="settings">
+    <h2 class="page-title">设置</h2>
 
-    <div class="card">
-      <h3>{{ $t("settings.language") }}</h3>
-      <div class="controls">
-        <button class="btn" :class="{ primary: locale === 'zh-CN' }" @click="setLocale('zh-CN')">简体中文</button>
-        <button class="btn" :class="{ primary: locale === 'en' }" @click="setLocale('en')">English</button>
-      </div>
-
-      <h3>{{ $t("settings.defaultProfile") }}</h3>
-      <select v-model="draft.defaultProfileId" class="input">
-        <option :value="null">{{ $t("settings.none") }}</option>
-        <option v-for="p in store.profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-      </select>
-      <label class="check-row">
-        <input v-model="draft.autoStartOnLaunch" type="checkbox" />
-        {{ $t("settings.autoStartOnLaunch") }}
-      </label>
-
-      <h3>{{ $t("logs.filter") }}</h3>
-      <label class="check-row">
-        <input v-model="draft.showAccessLogs" type="checkbox" />
-        {{ $t("settings.showAccessLogs") }}
-      </label>
-
-      <h3>{{ $t("settings.closeToTray") }}</h3>
-      <label class="check-row">
-        <input v-model="draft.closeToTray" type="checkbox" />
-        {{ $t("settings.closeToTray") }}
-      </label>
-
-      <h3>{{ $t("settings.engine") }}</h3>
-      <p class="muted small">
-        {{ $t("settings.engineBundledVersion") }}：{{ engineInfo?.bundledVersion ?? "unknown" }}
-        · {{ engineInfo?.usingCustom ? $t("settings.engineCustom") : "" }}
-        <span v-if="engineInfo && !engineInfo.exists" class="error-text">{{ $t("settings.engineMissing") }}</span>
-      </p>
-      <input v-model="draft.enginePath" class="input" :placeholder="$t('settings.enginePathHint')" />
-      <p class="muted small">{{ $t("settings.enginePathHint") }}</p>
-
-      <h3>{{ $t("settings.dataDir") }}</h3>
-      <p class="muted small">{{ dataDir }}</p>
-
-      <div class="controls">
-        <button class="btn primary" @click="save">{{ $t("common.save") }}</button>
+    <div class="section-card">
+      <h3 class="card-title">外观</h3>
+      <div class="field">
+        <span class="field-label">主题</span>
+        <select :value="settings.theme" @change="update({ theme: ($event.target as HTMLSelectElement).value })">
+          <option value="system">跟随系统</option>
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+        </select>
       </div>
     </div>
-  </section>
+
+    <div class="section-card">
+      <h3 class="card-title">启动</h3>
+      <div class="switch-row">
+        <div class="sw-text">
+          <div class="sw-label">启动应用时自动运行默认配置</div>
+          <div class="sw-support">
+            {{
+              store.profiles.length
+                ? `当前默认：${store.profiles.find((p) => p.id === settings!.defaultProfileId)?.name ?? store.profiles[0].name}`
+                : "还没有任何配置"
+            }}
+          </div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            :checked="settings.autoStartOnLaunch"
+            @change="update({ autoStartOnLaunch: ($event.target as HTMLInputElement).checked })"
+          />
+          <span class="track"></span><span class="thumb"></span>
+        </label>
+      </div>
+      <div class="switch-row">
+        <div class="sw-text">
+          <div class="sw-label">关闭窗口时最小化到托盘</div>
+          <div class="sw-support">关闭后 frpc 继续运行，可从托盘图标重新打开窗口或退出</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            :checked="settings.closeToTray"
+            @change="update({ closeToTray: ($event.target as HTMLInputElement).checked })"
+          />
+          <span class="track"></span><span class="thumb"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <h3 class="card-title">日志</h3>
+      <div class="switch-row">
+        <div class="sw-text">
+          <div class="sw-label">显示状态接口访问日志</div>
+          <div class="sw-support">状态页每 4 秒刷新会产生两条日志，默认隐藏</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            :checked="settings.showAccessLogs"
+            @change="update({ showAccessLogs: ($event.target as HTMLInputElement).checked })"
+          />
+          <span class="track"></span><span class="thumb"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <h3 class="card-title">frpc 引擎</h3>
+      <p style="margin: 0">内置版本：{{ engineInfo?.bundledVersion ?? "unknown" }}</p>
+      <p class="muted small" style="margin: 0">
+        当前使用：{{ engineInfo?.path }}{{ engineInfo?.usingCustom ? "（自定义）" : "（内置）" }}
+      </p>
+      <button class="btn text-btn" @click="showEngineAdvanced = !showEngineAdvanced">
+        {{ showEngineAdvanced ? "收起高级选项" : "高级：自定义引擎路径" }}
+      </button>
+      <div v-if="showEngineAdvanced" style="display: flex; flex-direction: column; gap: 12px">
+        <div class="field">
+          <span class="field-label">自定义引擎路径（留空用内置）</span>
+          <input
+            :value="settings.enginePath"
+            placeholder="C:\tools\frpc.exe"
+            @change="update({ enginePath: ($event.target as HTMLInputElement).value })"
+          />
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center">
+          <button class="btn filled small" @click="checkEngine">检查引擎</button>
+          <span v-if="engineMessage" class="muted small">{{ engineMessage }}</span>
+        </div>
+      </div>
+      <hr class="hr" />
+      <div style="display: flex; gap: 12px; flex-wrap: wrap">
+        <button class="btn text-btn" @click="api.openPath(dataDir)">打开数据目录</button>
+        <button v-if="engineInfo?.path" class="btn text-btn" @click="api.openPath(engineInfo.path.replace(/[\\/]frpc(\.exe)?$/i, ''))">
+          打开引擎目录
+        </button>
+        <button class="btn text-btn" @click="api.openPath(dataDir + (dataDir.includes('\\') ? '\\run' : '/run'))">
+          打开运行目录
+        </button>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <h3 class="card-title">关于</h3>
+      <p style="margin: 0">frpc-desktop-multi 0.1.0</p>
+      <p class="muted small" style="margin: 0">
+        内置引擎 frp {{ engineInfo?.bundledVersion ?? "unknown" }} · 配置文件 {{ dataDir }}
+      </p>
+    </div>
+    <div style="height: 8px"></div>
+  </div>
 </template>

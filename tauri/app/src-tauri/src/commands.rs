@@ -49,11 +49,16 @@ pub fn duplicate_profile(
     id: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<ServerProfile, String> {
-    state.duplicate_profile(&id).ok_or_else(|| "档案不存在".into())
+    state
+        .duplicate_profile(&id)
+        .ok_or_else(|| "档案不存在".into())
 }
 
 #[tauri::command]
-pub fn export_profile_toml(id: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
+pub fn export_profile_toml(
+    id: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
     let profile = state.find_profile(&id).ok_or("档案不存在")?;
     Ok(FrpcToml::encode(&profile.config))
 }
@@ -109,8 +114,7 @@ pub fn get_engine_info(state: tauri::State<'_, AppState>) -> EngineInfo {
         path: engine_file.display().to_string(),
         exists: engine_file.is_file(),
         using_custom: mgr.is_using_custom(),
-        bundled_version: mgr
-            .bundled_version(state.resource_dir.as_deref()),
+        bundled_version: mgr.bundled_version(state.resource_dir.as_deref()),
     }
 }
 
@@ -168,10 +172,7 @@ pub fn get_engine_state(state: tauri::State<'_, AppState>) -> RunState {
 }
 
 #[tauri::command]
-pub fn check_before_start(
-    id: String,
-    state: tauri::State<'_, AppState>,
-) -> Option<String> {
+pub fn check_before_start(id: String, state: tauri::State<'_, AppState>) -> Option<String> {
     state.find_profile(&id).map(|p| p.config).and_then(|c| {
         let mgr = EngineManager { state: &state };
         let _ = mgr.ensure_ready();
@@ -190,7 +191,13 @@ pub fn get_proxy_states(
 
 #[tauri::command]
 pub fn get_visitors(state: tauri::State<'_, AppState>) -> Vec<String> {
-    state.supervisor.visitors().borrow().iter().cloned().collect()
+    state
+        .supervisor
+        .visitors()
+        .borrow()
+        .iter()
+        .cloned()
+        .collect()
 }
 
 #[tauri::command]
@@ -201,7 +208,9 @@ pub fn get_status_snapshot(
 }
 
 #[tauri::command]
-pub fn get_active_counts(state: tauri::State<'_, AppState>) -> frpc_core::supervisor::ActiveRuleCounts {
+pub fn get_active_counts(
+    state: tauri::State<'_, AppState>,
+) -> frpc_core::supervisor::ActiveRuleCounts {
     *state.supervisor.active_counts().borrow()
 }
 
@@ -230,6 +239,16 @@ pub fn get_pending_reload(state: tauri::State<'_, AppState>) -> Option<String> {
     state.supervisor.pending_reload().borrow().clone()
 }
 
+#[tauri::command]
+pub fn mark_pending_reload(profile_id: String, state: tauri::State<'_, AppState>) {
+    state.supervisor.mark_pending_reload(&profile_id);
+}
+
+#[tauri::command]
+pub fn clear_pending_reload(state: tauri::State<'_, AppState>) {
+    state.supervisor.clear_pending_reload();
+}
+
 // ---------- 日志 ----------
 
 #[tauri::command]
@@ -246,10 +265,7 @@ pub fn clear_logs(state: tauri::State<'_, AppState>) {
 #[tauri::command]
 pub fn export_logs(state: tauri::State<'_, AppState>) -> Result<String, String> {
     let ts = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let target = state
-        .paths
-        .logs_dir
-        .join(format!("frpc-logs-{ts}.txt"));
+    let target = state.paths.logs_dir.join(format!("frpc-logs-{ts}.txt"));
     state.supervisor.save_logs(&target).map_err(err)?;
     Ok(target.display().to_string())
 }
@@ -263,11 +279,81 @@ pub fn get_settings(state: tauri::State<'_, AppState>) -> SettingsData {
 
 #[tauri::command]
 pub fn set_settings(settings: SettingsData, state: tauri::State<'_, AppState>) {
-    state.supervisor.set_show_access_logs(settings.show_access_logs);
+    state
+        .supervisor
+        .set_show_access_logs(settings.show_access_logs);
     state.save_settings(settings);
 }
 
 #[tauri::command]
 pub fn get_data_dir(state: tauri::State<'_, AppState>) -> String {
     state.paths.home.display().to_string()
+}
+
+// ---------- 系统集成 ----------
+
+/// 用系统默认浏览器打开 URL（对齐旧版 Desktop.browse）。
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    open_url_inner(&url)
+}
+
+/// 用系统文件管理器打开目录（对齐旧版 Desktop.open）。
+#[tauri::command]
+pub fn open_path(path: String) -> Result<(), String> {
+    open_path_inner(&path)
+}
+
+pub fn open_url_inner(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+pub fn open_path_inner(path: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }

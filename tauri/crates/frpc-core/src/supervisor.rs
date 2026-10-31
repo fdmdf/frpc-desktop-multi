@@ -17,7 +17,7 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::TimeZone as _;
 use serde::{Deserialize, Serialize};
@@ -124,8 +124,13 @@ struct Inner {
 }
 
 /// frpc 子进程监管器（每个应用一个实例）。
+///
+/// 自带独立 tokio 运行时：宿主（Tauri 主线程 / 命令线程 / 测试）无需处于
+/// 任何 async 上下文即可调用 `start` / `stop` —— 否则在 Tauri 命令线程里
+/// `tokio::spawn` 会 panic（表现为点击"启动"后整个应用闪退）。
 pub struct Supervisor {
     cfg: SupervisorConfig,
+    rt: Arc<tokio::runtime::Runtime>,
     inner: Arc<Mutex<Inner>>,
     stopping: Arc<AtomicBool>,
     metrics_reader: Arc<std::sync::Mutex<ProcessMetricsReader>>,
@@ -149,6 +154,7 @@ impl Clone for Supervisor {
     fn clone(&self) -> Self {
         Self {
             cfg: self.cfg.clone(),
+            rt: self.rt.clone(),
             inner: self.inner.clone(),
             stopping: self.stopping.clone(),
             metrics_reader: self.metrics_reader.clone(),
@@ -185,6 +191,7 @@ impl Supervisor {
         let (admin_reachable_tx, _) = watch::channel(false);
         let (metrics_tx, _) = watch::channel(None);
         Self {
+            rt: shared_runtime(),
             inner: Arc::new(Mutex::new(Inner::default())),
             stopping: Arc::new(AtomicBool::new(false)),
             metrics_reader: Arc::new(std::sync::Mutex::new(ProcessMetricsReader::new())),
@@ -275,7 +282,7 @@ impl Supervisor {
     /// 启动（若已有运行中的进程则先停止，与 Kotlin `start` 一致）。
     pub fn start(&self, profile: ProfileRef) {
         let this = self.clone();
-        tokio::spawn(async move {
+        self.rt.spawn(async move {
             let mut inner = this.inner.lock().await;
             if matches!(
                 this.state_tx.borrow().phase,
@@ -289,7 +296,7 @@ impl Supervisor {
 
     pub fn stop(&self) {
         let this = self.clone();
-        tokio::spawn(async move {
+        self.rt.spawn(async move {
             let mut inner = this.inner.lock().await;
             this.stop_internal(&mut inner, Duration::from_secs(6)).await;
         });
@@ -379,7 +386,7 @@ impl Supervisor {
     pub fn cleanup_orphans(&self) {
         let run_dir = self.cfg.run_dir.clone();
         let this = self.clone();
-        tokio::spawn(async move {
+        self.rt.spawn(async move {
             let killed = tokio::task::spawn_blocking(move || kill_orphans(&run_dir))
                 .await
                 .unwrap_or(0);
@@ -530,7 +537,7 @@ impl Supervisor {
         // stdout / stderr 各起一个读取任务（Kotlin redirectErrorStream 合并读取）
         if let Some(stdout) = child.stdout.take() {
             let this = self.clone();
-            tokio::spawn(async move {
+            self.rt.spawn(async move {
                 let mut lines = tokio::io::BufReader::new(stdout).lines();
                 while let Ok(Some(line)) = lines.next_line().await {
                     this.ingest_line(&line);
@@ -539,7 +546,7 @@ impl Supervisor {
         }
         if let Some(stderr) = child.stderr.take() {
             let this = self.clone();
-            tokio::spawn(async move {
+            self.rt.spawn(async move {
                 let mut lines = tokio::io::BufReader::new(stderr).lines();
                 while let Ok(Some(line)) = lines.next_line().await {
                     this.ingest_line(&line);
@@ -570,14 +577,14 @@ impl Supervisor {
     fn start_pollers(&self, inner: &mut Inner) {
         self.stop_status_pollers(inner);
         let this = self.clone();
-        inner.pollers.push(tokio::spawn(async move {
+        inner.pollers.push(self.rt.spawn(async move {
             loop {
                 tokio::time::sleep(this.cfg.status_interval).await;
                 this.poll_status().await;
             }
         }));
         let this = self.clone();
-        inner.pollers.push(tokio::spawn(async move {
+        inner.pollers.push(self.rt.spawn(async move {
             loop {
                 tokio::time::sleep(this.cfg.metrics_interval).await;
                 this.poll_metrics().await;
@@ -635,7 +642,9 @@ impl Supervisor {
         let stop_sig = Arc::new(Notify::new());
         inner.stop_sig = Some(stop_sig.clone());
         let this = self.clone();
-        inner.watcher = Some(tokio::spawn(async move {
+        let rt = self.rt.clone();
+        let rt_inner = self.rt.clone();
+        inner.watcher = Some(rt.spawn(async move {
             tokio::select! {
                 st = child.wait() => {
                     let code = st.ok().and_then(|s| s.code()).unwrap_or(-1);
@@ -656,7 +665,7 @@ impl Supervisor {
                     });
                     // 自动重启放独立任务：不持有 supervisor 内锁，避免与 stop 竞争
                     let this2 = this.clone();
-                    tokio::spawn(async move {
+                    rt_inner.spawn(async move {
                         this2.auto_restart(profile).await;
                     });
                 }
@@ -794,6 +803,22 @@ impl Supervisor {
     }
 }
 
+/// 进程级共享运行时：所有 Supervisor 复用；静态存储永不 drop，
+/// 规避"async 上下文中 drop Runtime"的 panic，也避免测试反复建运行时。
+fn shared_runtime() -> Arc<tokio::runtime::Runtime> {
+    static RT: std::sync::OnceLock<Arc<tokio::runtime::Runtime>> = std::sync::OnceLock::new();
+    RT.get_or_init(|| {
+        Arc::new(
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .expect("supervisor runtime"),
+        )
+    })
+    .clone()
+}
+
 /// 指数退避：`min(base << (attempt-1), cap)`（Kotlin `2_000L shl (attempt-1)`）。
 pub fn backoff_ms(attempt: u32, base_ms: u64, cap_ms: u64) -> u64 {
     let shift = attempt.saturating_sub(1).min(31);
@@ -875,6 +900,54 @@ mod tests {
         assert_eq!(4_000, backoff_ms(2, 2_000, 60_000));
         assert_eq!(8_000, backoff_ms(3, 2_000, 60_000));
         assert_eq!(60_000, backoff_ms(7, 2_000, 60_000), "超过上限应钳制");
+    }
+
+    /// 回归：在**无 tokio 上下文**的普通线程调用 start（复现 Tauri 命令线程场景，
+    /// 修复"点击启动后闪退"）。
+    #[test]
+    fn start_works_without_tokio_context() {
+        let dir = std::env::temp_dir().join(format!("frpc-sup-noctx-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let engine = make_fake_engine(&dir);
+        let sup = Supervisor::new(SupervisorConfig {
+            engine_path: engine,
+            run_dir: dir.clone(),
+            run_config_file: dir.join("run.toml"),
+            status_interval: Duration::from_millis(50),
+            metrics_interval: Duration::from_millis(50),
+            max_log_lines: 50,
+            max_restarts: 1,
+            backoff_base_ms: 10,
+            backoff_cap_ms: 50,
+        });
+        let state = sup.state();
+        // 当前线程没有任何 tokio 运行时 —— 修复前这里会 panic
+        sup.start(ProfileRef {
+            id: "p1".into(),
+            name: "n".into(),
+            config: FrpcConfig {
+                server_addr: "1.2.3.4".into(),
+                ..FrpcConfig::default()
+            },
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            assert!(Instant::now() < deadline, "等待 RUNNING 超时");
+            if state.borrow().phase == Phase::Running {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        sup.stop();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            assert!(Instant::now() < deadline, "等待 IDLE 超时");
+            if state.borrow().phase == Phase::Idle {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
