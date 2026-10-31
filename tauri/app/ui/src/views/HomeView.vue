@@ -210,7 +210,7 @@ async function confirmSwitch() {
   try {
     await store.start(target.id);
   } catch (e) {
-    blockedReason.value = String(e).replace(/^Error:\s*/, "");
+    blockedReason.value = errorText(e);
   }
 }
 
@@ -224,7 +224,7 @@ async function toggleRun() {
   try {
     await store.start(profile.id);
   } catch (e) {
-    blockedReason.value = String(e).replace(/^Error:\s*/, "");
+    blockedReason.value = errorText(e);
   }
 }
 
