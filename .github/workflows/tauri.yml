@@ -86,9 +86,9 @@ jobs:
           TARGETS: ${{ matrix.targets }}
         run: |
           set -o pipefail
-          bash scripts/build-frpc.sh desktop 2>&1 | tee /tmp/eng.log || CODE=$?
+          bash -x scripts/build-frpc.sh desktop 2>&1 | tee /tmp/eng.log || CODE=$?
           if [ "${CODE:-0}" -ne 0 ]; then
-            tail -n 22 /tmp/eng.log | while IFS= read -r line; do echo "::error::$line"; done
+            tail -n 40 /tmp/eng.log | while IFS= read -r line; do echo "::error::$line"; done
             exit "${CODE:-1}"
           fi
           mkdir -p tauri/app/src-tauri/resources/engine
@@ -180,7 +180,7 @@ jobs:
           set -o pipefail
           ui/node_modules/.bin/tauri android build --apk --target aarch64 2>&1 | tee /tmp/apk.log || CODE=$?
           if [ "${CODE:-0}" -ne 0 ]; then
-            tail -n 22 /tmp/apk.log | while IFS= read -r line; do echo "::error::$line"; done
+            tail -n 40 /tmp/apk.log | while IFS= read -r line; do echo "::error::$line"; done
             exit "${CODE:-1}"
           fi
 
