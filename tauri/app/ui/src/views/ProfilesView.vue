@@ -1225,12 +1225,12 @@ async function clearAll() {
 
   <!-- ============ 列表态 ============ -->
   <div v-else class="page">
-    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
-      <div>
+    <div class="profiles-header">
+      <div class="profiles-heading">
         <h2 class="page-title">{{ $t("profiles.title") }}</h2>
         <p class="page-sub">{{ $t("profiles.subtitle") }}</p>
       </div>
-      <div style="display: flex; gap: 12px">
+      <div class="profiles-header-actions">
         <label class="btn">
           {{ $t("profiles.import") }}
           <input type="file" accept=".toml" hidden @change="onImportFile" />
@@ -1239,8 +1239,8 @@ async function clearAll() {
       </div>
     </div>
 
-    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
-      <div class="field" style="flex: 1">
+    <div class="profiles-toolbar">
+      <div class="field profiles-search">
         <input v-model="query" :placeholder="$t('profiles.searchPlaceholder')" />
       </div>
       <button class="btn" @click="exportAll">{{ $t("profiles.exportAll") }}</button>
@@ -1264,33 +1264,36 @@ async function clearAll() {
       <p class="muted" style="margin: 0">{{ $t("profiles.noMatch", { q: query }) }}</p>
     </div>
 
-    <div v-for="profile in visible" :key="profile.id" class="section-card">
-      <div style="display: flex; align-items: center; gap: 8px">
-        <div style="flex: 1; min-width: 0">
-          <div style="display: flex; align-items: center; gap: 8px">
-            <span style="font-size: 15px; font-weight: 500">{{ profile.name }}</span>
-            <span v-if="store.runningId === profile.id" class="status-chip chip-running">{{ $t("profiles.chipRunning") }}</span>
-            <span v-if="store.pendingReload === profile.id" class="status-chip chip-error">{{ $t("profiles.chipPending") }}</span>
-            <span v-if="store.settings?.defaultProfileId === profile.id" class="status-chip chip-brand">{{ $t("profiles.chipDefault") }}</span>
-          </div>
-          <div class="muted">
-            {{ `${profile.config.serverAddr}:${profile.config.serverPort}` }} ·
-            {{ $t("profiles.metaProxies", { n: profile.config.proxies.length }) }}<template v-if="profile.config.visitors.length">
-              · {{ $t("profiles.metaVisitors", { n: profile.config.visitors.length }) }}</template
-            >
-          </div>
-          <div
-            v-if="store.runningId === profile.id"
-            class="small"
-            :class="store.pendingReload === profile.id ? 'error-text' : 'muted'"
-          >
-            {{
-              store.pendingReload === profile.id
-                ? $t("profiles.pendingHint")
-                : $t("profiles.runningHint")
-            }}
-          </div>
+    <div v-for="profile in visible" :key="profile.id" class="section-card profile-card">
+      <div class="pc-main">
+        <div class="pc-head">
+          <span class="pc-name">{{ profile.name }}</span>
+          <span v-if="store.runningId === profile.id" class="status-chip chip-running">{{ $t("profiles.chipRunning") }}</span>
+          <span v-if="store.pendingReload === profile.id" class="status-chip chip-error">{{ $t("profiles.chipPending") }}</span>
+          <span v-if="store.settings?.defaultProfileId === profile.id" class="status-chip chip-brand">{{ $t("profiles.chipDefault") }}</span>
         </div>
+        <!-- 每个信息单独成段：换行只发生在「·」分隔处，不会把「代理 1 个」拆成两行 -->
+        <div class="pc-meta">
+          <span class="pc-meta-item">{{ profile.config.serverAddr }}:{{ profile.config.serverPort }}</span>
+          <span class="pc-meta-item">· {{ $t("profiles.metaProxies", { n: profile.config.proxies.length }) }}</span>
+          <span v-if="profile.config.visitors.length" class="pc-meta-item">
+            · {{ $t("profiles.metaVisitors", { n: profile.config.visitors.length }) }}
+          </span>
+        </div>
+        <div
+          v-if="store.runningId === profile.id"
+          class="pc-hint small"
+          :class="store.pendingReload === profile.id ? 'error-text' : 'muted'"
+        >
+          {{
+            store.pendingReload === profile.id
+              ? $t("profiles.pendingHint")
+              : $t("profiles.runningHint")
+          }}
+        </div>
+      </div>
+
+      <div class="pc-actions">
         <button
           class="icon-btn"
           :title="store.runningId === profile.id ? $t('home.stop') : $t('home.start')"

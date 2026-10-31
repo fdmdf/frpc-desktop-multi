@@ -582,6 +582,98 @@ body {
   padding: 2px 0;
 }
 
+/* ---------- 配置档案卡（ProfilesView） ----------
+   卡片 = 「文本块（自适应）+ 操作按钮组（固定宽）」两段。
+   以前是「一行 flex + 6 个按钮」，窄屏下文本列被挤到 ~90px：
+   标题折两行、副标题的「代理 1 个」被拆成「1」和「个」两行、
+   按钮还跑到文字中间。现在文本块独占宽度，按钮独立成组。 */
+.profiles-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profiles-heading {
+  min-width: 0;
+}
+
+.profiles-header-actions {
+  display: flex;
+  gap: 12px;
+  flex: none;
+}
+
+/* 工具行：搜索框给一个「至少 240px」的弹性基准，按钮不被压缩 */
+.profiles-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profiles-toolbar .profiles-search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.profiles-toolbar > .btn {
+  flex: none;
+}
+
+.profile-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.pc-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pc-name {
+  font-size: 15px;
+  font-weight: 500;
+  /* 超长文件名（含 - _）在任意位置断行，绝不撑破卡片 */
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.pc-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  color: var(--text-2);
+}
+
+/* 单条信息不拆行：「代理 1 个」要整体换行 */
+.pc-meta-item {
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pc-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: none;
+}
+
 /* 轻提示（复制结果等）：底部居中，避开移动端底部导航 */
 .toast {
   position: fixed;
@@ -733,6 +825,28 @@ body {
   /* 固定宽度的选择器（当前配置 / 日志筛选）窄屏改为整行 */
   .fixed-field {
     width: 100%;
+  }
+
+  /* 配置卡：窄屏下操作按钮换到独立一行，文本块独占整行 */
+  .profile-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .pc-actions {
+    justify-content: flex-end;
+    margin-top: 2px;
+  }
+
+  /* 顶部「导入 / 新建」按钮跟标题挤一行会只剩半个字，单独成行靠右 */
+  .profiles-header-actions {
+    margin-left: auto;
+  }
+
+  /* 工具行：搜索框独占一行，导出/导入/清空按钮排到下一行 */
+  .profiles-toolbar .profiles-search {
+    flex: 1 1 100%;
   }
 
   /* 抬到底部导航栏之上 */
