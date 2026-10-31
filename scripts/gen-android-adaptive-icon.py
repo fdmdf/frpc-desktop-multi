@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成 Android 自适应图标（adaptive icon）的前景层。
+"""生成 Android 自适应图标（adaptive icon）资源。
 
 背景
 ----
@@ -10,14 +10,20 @@
   * 前景 = 白色标识（拱门 + 数据流箭头），透明底
   * 背景 = 品牌蓝 #0B57D0（见 values/ic_launcher_background.xml）
 
-尺寸口径（重要）
-----------------
-108dp 画布中只有中心 72dp 可见，关键内容宜落在中心 66dp 的 keyline 圆内。
-本脚本的 CONTENT_RATIO 指的是 **字形包围盒宽度 / 108dp 画布宽度**。
+几何必须与 docs/assets/icon.svg（即桌面 icon.png）完全一致
+--------------------------------------------------------
+SVG 的 `stroke` 是**沿路径居中**画的：拱门半径 106、描边 34，实际覆盖半径
+89~123。而 PIL 的 `ImageDraw.arc(width=)` 是**从外边界向内**描 —— 早期版本
+直接用它，导致内径变成 106-34=72（少了 17px），拱门成了「肥厚的小拱」：
+开口变小、竖腿与拱门之间还留了个台阶。桌面图标和安卓图标放一起就能看出差别。
 
-旧实现把 SAFE=0.62 乘在 512 的绘制画布上，而字形只占该画布的 48%，
-实际落进图标只有 0.62×0.48 ≈ 30%，桌面显示成「蓝底上一个小白标」。
-现在改为先裁到字形包围盒、再按 CONTENT_RATIO 缩放，并真正居中。
+现在改为蒙版绘制：外半圆（半径 R+STROKE/2）填满后挖掉内圆（R-STROKE/2），
+竖腿用矩形 + 圆头补齐，与 SVG 的描边语义逐像素对齐。
+
+尺寸口径
+--------
+108dp 画布中只有中心 72dp 可见，关键内容宜落在中心 66dp 的 keyline 圆内。
+`CONTENT_RATIO` 指 **字形包围盒宽度 / 108dp 画布宽度**。
 
 用法：python scripts/gen-android-adaptive-icon.py
 """
@@ -43,7 +49,7 @@ FLOW_Y = 310
 FLOW_W = 22
 ARROW = [(282, 286), (322, 310), (282, 334)]
 
-# 自适应图标各密度尺寸（108dp 基准）
+# 自适应图标前景各密度尺寸（108dp 基准）
 DENSITIES = {
     "mipmap-mdpi": 108,
     "mipmap-hdpi": 162,
@@ -52,72 +58,136 @@ DENSITIES = {
     "mipmap-xxxhdpi": 432,
 }
 
+# 旧版位图图标（API 24/25 与未做遮罩的第三方壳子会直接用这张）：48dp 基准
+LEGACY_SIZES = {
+    "mipmap-mdpi": 48,
+    "mipmap-hdpi": 72,
+    "mipmap-xhdpi": 96,
+    "mipmap-xxhdpi": 144,
+    "mipmap-xxxhdpi": 192,
+}
+
 # 字形包围盒宽度占 108dp 画布的比例。
-# 0.50 → 字形占可见区（72dp）约 77%，与桌面图标一致（桌面版占圆角方块 48%）。
-# 实测（432px 画布）：0.52 时圆形遮罩切掉 0.08% 像素（竖腿圆头贴到边上），
-# 0.56 时切掉 3.3%（圆头被切平），0.50 及以下零裁切 —— 取零裁切里最饱满的一档。
+# 0.50 → 字形占可见区（72dp）约 75%，实测圆形遮罩零裁切（见 verify_ratios）。
 CONTENT_RATIO = 0.50
-# 超采样倍数：先按 4 倍绘制再缩回去，避免圆弧与圆头端点出现锯齿
-SS = 4
+# 旧版位图是满幅显示（没有遮罩裁切），按桌面 icon.png 的 48% 走
+LEGACY_CONTENT_RATIO = 0.48
+
+# 绘制精度：每 1 个 SVG 单位渲染成几个像素（512 单位 → 2048px 画布），
+# 再下采样到各密度，圆弧不会出现锯齿。
+PPU = 4
+
 BRAND_BLUE = "#0B57D0"
+BRAND_BLUE_TOP = "#1E88E5"
 
 
-def draw_glyph() -> Image.Image:
-    """在 512 坐标系下绘制字形，返回已裁到包围盒的 RGBA 图。"""
-    img = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    white = (255, 255, 255, 255)
+def glyph_mask(ppu: float = PPU) -> Image.Image:
+    """按 SVG 语义绘制字形蒙版（白色 = 有内容），返回已裁到包围盒的 L 图。"""
+    box = int(round(SIZE * ppu))
+    mask = Image.new("L", (box, box), 0)
+    d = ImageDraw.Draw(mask)
 
-    # 拱门：上半圆 + 两条竖腿（竖腿底部用圆头收尾）
-    box = [
-        ARCH_CENTER[0] - ARCH_R,
-        ARCH_CENTER[1] - ARCH_R,
-        ARCH_CENTER[0] + ARCH_R,
-        ARCH_CENTER[1] + ARCH_R,
-    ]
-    d.arc(box, 180, 360, fill=white, width=STROKE)
-    for x in (ARCH_CENTER[0] - ARCH_R, ARCH_CENTER[0] + ARCH_R):
-        d.line([(x, ARCH_CENTER[1]), (x, LEG_BOTTOM)], fill=white, width=STROKE)
-        r = STROKE / 2
-        d.ellipse([x - r, LEG_BOTTOM - r, x + r, LEG_BOTTOM + r], fill=white)
+    half = STROKE / 2
+    cx, cy = ARCH_CENTER
 
-    # 数据流：源点 + 横线（带圆头）+ 箭头
-    cx, cy = DOT
-    d.ellipse([cx - DOT_R, cy - DOT_R, cx + DOT_R, cy + DOT_R], fill=white)
-    d.line([(FLOW_START, FLOW_Y), (FLOW_END, FLOW_Y)], fill=white, width=FLOW_W)
-    fr = FLOW_W / 2
-    d.ellipse([FLOW_END - fr, FLOW_Y - fr, FLOW_END + fr, FLOW_Y + fr], fill=white)
-    d.polygon(ARROW, fill=white)
+    def px(x: float, y: float):
+        return (x * ppu, y * ppu)
 
-    bbox = img.split()[3].getbbox()
+    # 拱门上半圆：先填外圆（R+half），再挖内圆（R-half）—— 等价于居中描边
+    r_out = (ARCH_R + half) * ppu
+    r_in = (ARCH_R - half) * ppu
+    ox, oy = px(cx, cy)
+    d.pieslice([ox - r_out, oy - r_out, ox + r_out, oy + r_out], 180, 360, fill=255)
+    d.ellipse([ox - r_in, oy - r_in, ox + r_in, oy + r_in], fill=0)
+
+    # 两条竖腿（矩形 + 底部圆头），从拱门圆心高度接到 LEG_BOTTOM
+    for x in (cx - ARCH_R, cx + ARCH_R):
+        d.rectangle([*px(x - half, cy), *px(x + half, LEG_BOTTOM)], fill=255)
+        d.ellipse(
+            [*px(x - half, LEG_BOTTOM - half), *px(x + half, LEG_BOTTOM + half)],
+            fill=255,
+        )
+
+    # 数据流：源点 + 横线（两端圆头）+ 箭头
+    dx, dy = px(*DOT)
+    rr = DOT_R * ppu
+    d.ellipse([dx - rr, dy - rr, dx + rr, dy + rr], fill=255)
+
+    fw = max(1, int(round(FLOW_W * ppu)))
+    d.line([*px(FLOW_START, FLOW_Y), *px(FLOW_END, FLOW_Y)], fill=255, width=fw)
+    fr = fw / 2
+    ex, ey = px(FLOW_END, FLOW_Y)
+    d.ellipse([ex - fr, ey - fr, ex + fr, ey + fr], fill=255)
+
+    d.polygon([px(x, y) for x, y in ARROW], fill=255)
+
+    bbox = mask.getbbox()
     if bbox is None:
         sys.exit("字形为空：绘制参数可能被改坏了")
-    return img.crop(bbox)
+    return mask.crop(bbox)
+
+
+def white_glyph(ppu: float = PPU) -> Image.Image:
+    """纯白 + 蒙版 alpha 的字形图（已裁到包围盒）。"""
+    mask = glyph_mask(ppu)
+    glyph = Image.new("RGBA", mask.size, (255, 255, 255, 255))
+    glyph.putalpha(mask)
+    return glyph
+
+
+def place(glyph: Image.Image, size: int, ratio: float) -> Image.Image:
+    """把字形按「宽度 = size*ratio」等比缩放并居中，输出 size×size 的透明画布。"""
+    target_w = max(1, size * ratio)
+    scale = target_w / glyph.width
+    new = (
+        max(1, round(glyph.width * scale)),
+        max(1, round(glyph.height * scale)),
+    )
+    if new[1] > size:
+        sys.exit(f"字形高度 {new[1]}px 超出画布 {size}px，检查 CONTENT_RATIO")
+    small = glyph.resize(new, Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(small, (round((size - new[0]) / 2), round((size - new[1]) / 2)), small)
+    return canvas
 
 
 def render_foreground(size: int, ratio: float = CONTENT_RATIO) -> Image.Image:
-    """按目标画布尺寸渲染前景层（透明底，字形居中）。"""
-    glyph = draw_glyph()
+    """自适应图标前景层（透明底，字形居中）。"""
+    return place(white_glyph(), size, ratio)
 
-    # 超采样：先放大到 size*SS，再整体缩回，边缘更干净
-    big = size * SS
-    target_w = big * ratio
-    scale = target_w / glyph.width
-    target_h = glyph.height * scale
-    glyph = glyph.resize(
-        (max(1, round(glyph.width * scale)), max(1, round(glyph.height * scale))),
-        Image.LANCZOS,
-    )
 
-    canvas = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    canvas.paste(
-        glyph,
-        (round((big - glyph.width) / 2), round((big - glyph.height) / 2)),
-        glyph,
-    )
-    if target_h > big:
-        sys.exit("字形高度超出画布，检查 CONTENT_RATIO")
-    return canvas.resize((size, size), Image.LANCZOS)
+def linear_gradient(size: int) -> Image.Image:
+    """斜向品牌渐变（与 icon.svg 的 #1E88E5 → #0B57D0 同向），用于旧版位图。"""
+    top, bottom = (30, 136, 229), (11, 87, 208)
+    grad = Image.new("RGBA", (size, size))
+    px = grad.load()
+    for y in range(size):
+        for x in range(size):
+            t = (x + y) / (2 * (size - 1)) if size > 1 else 0
+            px[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(top, bottom)) + (255,)
+    return grad
+
+
+def render_legacy(size: int, circle: bool) -> Image.Image:
+    """旧版位图图标：满幅蓝底（圆角方 / 圆形）+ 居中字形。"""
+    ss = 4
+    big = size * ss
+    base = linear_gradient(big)
+    shape = Image.new("L", (big, big), 0)
+    d = ImageDraw.Draw(shape)
+    if circle:
+        d.ellipse([0, 0, big - 1, big - 1], fill=255)
+    else:
+        # 与 icon.svg 一致的 116/512 圆角
+        d.rounded_rectangle([0, 0, big - 1, big - 1], radius=round(big * 116 / 512), fill=255)
+    base.putalpha(shape)
+
+    glyph = white_glyph()
+    scaled_w = big * LEGACY_CONTENT_RATIO
+    scale = scaled_w / glyph.width
+    small = glyph.resize((round(glyph.width * scale), round(glyph.height * scale)), Image.LANCZOS)
+    base.alpha_composite(small, (round((big - small.width) / 2), round((big - small.height) / 2)))
+    return base.resize((size, size), Image.LANCZOS)
 
 
 def write_foreground() -> None:
@@ -140,6 +210,15 @@ def write_foreground() -> None:
         )
 
 
+def write_legacy() -> None:
+    for folder, size in LEGACY_SIZES.items():
+        for name, circle in (("ic_launcher.png", False), ("ic_launcher_round.png", True)):
+            out = os.path.join(ICONS, folder, name)
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            render_legacy(size, circle).save(out, optimize=True)
+        print("legacy     %-18s %dx%d (ic_launcher / ic_launcher_round)" % (folder, size, size))
+
+
 def write_background() -> None:
     """背景色固定为品牌蓝（原模板是白色）。"""
     for path in (
@@ -155,27 +234,62 @@ def write_background() -> None:
         print("background", path)
 
 
-def write_monochrome_resources() -> None:
-    """Android 13+ 主题图标（themed icon）：用同一份白色前景做单色层。
+def write_adaptive_xml() -> None:
+    """anydpi-v26 / anydpi-v33 的 ic_launcher **和 ic_launcher_round**。
 
-    前景已经是「纯白 + alpha」，系统着色时会按 alpha 上色，可直接复用。
+    缺 ic_launcher_round.xml 是另一个坑：AndroidManifest 的 `android:roundIcon`
+    指向 @mipmap/ic_launcher_round，8+ 找不到自适应版本就会回退到旧版位图
+    PNG —— 于是「用圆形图标的启动器」显示的是非自适应的大方块，
+    和「方形图标」的启动器显示的样式完全不一致。
     """
-    os.makedirs(os.path.join(ICONS, "mipmap-anydpi-v33"), exist_ok=True)
-    path = os.path.join(ICONS, "mipmap-anydpi-v33", "ic_launcher.xml")
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write('<?xml version="1.0" encoding="utf-8"?>\n')
-        f.write('<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n')
-        f.write('  <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n')
-        f.write('  <background android:drawable="@color/ic_launcher_background"/>\n')
-        f.write('  <monochrome android:drawable="@mipmap/ic_launcher_foreground"/>\n')
-        f.write("</adaptive-icon>\n")
-    print("monochrome", path)
+    for folder, mono in (("mipmap-anydpi-v26", False), ("mipmap-anydpi-v33", True)):
+        out_dir = os.path.join(ICONS, folder)
+        os.makedirs(out_dir, exist_ok=True)
+        for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
+            path = os.path.join(out_dir, name)
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                f.write('<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n')
+                f.write('  <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n')
+                f.write('  <background android:drawable="@color/ic_launcher_background"/>\n')
+                if mono:
+                    # Android 13+ 主题图标：前景本身是「纯白 + alpha」，系统按 alpha 着色
+                    f.write('  <monochrome android:drawable="@mipmap/ic_launcher_foreground"/>\n')
+                f.write("</adaptive-icon>\n")
+            print("adaptive  ", path)
+
+
+def verify_ratios() -> None:
+    """自检：各候选比例在圆形 / 方圆角遮罩下被切掉的像素占比。"""
+    size = DENSITIES["mipmap-xxxhdpi"]
+    visible = size * 72 / 108  # 启动器可见区
+    circles = []
+    for ratio in (0.46, 0.48, 0.50, 0.52):
+        img = render_foreground(size, ratio)
+        alpha = img.split()[3]
+        total = sum(alpha.getdata())
+        for shape in ("circle", "squircle"):
+            m = Image.new("L", (size, size), 0)
+            d = ImageDraw.Draw(m)
+            if shape == "circle":
+                d.ellipse([(size - visible) / 2, (size - visible) / 2, (size + visible) / 2, (size + visible) / 2], fill=255)
+            else:
+                pad = (size - visible) / 2
+                d.rounded_rectangle([pad, pad, size - pad, size - pad], radius=round(visible * 0.22), fill=255)
+            kept = sum(a & v for a, v in zip(alpha.getdata(), m.getdata()))
+            loss = (total - kept) / total * 100 if total else 0
+            circles.append(f"ratio={ratio:.2f} {shape:<8} 裁切 {loss:.2f}%")
+    print("遮罩自检（108dp 可见区 72dp）：")
+    for line in circles:
+        print("  " + line)
 
 
 if __name__ == "__main__":
     if not os.path.isdir(ICONS):
         sys.exit(f"icons 目录不存在：{ICONS}（先跑 tauri icon）")
     write_foreground()
+    write_legacy()
     write_background()
-    write_monochrome_resources()
+    write_adaptive_xml()
+    verify_ratios()
     print("done")
