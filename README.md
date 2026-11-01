@@ -2,6 +2,7 @@
   <img src="docs/assets/icon.svg" width="96" height="96" alt="frpc-desktop-multi" />
   <h1>frpc-desktop-multi</h1>
   <p><b>frp 内网穿透的可视化客户端</b> · Windows / Linux / macOS / Android<br>配置、启停、日志、监控，全在一个界面里</p>
+  <p><sub>A GUI client for frp (fast reverse proxy) — configure, run and monitor frpc tunnels on desktop and Android.<br>No terminal, no manual binary download.</sub></p>
 
   <p>
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
@@ -15,19 +16,23 @@
     <a href="https://github.com/fdmdf/frpc-desktop-multi/releases/latest"><img src="https://img.shields.io/github/v/release/fdmdf/frpc-desktop-multi?label=%E4%B8%8B%E8%BD%BD" alt="Release" /></a>
     <a href="https://github.com/fdmdf/frpc-desktop-multi/actions/workflows/tauri.yml"><img src="https://github.com/fdmdf/frpc-desktop-multi/actions/workflows/tauri.yml/badge.svg" alt="CI" /></a>
   </p>
+
+  <p>
+    <b>简体中文</b> · <a href="README.en.md">English</a>
+  </p>
 </div>
 
 ---
 
 ## 特性
 
-- **可视化配置**：8 种代理类型 + 3 种访问者，按类型生成表单，保存前自动校验（必填、端口占用、重名、类型不支持的字段）
-- **一键启停**：启动 / 停止 / 热重载；进程异常退出按指数退避自动重启
-- **真实状态**：优先读 frpc 的 admin API（含真实远程端口），接口关闭时用日志推断；访问者状态同样可见
-- **资源与日志**：CPU / 内存 / 线程 / 运行时长实时采样；日志分级过滤、搜索、导出
-- **开箱即用**：内置 frpc 引擎，各平台原生编译，用户不需要装 Java、Go 或手动下载二进制
-- **双语界面**：简体中文 / English，应用内切换，也可跟随系统
-- **一份代码两端跑**：Rust 核心层（`frpc-core`）+ Vue 3 界面，桌面与 Android 共用同一份实现
+- **可视化配置**（visual config editor）：8 种代理类型 + 3 种访问者，按类型生成表单，保存前自动校验（必填、端口占用、重名、类型不支持的字段）
+- **一键启停**（start / stop / hot reload）：启动 / 停止 / 热重载；进程异常退出按指数退避自动重启
+- **真实状态**（live tunnel status）：优先读 frpc 的 admin API（含真实远程端口），接口关闭时用日志推断；访问者状态同样可见
+- **资源与日志**（metrics & logs）：CPU / 内存 / 线程 / 运行时长实时采样；日志分级过滤、搜索、导出
+- **开箱即用**（self-contained）：内置 frpc 引擎，各平台原生编译，用户不需要装 Java、Go 或手动下载二进制
+- **双语界面**（i18n）：简体中文 / English，应用内切换，也可跟随系统
+- **一份代码两端跑**（cross-platform core）：Rust 核心层（`frpc-core`）+ Vue 3 界面，桌面与 Android 共用同一份实现
 
 ## 界面
 
@@ -123,6 +128,16 @@ docs/wiki/            使用文档
 - macOS 产物未签名 / 未公证
 - 运行中的配置不可编辑，需先停止服务（避免"改了没生效"的误解）
 - xtcp 依赖 UDP 打洞：系统代理 / 虚拟网卡（TUN）、对称型 NAT、模拟器网络都可能让它建不上隧道。日志出现 `establishing nat hole connection successful` 仍不通时，先关掉系统代理或换网络再试
+
+## 相关项目
+
+| 项目 | 关系 |
+|---|---|
+| [fatedier/frp](https://github.com/fatedier/frp) | 本项目内置的引擎本体，frpc / frps 的官方实现（Apache-2.0） |
+| [frp 官方文档](https://gofrp.org/) | 配置项、协议与 frps 服务端部署的权威说明 |
+| [Tauri](https://github.com/tauri-apps/tauri) | 桌面端外壳与打包，跨平台窗口与系统集成 |
+| [Vue 3](https://github.com/vuejs/core) | 界面层框架，桌面与 Android 共用 |
+| [ngrok](https://ngrok.com/) · [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) | 托管的同类穿透方案，无需自备公网服务器；本项目面向自建 frps 的场景 |
 
 ## 许可
 
