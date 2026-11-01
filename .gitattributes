@@ -1,0 +1,19 @@
+* text=auto eol=lf
+
+# 二进制资源（避免换行符转换破坏文件，并从语言统计中排除）
+*.so binary linguist-vendored
+*.apk binary linguist-vendored
+*.jar binary
+*.jpg binary
+*.png binary
+*.ico binary
+*.jks binary
+*.keystore binary
+
+# 生成产物
+androidApp/src/main/jniLibs/** linguist-generated
+scripts/frpc-web-dist/*.js linguist-generated
+scripts/frpc-web-dist/*.css linguist-generated
+
+# 构建缓存
+desktopApp/engine/** linguist-generated

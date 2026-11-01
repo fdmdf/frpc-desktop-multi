@@ -1,0 +1,951 @@
+/* Material3 风格主题 —— 与旧版 Compose 端视觉一致（Theme.kt） */
+:root {
+  --brand: #0b57d0;
+  --brand-soft: rgba(11, 87, 208, 0.12);
+  --bg: #f6f7fa;
+  --surface: #ffffff;
+  --surface-2: #eef0f4;
+  --border: rgba(0, 0, 0, 0.12);
+  --border-soft: rgba(0, 0, 0, 0.08);
+  --text: #1c1e21;
+  --text-2: #5b6068;
+  --error: #b3261e;
+  /* 危险操作的**填充底色**（停止 / 删除）。不能直接用 --error：暗色主题的
+     --error 是给文字用的浅红，铺成底会让白字发糊。 */
+  --danger: #b3261e;
+  --danger-hover: #8f1d17;
+  --running: #2e7d32;
+  --starting: #b26a00;
+  --idle: #5b6068;
+  --radius: 12px;
+}
+
+[data-theme="dark"] {
+  --brand: #9ec1ff;
+  --brand-soft: rgba(158, 193, 255, 0.16);
+  --bg: #141518;
+  --surface: #1b1d21;
+  --surface-2: #24262b;
+  --border: rgba(255, 255, 255, 0.14);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --text: #e8eaed;
+  --text-2: #b4b9c2;
+  --error: #f2b8b5;
+  --danger: #c5372c;
+  --danger-hover: #a52a22;
+  --running: #6fbf73;
+  --starting: #e0a23c;
+  --idle: #9aa0a8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.shell {
+  display: flex;
+  height: 100%;
+}
+
+/* ---------- 侧栏（Main.kt Sidebar：224dp） ---------- */
+.sidebar {
+  width: 224px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 12px;
+  background: var(--surface);
+  border-right: 0.5px solid var(--border);
+}
+
+.sidebar .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.sidebar .brand svg {
+  width: 22px;
+  height: 22px;
+  color: var(--brand);
+  flex: none;
+}
+
+/* 品牌 Logo（与打包图标同一个 svg：蓝底白拱门+箭头） */
+.brand-logo {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 5px;
+  display: block;
+}
+
+/* 移动端顶栏：桌面端隐藏（标题在侧栏里） */
+.topbar {
+  display: none;
+}
+
+.sidebar .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.sidebar .nav-item svg {
+  width: 20px;
+  height: 20px;
+  color: var(--text-2);
+  flex: none;
+}
+
+.sidebar .nav-item:hover {
+  background: var(--surface-2);
+}
+
+.sidebar .nav-item.active {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.sidebar .nav-item.active svg {
+  color: var(--brand);
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+/* ---------- 页面骨架 ---------- */
+.page {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1080px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.page-sub {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+/* 内容区更窄的页面（配置列表）；窄屏下由 @media 统一放开 */
+.page-narrow {
+  max-width: 960px;
+}
+
+/* 全页编辑器（配置页）：顶部「返回 / 保存」条吸顶 —— 编辑器表单很长，
+   滚动到代理规则时按钮跑没了，只能滚回顶部才能保存 */
+.editor-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.editor-root > div:first-child {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--surface);
+}
+
+/* 固定宽度的下拉/输入（桌面端保持固定，窄屏整行显示） */
+.fixed-field {
+  width: 280px;
+}
+
+/* ---------- SectionCard（Components.kt） ---------- */
+.section-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-card > .card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--brand);
+  margin: 0;
+}
+
+.hr {
+  border: none;
+  border-top: 0.5px solid var(--border-soft);
+  margin: 2px 0;
+}
+
+/* ---------- StatusChip ---------- */
+.status-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.chip-running { background: rgba(46, 125, 50, 0.14); color: var(--running); }
+.chip-error { background: rgba(179, 38, 30, 0.14); color: var(--error); }
+.chip-starting { background: rgba(178, 106, 0, 0.14); color: var(--starting); }
+.chip-idle { background: rgba(91, 96, 104, 0.14); color: var(--idle); }
+.chip-brand { background: var(--brand-soft); color: var(--brand); }
+
+/* ---------- StatTile ---------- */
+.stat-row {
+  display: flex;
+  gap: 24px;
+}
+
+.stat-tile {
+  flex: 1;
+  min-width: 0;
+}
+
+.stat-tile .label {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.stat-tile .value {
+  font-size: 20px;
+  font-weight: 500;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 表单控件（Material3 OutlinedTextField） ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field > .field-label {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.field input,
+.field select,
+.field textarea {
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.field .support {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.field .support.error {
+  color: var(--error);
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: var(--text-2);
+  opacity: 0.7;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-row > .field {
+  flex: 1;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+/* SwitchRow */
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.switch-row .sw-text {
+  flex: 1;
+}
+
+.switch-row .sw-label {
+  font-size: 14px;
+}
+
+.switch-row .sw-support {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+.switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex: none;
+  cursor: pointer;
+}
+
+.switch input {
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  cursor: pointer;
+  margin: 0;
+}
+
+.switch .track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.switch input:checked + .track {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.switch .thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: all 0.15s;
+}
+
+.switch input:checked ~ .thumb {
+  left: 24px;
+  background: #fff;
+}
+
+/* ---------- 按钮 ---------- */
+.btn {
+  border: 0.5px solid var(--border);
+  background: transparent;
+  color: var(--brand);
+  border-radius: 20px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--brand-soft);
+}
+
+.btn.filled {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+/* 必须在这里重新声明 background：上面 `.btn:hover` 的 background 特异性更高，
+   只写 filter 的话 hover 期间底色会被换成 --brand-soft（浅蓝），而文字仍是白色
+   —— 白字压在浅底上几乎看不见。启动按钮点完鼠标正好停在原地，于是表现为
+   「文字变成停止、背景还是浅色」，移开鼠标才恢复。 */
+.btn.filled:hover:not(:disabled) {
+  background: var(--brand);
+  border-color: var(--brand);
+  filter: brightness(1.08);
+}
+
+/* 「停止」这类会中断运行的操作：用实心危险色，与「启动」一眼区分开 */
+.btn.filled.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.btn.filled.danger:hover:not(:disabled) {
+  background: var(--danger-hover);
+  border-color: var(--danger-hover);
+  filter: none;
+}
+
+/* 启动中 / 停止中：按钮置灰但仍要读得清。
+   靠父级 `.btn:disabled` 的 opacity 0.45 会把白字一起压淡，看起来像「底色还是浅的」。 */
+.btn.filled:disabled,
+.btn.filled.danger:disabled {
+  opacity: 1;
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-2);
+  filter: none;
+}
+
+.btn.text-btn {
+  border-color: transparent;
+  padding: 6px 10px;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn.small {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.btn.danger-text {
+  color: var(--error);
+}
+
+.btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-2);
+  flex: none;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.icon-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- 日志 ---------- */
+.log-list {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 12px;
+  height: calc(100vh - 240px);
+  min-height: 320px;
+  overflow: auto;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.log-line {
+  display: flex;
+  gap: 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-time {
+  color: var(--text-2);
+  flex: none;
+}
+
+.filter-chip {
+  border: 0.5px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.filter-chip.selected {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: transparent;
+  font-weight: 500;
+}
+
+/* ---------- 对话框 ---------- */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--surface);
+  border-radius: 24px;
+  padding: 24px;
+  width: 640px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal .modal-title {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.error-text {
+  color: var(--error);
+}
+
+.muted {
+  color: var(--text-2);
+}
+
+.small {
+  font-size: 12px;
+}
+
+/* 状态小胶囊：用于「已允许 / 未允许」这类一眼可见的状态（勿用红绿之外的语义色） */
+.mono {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+}
+
+.break-all {
+  word-break: break-all;
+}
+
+/* ---------- 关于卡片 ---------- */
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.about-logo {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 10px;
+}
+
+.about-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* 键值对：窄屏自动堆成单列，值允许长路径折行 */
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 16px;
+}
+
+.about-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.about-key {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.about-val {
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.about-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 曲线（MonitorScreen Sparkline） */
+.spark {
+  width: 100%;
+  height: 120px;
+  display: block;
+}
+
+.proxy-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+/* ---------- 配置档案卡（ProfilesView） ----------
+   卡片 = 「文本块（自适应）+ 操作按钮组（固定宽）」两段。
+   以前是「一行 flex + 6 个按钮」，窄屏下文本列被挤到 ~90px：
+   标题折两行、副标题的「代理 1 个」被拆成「1」和「个」两行、
+   按钮还跑到文字中间。现在文本块独占宽度，按钮独立成组。 */
+.profiles-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profiles-heading {
+  min-width: 0;
+}
+
+.profiles-header-actions {
+  display: flex;
+  gap: 12px;
+  flex: none;
+}
+
+/* 工具行：搜索框给一个「至少 240px」的弹性基准，按钮不被压缩 */
+.profiles-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profiles-toolbar .profiles-search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.profiles-toolbar > .btn {
+  flex: none;
+}
+
+.profile-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.pc-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pc-name {
+  font-size: 15px;
+  font-weight: 500;
+  /* 超长文件名（含 - _）在任意位置断行，绝不撑破卡片 */
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.pc-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  color: var(--text-2);
+}
+
+/* 单条信息不拆行：「代理 1 个」要整体换行 */
+.pc-meta-item {
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pc-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: none;
+}
+
+/* 轻提示（复制结果等）：底部居中，避开移动端底部导航 */
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 24px;
+  z-index: 200;
+  max-width: calc(100vw - 32px);
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme="dark"] .toast {
+  background: rgba(255, 255, 255, 0.92);
+  color: #141518;
+}
+
+/* 「再按一次返回退出」：纯提示，不能挡住底下的点击（它会压在底部导航上方） */
+.back-hint {
+  pointer-events: none;
+}
+
+/* ---------------- 窄屏（手机 / Android）适配 ----------------
+   桌面端是「224px 侧栏 + 内容」两栏，直接套到手机上会把内容挤成一条，
+   所以窄屏改为「顶栏 + 内容 + 底部导航栏」的移动端骨架。 */
+@media (max-width: 720px) {
+  .shell {
+    flex-direction: column;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* 安全区由原生侧补（android/MainActivity.kt 给内容视图加系统栏 padding）：
+       Android WebView 的 env(safe-area-inset-*) 不可靠，这里只用固定值，避免双重内边距 */
+    padding: 10px 14px;
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    flex: none;
+  }
+
+  .topbar-title {
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .topbar-ver {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  /* 侧栏变底部导航栏 */
+  .sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    flex-direction: row;
+    gap: 0;
+    padding: 6px 4px;
+    border-right: none;
+    border-top: 0.5px solid var(--border);
+    box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.06);
+    z-index: 20;
+  }
+
+  .sidebar .brand,
+  .sidebar-foot {
+    display: none;
+  }
+
+  .sidebar .nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 2px;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .sidebar .nav-item svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .sidebar .nav-item span {
+    font-size: 11px;
+  }
+
+  .content {
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 68px;
+  }
+
+  .page {
+    padding: 12px;
+    max-width: none;
+    gap: 12px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  .section-card {
+    padding: 14px;
+  }
+
+  .stat-row {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .stat-tile {
+    min-width: 40%;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+
+  .modal {
+    width: auto;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 64px);
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .log-list {
+    height: calc(100vh - 210px);
+    min-height: 240px;
+  }
+
+  /* 页面里有不少「行内 display:flex」的工具行（按钮组、字段组），
+     窄屏下统一允许换行，避免内容被挤出屏幕右侧。 */
+  .page [style*="display: flex"],
+  .page [style*="display:flex"],
+  .modal [style*="display: flex"],
+  .modal [style*="display:flex"] {
+    flex-wrap: wrap;
+  }
+
+  /* 固定宽度的选择器（当前配置 / 日志筛选）窄屏改为整行 */
+  .fixed-field {
+    width: 100%;
+  }
+
+  /* 配置卡：窄屏下操作按钮换到独立一行，文本块独占整行 */
+  .profile-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .pc-actions {
+    justify-content: flex-end;
+    margin-top: 2px;
+  }
+
+  /* 顶部「导入 / 新建」按钮跟标题挤一行会只剩半个字，单独成行靠右 */
+  .profiles-header-actions {
+    margin-left: auto;
+  }
+
+  /* 工具行：搜索框独占一行，导出/导入/清空按钮排到下一行 */
+  .profiles-toolbar .profiles-search {
+    flex: 1 1 100%;
+  }
+
+  /* 抬到底部导航栏之上 */
+  .toast {
+    bottom: 80px;
+  }
+}
