@@ -2,6 +2,12 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [2.1.1] - 2026-11-02
+
+### 修复
+
+- **访问者状态一直显示「启动中」**：访问者名字里带空格时（例如 `ThinkBook16+ rdp`），解析 `visitor added` 日志会把它按空格拆成两个名字，界面拿它跟配置里的名字比对永远不相等，于是引擎在跑、隧道也连上了，状态却卡在「启动中」。现在整段取名字，带空格的名字同样能正确显示「在线」。
+
 ## [2.1.0] - 2026-11-02
 
 ### 功能
@@ -30,5 +36,6 @@
 - macOS 产物未签名、未公证，首次启动需在系统设置里放行。
 - 运行中的配置不可编辑，需先停止服务。
 
+[2.1.1]: https://github.com/fdmdf/frpc-desktop-multi/releases/tag/v2.1.1
 [2.1.0]: https://github.com/fdmdf/frpc-desktop-multi/releases/tag/v2.1.0
 [2.0.0]: https://github.com/fdmdf/frpc-desktop-multi/releases/tag/v2.0.0
