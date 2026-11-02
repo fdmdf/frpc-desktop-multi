@@ -1080,6 +1080,12 @@ mod tests {
 
         let ok = FrpcConfig {
             server_addr: "frps.example.com".into(),
+            // 显式用一个刚释放的临时端口：默认值 7400 是开发机上「应用正在跑」时
+            // 最常被占的端口，拿默认配置做「校验通过」的用例会随机器状态随机变红
+            web_server: Some(crate::model::WebServerConfig {
+                port,
+                ..crate::model::WebServerConfig::default()
+            }),
             ..FrpcConfig::default()
         };
         assert!(sup.check_before_start(&ok).is_none());
