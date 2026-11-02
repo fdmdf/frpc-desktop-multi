@@ -176,13 +176,15 @@ impl ProxyLogParser {
             });
         }
         if let Some(m) = visitor_added.captures(message) {
-            let names: Vec<String> = m[1]
-                .split(' ')
-                .filter(|s| !s.is_empty())
-                .map(str::to_string)
-                .collect();
-            if !names.is_empty() {
-                return Some(ProxyLogEvent::VisitorsRegistered { names });
+            // frpc 每行只报一个访问者：`visitor added: [ThinkBook16+ rdp]`。
+            // 方括号里就是完整名字，而配置里的访问者名允许带空格，所以不能按空格
+            // 切分 —— 切了之后 "ThinkBook16+ rdp" 变成两个名字，前端永远匹配不上
+            // 配置项，状态就会一直卡在「启动中」。
+            let name = m[1].trim();
+            if !name.is_empty() {
+                return Some(ProxyLogEvent::VisitorsRegistered {
+                    names: vec![name.to_string()],
+                });
             }
         }
         const RESET_MARKERS: [&str; 2] = ["control writer is closing", "client exit success"];
@@ -397,14 +399,38 @@ mod tests {
         );
         assert_eq!(
             Some(ProxyLogEvent::VisitorsRegistered {
-                names: vec!["a".into(), "b".into()]
+                names: vec!["ThinkBook16+ rdp".into()]
             }),
-            ProxyLogParser::parse("visitor added: [a b]")
+            ProxyLogParser::parse("visitor added: [ThinkBook16+ rdp]")
         );
         assert_eq!(
             Some(ProxyLogEvent::Reset),
             ProxyLogParser::parse("control writer is closing")
         );
         assert_eq!(None, ProxyLogParser::parse("nothing special"));
+    }
+
+    /// 回归：访问者名带空格时不能被拆成多个名字。
+    ///
+    /// frpc 的 `visitor added: [名字]` 一行只对应一个访问者；早前按空格切分
+    /// 方括号内容，`ThinkBook16+ rdp` 会变成 `ThinkBook16+` 和 `rdp` 两个名字，
+    /// 前端拿它跟配置里的名字比对永远失败，于是「在线」永远显示成「启动中」。
+    #[test]
+    fn visitor_name_with_spaces_stays_whole() {
+        assert_eq!(
+            Some(ProxyLogEvent::VisitorsRegistered {
+                names: vec!["ThinkBook16+ rdp".into()]
+            }),
+            ProxyLogParser::parse("[2e7263001d2c3680] visitor added: [ThinkBook16+ rdp]")
+        );
+        // 名字前后的空白要去掉，但不能因此被切分
+        assert_eq!(
+            Some(ProxyLogEvent::VisitorsRegistered {
+                names: vec!["a b c".into()]
+            }),
+            ProxyLogParser::parse("visitor added: [ a b c ]")
+        );
+        // 空名字不该产生事件（frpc 不会这么写，防的是日志被截断的情况）
+        assert_eq!(None, ProxyLogParser::parse("visitor added: []"));
     }
 }
