@@ -32,6 +32,7 @@ A cross-platform desktop and Android GUI for [frp](https://github.com/fatedier/f
 - **Live tunnel status** — reads frpc's admin API first (including the real remote port assigned by the server), falls back to log inference when the API is off. Visitor status is visible too.
 - **Metrics and logs** — CPU, memory, thread count and uptime sampled in real time; logs with level filtering, search and export.
 - **Self-contained** — the frpc engine ships inside the app, natively built for each platform.
+- **Launch at login** — writes the per-user Run key on Windows, a LaunchAgent on macOS and an XDG autostart entry on Linux; no admin rights needed, toggleable any time, and re-pointed automatically if the executable moves after an upgrade ([platform notes](docs/autostart.md)).
 - **Bilingual UI** — Simplified Chinese and English, switchable in-app or following the system locale.
 - **One core, two frontends** — a Rust core layer (`frpc-core`) plus a Vue 3 interface, shared by the desktop app and the Android app.
 

@@ -351,7 +351,13 @@ pub fn get_settings(state: tauri::State<'_, AppState>) -> SettingsData {
 }
 
 #[tauri::command]
-pub fn set_settings(settings: SettingsData, state: tauri::State<'_, AppState>) {
+pub fn set_settings(mut settings: SettingsData, state: tauri::State<'_, AppState>) {
+    // 自启动的系统注册只能走 set_autostart：这里强制沿用已有值。
+    // 前端每次都是整份 settings 回写，若照抄它带来的 autostart 字段，
+    // 会出现「settings.json 说开着、系统里其实没有」的分裂状态。
+    let current = state.settings();
+    settings.autostart = current.autostart;
+    settings.autostart_path = current.autostart_path;
     // Android 只认随包内置的 libfrpc.so：自定义引擎路径既不可 exec，界面也已隐藏，
     // 落盘的遗留值一律清掉，避免旧配置把引擎指到一个不可用的路径。
     #[cfg(target_os = "android")]
@@ -363,6 +369,26 @@ pub fn set_settings(settings: SettingsData, state: tauri::State<'_, AppState>) {
         .supervisor
         .set_show_access_logs(settings.show_access_logs);
     state.save_settings(settings);
+}
+
+// ---------- 开机自启动 ----------
+
+/// 系统里的真实注册状态（不写入）。界面开关以此为准，而不是 settings.json。
+#[tauri::command]
+pub fn get_autostart_status() -> frpc_core::autostart::AutostartStatus {
+    crate::autostart::current_status()
+}
+
+/// 开关开机自启动：先写系统，成功才落盘用户意图。
+///
+/// 失败以 `{code, message}` 返回：`code` 让前端区分「没权限」和「平台不支持」，
+/// `message` 原样展示（含注册表键 / plist 路径，用户可以直接照着排查）。
+#[tauri::command]
+pub fn set_autostart(
+    enabled: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<frpc_core::autostart::AutostartStatus, crate::autostart::AutostartErrorPayload> {
+    crate::autostart::apply(&state, enabled)
 }
 
 #[tauri::command]

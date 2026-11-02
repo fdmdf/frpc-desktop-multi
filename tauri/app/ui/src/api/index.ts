@@ -124,6 +124,32 @@ export interface SettingsData {
   defaultProfileId?: string | null;
   autoStartOnLaunch: boolean;
   closeToTray: boolean;
+  /** 开机自启动的「用户意图」；真实状态以 AutostartStatus 为准，只读字段 */
+  autostart?: boolean;
+  /** 上次成功注册自启动时的可执行文件路径（路径变更检测用），只读字段 */
+  autostartPath?: string;
+}
+
+/** 开机自启动的系统真实状态（get_autostart_status 的返回） */
+export interface AutostartStatus {
+  /** "windows" | "macos" | "linux" */
+  platform: string;
+  /** 平台不支持时开关置灰 */
+  supported: boolean;
+  /** 系统里确实存在注册项 */
+  enabled: boolean;
+  /** 系统里记录的启动目标 */
+  target?: string | null;
+  /** 当前进程可执行文件路径 */
+  exePath: string;
+  /** 已注册但指向的不是当前程序（升级换目录 / 被手工改过） */
+  stale: boolean;
+  /** "registry" | "launch-agent" | "xdg-autostart" | "none" */
+  backend: string;
+  /** 注册落点：注册表键 / plist 路径 / desktop 文件路径 */
+  location: string;
+  /** 读取注册项时的异常说明 */
+  detail?: string | null;
 }
 
 export type Phase = "IDLE" | "STARTING" | "RUNNING" | "STOPPING" | "ERROR";
@@ -248,6 +274,10 @@ export const api = {
   getLogsText: () => invoke<string>("get_logs_text"),
   getSettings: () => invoke<SettingsData>("get_settings"),
   setSettings: (settings: SettingsData) => invoke<void>("set_settings", { settings }),
+  /// 开机自启动的系统真实状态
+  getAutostartStatus: () => invoke<AutostartStatus>("get_autostart_status"),
+  /// 开关开机自启动；失败时抛 { code, message }
+  setAutostart: (enabled: boolean) => invoke<AutostartStatus>("set_autostart", { enabled }),
   getDataDir: () => invoke<string>("get_data_dir"),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   openPath: (path: string) => invoke<void>("open_path", { path }),

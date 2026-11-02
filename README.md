@@ -31,6 +31,7 @@
 - **真实状态**（live tunnel status）：优先读 frpc 的 admin API（含真实远程端口），接口关闭时用日志推断；访问者状态同样可见
 - **资源与日志**（metrics & logs）：CPU / 内存 / 线程 / 运行时长实时采样；日志分级过滤、搜索、导出
 - **开箱即用**（self-contained）：内置 frpc 引擎，各平台原生编译，用户不需要装 Java、Go 或手动下载二进制
+- **开机自启**（launch at login）：Windows 写当前用户注册表 Run 项、macOS 写 LaunchAgent、Linux 写 XDG autostart，无需管理员权限；可随时开关，程序被移动 / 升级换目录后启动时自动改写（[平台差异与限制](docs/autostart.md)）
 - **双语界面**（i18n）：简体中文 / English，应用内切换，也可跟随系统
 - **一份代码两端跑**（cross-platform core）：Rust 核心层（`frpc-core`）+ Vue 3 界面，桌面与 Android 共用同一份实现
 

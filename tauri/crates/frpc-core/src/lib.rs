@@ -11,6 +11,7 @@
 //!   映射表见迁移方案第 6 节）。
 
 pub mod admin;
+pub mod autostart;
 pub mod logs;
 pub mod metrics;
 pub mod model;

@@ -5,6 +5,8 @@
 
 #[cfg(target_os = "android")]
 mod android;
+/// 开机自启动：桌面三平台可用，Android 上探到的状态是「不支持」（前端不展示开关）
+mod autostart;
 mod bridge;
 mod commands;
 mod state;
@@ -69,6 +71,25 @@ pub fn run() {
             // 托盘 + 关闭行为（桌面专属；Android 无托盘概念）
             #[cfg(desktop)]
             tray::setup(app)?;
+
+            // 开机自启动的两件收尾（桌面专属）：
+            // 1) 注册项在程序被移动 / 升级换目录后会指向旧路径，启动时对齐一次；
+            // 2) 由自启动拉起时静默进托盘，不抢用户当前工作的焦点。
+            // 两者都不参与启动成败：self-heal 放后台线程，失败只进应用日志。
+            #[cfg(desktop)]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    autostart::reconcile_on_startup(&handle);
+                });
+                if autostart::launched_by_autostart()
+                    && app.state::<AppState>().settings().close_to_tray
+                {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                }
+            }
 
             // 设置了「启动即连」时自动启动默认档案
             {
@@ -137,6 +158,8 @@ pub fn run() {
             commands::get_logs_text,
             commands::get_settings,
             commands::set_settings,
+            commands::get_autostart_status,
+            commands::set_autostart,
             commands::get_data_dir,
             commands::open_url,
             commands::open_path,

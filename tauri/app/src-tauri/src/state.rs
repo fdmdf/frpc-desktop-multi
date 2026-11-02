@@ -235,6 +235,12 @@ impl AppState {
     }
 
     pub fn save_settings(&self, settings: SettingsData) {
+        // 串行化写盘：自启动自愈在后台线程跑，可能与界面上的设置保存同时发生，
+        // 两条 `write(tmp) → rename(tmp)` 交错会写出半截 JSON
+        static SETTINGS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = SETTINGS_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         write_json_file(&self.paths.settings_file, &settings);
         if let Ok(mut guard) = self.settings.write() {
             *guard = settings;

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { api, type SettingsData } from "../api";
+import { api, type AutostartStatus, type SettingsData } from "../api";
 import logo from "../assets/logo.svg";
 import { errorText } from "../format";
 import { applyLocale, localeSetting, type LocaleSetting } from "../i18n";
 import { useEngineStore } from "../stores/engine";
 
 const store = useEngineStore();
-const { t } = useI18n();
+const { t, te } = useI18n();
 // 设置与档案卡/主页共用同一份数据（store.settings），避免两个副本互相覆盖
 const settings = computed(() => store.settings);
 const engineInfo = computed(() => store.engineInfo);
@@ -38,7 +38,78 @@ onMounted(async () => {
   if (!store.settings) store.settings = await api.getSettings();
   if (!store.engineInfo) await store.refreshEngineInfo();
   dataDir.value = await api.getDataDir();
+  void refreshAutostart();
 });
+
+// ---------- 开机自启动 ----------
+// 开关绑的是**系统真实状态**（get_autostart_status），不是 settings.json 里的意图：
+// 用户在 Windows「任务管理器 → 启动」里禁用、或手动删掉注册项，界面必须如实反映。
+// 失败时回滚开关 —— 显示「已开启」但开机没启动，比不做这个功能更让人恼火。
+const autostart = ref<AutostartStatus | null>(null);
+const autostartBusy = ref(false);
+const autostartMessage = ref("");
+
+const autostartBackend = computed(() => {
+  const key = autostart.value?.backend ?? "none";
+  const map: Record<string, string> = {
+    registry: "settings.autostartBackendRegistry",
+    "launch-agent": "settings.autostartBackendLaunchAgent",
+    "xdg-autostart": "settings.autostartBackendXdg",
+  };
+  return t(map[key] ?? "settings.autostartBackendNone");
+});
+
+const autostartSupport = computed(() => {
+  const st = autostart.value;
+  if (!st) return t("settings.autostartChecking");
+  if (!st.supported) return st.detail || t("settings.autostartUnsupported");
+  if (st.enabled && st.stale) {
+    return t("settings.autostartStale", { target: st.target || "—" });
+  }
+  if (st.enabled) {
+    return t("settings.autostartOn", {
+      backend: autostartBackend.value,
+      target: st.target || st.exePath,
+    });
+  }
+  if (st.detail) return t("settings.autostartReadFailed", { err: st.detail });
+  return t("settings.autostartOff", { backend: autostartBackend.value });
+});
+
+async function refreshAutostart() {
+  try {
+    autostart.value = await api.getAutostartStatus();
+  } catch (err) {
+    autostartMessage.value = t("settings.autostartReadFailed", { err: errorText(err) });
+  }
+}
+
+/// 后端抛的是 `{ code, message }`：code 翻成当前语言的说明，
+/// message 里带着注册表键 / plist 路径，排查时正需要它，原样附在后面。
+function autostartErrorText(err: unknown): string {
+  const code = (err as { code?: string } | null | undefined)?.code ?? "unknown";
+  const key = `settings.autostartErr.${code}`;
+  const head = te(key) ? t(key) : t("settings.autostartErr.unknown");
+  const detail = errorText(err);
+  return detail && detail !== head ? `${head}：${detail}` : head;
+}
+
+async function onAutostartToggle(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const want = input.checked;
+  // 立即拨回原状：只有系统那边真的改成功了才允许开关停在「开」
+  input.checked = !want;
+  autostartMessage.value = "";
+  autostartBusy.value = true;
+  try {
+    autostart.value = await api.setAutostart(want);
+  } catch (err) {
+    autostartMessage.value = t("settings.autostartFailed", { err: autostartErrorText(err) });
+    await refreshAutostart();
+  } finally {
+    autostartBusy.value = false;
+  }
+}
 
 function update(patch: Partial<SettingsData>) {
   const base = store.settings;
@@ -269,6 +340,28 @@ onUnmounted(() => {
           <span class="track"></span><span class="thumb"></span>
         </label>
       </div>
+      <!-- 开机自启动：桌面三平台各有落点，Android 没有这个概念（系统由桌面启动器管理） -->
+      <div v-if="!isAndroid" class="switch-row">
+        <div class="sw-text">
+          <div class="sw-label">{{ $t("settings.autostart") }}</div>
+          <div class="sw-support">{{ autostartSupport }}</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            :checked="autostart?.enabled === true"
+            :disabled="autostartBusy || !autostart?.supported"
+            @change="onAutostartToggle"
+          />
+          <span class="track"></span><span class="thumb"></span>
+        </label>
+      </div>
+      <p v-if="!isAndroid" class="muted small" style="margin: 0">
+        {{ $t("settings.autostartHint") }}
+      </p>
+      <p v-if="!isAndroid && autostartMessage" class="muted small" style="margin: 0">
+        {{ autostartMessage }}
+      </p>
     </div>
 
     <!-- Android 专属：前台服务保活。隧道是应用进程的子进程，父亲的命就是儿子的命 -->

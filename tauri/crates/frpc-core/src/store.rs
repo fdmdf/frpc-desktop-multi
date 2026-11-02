@@ -82,6 +82,13 @@ pub struct SettingsData {
     pub default_profile_id: Option<String>,
     pub auto_start_on_launch: bool,
     pub close_to_tray: bool,
+    /// 用户是否希望**开机自启动**。这是「意图」，不是系统真实状态 ——
+    /// 真实状态由 `autostart::status()` 现场探测，两者可能不一致
+    /// （被系统清理、用户手动删掉注册项）。不一致时启动阶段做修复。
+    pub autostart: bool,
+    /// 上次成功注册自启动时使用的可执行文件路径。
+    /// 升级更换安装目录后，与当前路径比对即可发现「自启动项指向一个不存在的程序」。
+    pub autostart_path: String,
 }
 
 impl Default for SettingsData {
@@ -93,6 +100,8 @@ impl Default for SettingsData {
             default_profile_id: None,
             auto_start_on_launch: false,
             close_to_tray: true,
+            autostart: false,
+            autostart_path: String::new(),
         }
     }
 }
@@ -125,9 +134,24 @@ mod tests {
         assert_eq!("system", s.theme);
         assert!(!s.show_access_logs);
         assert!(s.close_to_tray);
+        // 自启动默认关闭：不能出现「装完就自己开机启动」这种事
+        assert!(!s.autostart);
+        assert!(s.autostart_path.is_empty());
         let json = serde_json::to_string(&s).unwrap();
         assert!(json.contains("\"enginePath\""), "{json}");
         assert!(json.contains("\"closeToTray\""), "{json}");
+        assert!(json.contains("\"autostart\""), "{json}");
+        assert!(json.contains("\"autostartPath\""), "{json}");
+    }
+
+    /// 老版本 settings.json 没有 autostart 字段，必须能正常反序列化（不丢其它设置）
+    #[test]
+    fn legacy_settings_without_autostart_still_loads() {
+        let json = r#"{"theme":"dark","enginePath":"","showAccessLogs":true,"closeToTray":false}"#;
+        let s: SettingsData = serde_json::from_str(json).unwrap();
+        assert_eq!("dark", s.theme);
+        assert!(s.show_access_logs);
+        assert!(!s.autostart);
     }
 
     #[test]
